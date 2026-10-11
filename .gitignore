@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+# 自動生成物
+artifact.html
+test/out/
+trailer/out/
+trailer/frames/
+*.mp4
+# 音源（各自で用意する。既存の楽曲は配布しない）
+bgm/src/*
+!bgm/src/.gitkeep
+bgm/work/

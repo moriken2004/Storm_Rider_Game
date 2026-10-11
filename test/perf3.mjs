@@ -1,0 +1,16 @@
+import puppeteer from 'puppeteer';
+const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist','--window-size=1600,900']});
+const p=await b.newPage();await p.setViewport({width:1600,height:900,deviceScaleFactor:1.5});
+await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR',{timeout:60000});
+const fps=async(label,setup,ms=2500)=>{await p.evaluate(setup);await new Promise(r=>setTimeout(r,400));
+  const r=await p.evaluate((ms)=>new Promise(res=>{let n=0,t0=performance.now();const f=()=>{n++;if(performance.now()-t0<ms)requestAnimationFrame(f);else res(+(n/(performance.now()-t0)*1000).toFixed(1));};requestAnimationFrame(f);}),ms);
+  console.log(label.padEnd(34),'fps',r);};
+const L='__SR.view.scale=.6;__SR.view.upT=-999;resize();';
+await p.evaluate('document.getElementById("title").hidden=true;__SR.startRun("approach");__SR.G.flags.b3=1;__SR.P.pos.set(0,400,11000);');
+await fps('bands',L);
+await fps('  no temporal resolve',L+'window.__r=renderFrame');
+await fps('  cloud steps 70',L+'cloudMat.uniforms.uSteps.value=70');
+await fps('  HUD hidden',L+'cloudMat.uniforms.uSteps.value=112;document.getElementById("hud").style.visibility="hidden"');
+await fps('  base hidden',L+'baseGroup.visible=false');
+await fps('  clouds off (steps 1)',L+'cloudMat.uniforms.uSteps.value=1');
+await b.close();

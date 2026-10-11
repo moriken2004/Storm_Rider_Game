@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>音の切り分け</title>
+<style>body{font:16px/1.7 -apple-system,sans-serif;background:#0d2a33;color:#f4efe2;max-width:720px;margin:32px auto;padding:0 16px}
+button{font:inherit;display:block;width:100%;text-align:left;margin:10px 0;padding:12px 16px;border-radius:10px;border:1.5px solid #e6bd74;background:#14606a;color:#fff;cursor:pointer}
+button:active{background:#1f8f96}#log{white-space:pre-wrap;font:13px Menlo,monospace;color:#9fe;margin-top:18px}</style>
+<h2>音の切り分け</h2>
+<p>上から順に押して、それぞれ 1 秒の音が聞こえるかどうかを教えてください（番号だけで構いません）。</p>
+<button id="b1">1. audio 要素で再生（ブラウザ標準の再生）</button>
+<button id="b2">2. Web Audio：発振器 → 出口（最小構成）</button>
+<button id="b3">3. Web Audio：発振器 → 圧縮器 → 出口（ゲームと同じ出口）</button>
+<button id="b4">4. Web Audio：発振器 → 音量 → 左右振り分け → 残響 → 圧縮器 → 出口</button>
+<button id="b5">5. Web Audio：ゲームと同じ音源ファイル（メドレー）を 3 秒</button>
+<div id="log"></div>
+<script>
+const log=s=>{document.getElementById('log').textContent+=s+'\n';};
+let ctx=null;const C=()=>{if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)();log('context 作成: state='+ctx.state+' sr='+ctx.sampleRate);}if(ctx.state!=='running')ctx.resume().then(()=>log('resume → '+ctx.state));return ctx;};
+const comp=c=>{const k=c.createDynamicsCompressor();k.threshold.value=-14;k.ratio.value=5;k.attack.value=.004;k.release.value=.22;k.connect(c.destination);return k;};
+const osc=(c,dest,f)=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;g.gain.value=.25;o.connect(g);g.connect(dest);o.start();o.stop(c.currentTime+1);};
+const wav=()=>{const sr=22050,n=sr,b=new DataView(new ArrayBuffer(44+n*2));const w=(o,s)=>{for(let i=0;i<s.length;i++)b.setUint8(o+i,s.charCodeAt(i));};w(0,'RIFF');b.setUint32(4,36+n*2,true);w(8,'WAVEfmt ');b.setUint32(16,16,true);b.setUint16(20,1,true);b.setUint16(22,1,true);b.setUint32(24,sr,true);b.setUint32(28,sr*2,true);b.setUint16(32,2,true);b.setUint16(34,16,true);w(36,'data');b.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++)b.setInt16(44+i*2,Math.sin(i/sr*6.2832*440)*8000*Math.min(1,(n-i)/2000),true);return URL.createObjectURL(new Blob([b],{type:'audio/wav'}));};
+b1.onclick=()=>{const a=new Audio(wav());a.play().then(()=>log('1: 再生開始')).catch(e=>log('1: 失敗 '+e));};
+b2.onclick=()=>{const c=C();osc(c,c.destination,440);log('2: 予約 state='+c.state);};
+b3.onclick=()=>{const c=C();osc(c,comp(c),550);log('3: 予約 state='+c.state);};
+b4.onclick=()=>{const c=C(),k=comp(c),g=c.createGain(),cv=c.createConvolver(),len=c.sampleRate*3.2,ir=c.createBuffer(2,len,c.sampleRate);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6);}cv.buffer=ir;const rg=c.createGain();rg.gain.value=.55;cv.connect(rg);rg.connect(k);
+  let n=g;if(c.createStereoPanner){const p=c.createStereoPanner();g.connect(p);n=p;}n.connect(k);n.connect(cv);osc(c,g,660);log('4: 予約 state='+c.state);};
+b5.onclick=()=>{const c=C();fetch('bgm/src/storm_rider.mp3').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>c.decodeAudioData(b,ok,ng))).then(buf=>{const s=c.createBufferSource();s.buffer=buf;s.connect(c.destination);s.start(c.currentTime+.05,150,3);log('5: 再生 '+buf.duration.toFixed(0)+'s の音源');}).catch(e=>log('5: 失敗 '+e));};
+</script>

@@ -1,0 +1,21 @@
+// 各場面の実フレームレートと、着陸ムービーの例外を調べる
+import puppeteer from 'puppeteer';
+const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist','--window-size=1600,900']});
+const p=await b.newPage();await p.setViewport({width:1600,height:900,deviceScaleFactor:1.5});
+const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message+' '+(e.stack||'').split('\n')[1]));
+await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR',{timeout:60000});
+const fps=async(label,setup,ms=3500)=>{await p.evaluate(setup);await new Promise(r=>setTimeout(r,700));
+  const r=await p.evaluate((ms)=>new Promise(res=>{let n=0,t0=performance.now();const f=()=>{n++;if(performance.now()-t0<ms)requestAnimationFrame(f);else res([+(n/(performance.now()-t0)*1000).toFixed(1),__SR.view.scale,renderer.info.render.triangles,renderer.info.render.calls]);};requestAnimationFrame(f);}),ms);
+  console.log(label.padEnd(18),'fps',r[0],'scale',r[1].toFixed(2),'tris',r[2],'calls',r[3]);};
+await fps('title','1');
+await fps('intro hangar','document.getElementById("title").hidden=true;__SR.startCut(__SR.CUTS.CUT_INTRO);__SR.tick(10*30)');
+await fps('approach','__SR.endCut();__SR.startRun("approach")');
+await fps('bands','__SR.startRun("approach");__SR.G.flags.b3=1;__SR.P.pos.set(0,400,11000)');
+await fps('eye','__SR.startRun("eye")');
+await fps('ret near base','__SR.startRun("ret");__SR.G.flags.e1=1;__SR.P.pos.set(0,400,18500)');
+await p.evaluate('__SR.startRun("ret");__SR.G.flags.e1=1;__SR.P.pos.set(0,300,21000-1700);__SR.P.yaw=Math.PI;__SR.startCut(__SR.CUTS.CUT_LAND)');
+await new Promise(r=>setTimeout(r,2500));
+console.log('LAND state',await p.evaluate('[__SR.G.mode,__SR.P.pos.toArray().map(Math.round)]'));
+await fps('landing cut','1',3000);
+console.log(errs.slice(0,4).join('\n')||'no page errors');
+await b.close();

@@ -1,0 +1,21 @@
+// 60fps 上限に隠れない負荷の測り方：解像度 100% 固定で 1 コマあたりの描画時間（ms）を測る
+import puppeteer from 'puppeteer';
+const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist','--window-size=1600,900']});
+const p=await b.newPage();await p.setViewport({width:1600,height:900,deviceScaleFactor:1.5});
+const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message));p.on('console',m=>{if(m.type()==='error'&&/ERROR|shader/.test(m.text()))errs.push(m.text().split('\n').slice(0,4).join(' | '));});
+await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR',{timeout:60000});
+const cost=async(label,setup)=>{await p.evaluate(setup);
+  const ms=await p.evaluate(()=>{__SR.view.scale=1;__SR.view.upT=-9999;resize();const gl=renderer.getContext(),px=new Uint8Array(4);for(let i=0;i<6;i++){__SR.step(1/60);}gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    const t0=performance.now(),N=40;for(let i=0;i<N;i++){__SR.step(1/60);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);}return (performance.now()-t0)/N;});
+  console.log(label.padEnd(16),ms.toFixed(1).padStart(6),'ms  (',(1000/ms).toFixed(0),'fps 相当 )');};
+const H='document.getElementById("title").hidden=true;';
+await cost('title','1');
+await cost('hangar',H+'__SR.startCut(__SR.CUTS.CUT_INTRO);__SR.tick(10*30)');
+await cost('takeoff','__SR.tick(22*30)');
+await cost('approach','__SR.endCut();__SR.startRun("approach")');
+await cost('bands','__SR.startRun("approach");__SR.G.flags.b3=1;__SR.P.pos.set(0,400,11000);__SR.tick(30)');
+await cost('wall','__SR.startRun("approach");__SR.G.flags.b3=__SR.G.flags.b4=1;__SR.P.pos.set(0,400,4300);__SR.tick(30)');
+await cost('eye','__SR.startRun("eye")');
+await cost('base flyby','__SR.startRun("ret");__SR.G.flags.e1=1;__SR.P.pos.set(0,300,19200)');
+console.log(errs.slice(0,3).join('\n')||'no errors');
+await b.close();

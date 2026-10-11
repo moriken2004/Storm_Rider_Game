@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>STORM RIDER 嵐を消す翼</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Josefin+Sans:wght@300;400;600&display=swap">
+<style>
+:root{color-scheme:dark;--pd-deep:#062c36;--pd-teal:#0e6f78;--pd-aqua:#62d2cb;--pd-copper:#c8793a;--pd-brass:#e6bd74;--pd-cream:#f6ecd4;--pd-coral:#e9633d;
+  --f-deco:"Poiret One","Josefin Sans","Hiragino Sans",sans-serif;--f-label:"Josefin Sans","Hiragino Sans","Yu Gothic UI",sans-serif;--hud:#bfe9ff;--hud2:#6fd3ff;--warn:#ff5a4a;--ok:#8dffb0;--gold:#ffd48a;--ink:#05080c}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:#05080c;overflow:hidden;color:#e8f1f7;
+  font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  user-select:none;-webkit-user-select:none;touch-action:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 0 6px rgba(0,20,40,.9)}
+#hud.glitch{animation:gl .12s steps(2) 6}
+@keyframes gl{50%{transform:translate(3px,-1px) skewX(2deg);opacity:.55}}
+#tl{position:absolute;left:22px;top:18px;width:250px}
+.gauge{margin-bottom:9px}
+.gauge label{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.18em;color:var(--hud);opacity:.9;margin-bottom:3px}
+.bar{height:7px;background:rgba(160,210,240,.16);border:1px solid rgba(190,233,255,.35);position:relative;transform:skewX(-18deg)}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#6fd3ff,#d8f4ff);transform-origin:left;transition:background .2s}
+#hullBar.low i{background:linear-gradient(90deg,#ff5a4a,#ffb08a)}
+#boostBar i{background:linear-gradient(90deg,#ffb347,#ffe6a8)}
+#obj{position:absolute;left:50%;top:16px;transform:translateX(-50%);text-align:center;max-width:60vw}
+#objPhase{font-size:11px;letter-spacing:.32em;color:var(--hud2)}
+#objText{font-size:15px;margin-top:4px;letter-spacing:.06em}
+#timer{font-size:22px;color:var(--warn);margin-top:4px;letter-spacing:.08em}
+#wing{position:absolute;right:22px;top:18px;font-size:12px;text-align:right}
+#wing div{margin-bottom:6px;letter-spacing:.08em}
+#wing b{display:inline-block;min-width:52px;margin-left:8px;padding:1px 7px;border:1px solid currentColor;font-weight:500;font-size:10px;letter-spacing:.14em}
+.st-ok{color:var(--ok)}.st-bad{color:var(--warn)}.st-out{color:#8a97a3}.st-mid{color:var(--gold)}
+#diff{display:flex;gap:0;width:250px}#diff button{flex:1;width:auto;padding:8px 0;font-size:12px;letter-spacing:.2em;border-right-width:0}#diff button:last-child{border-right-width:1px}
+#diff button.on{background:rgba(111,211,255,.34);border-color:#dff4ff;color:#fff}
+#diffT{font-size:12.5px;color:#eaf3f8;text-shadow:0 1px 8px #000,0 0 3px #000;letter-spacing:.06em;max-width:330px;line-height:1.6;min-height:2.4em;margin-bottom:4px}
+#fhud{position:absolute;inset:0;width:100%;height:100%}
+#inst div:nth-child(-n+2){display:none}
+#ret{display:none;position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;opacity:.75}
+#ret:before,#ret:after{content:"";position:absolute;background:var(--hud)}
+#ret:before{left:0;right:0;top:50%;height:1px;-webkit-mask:linear-gradient(90deg,#000 30%,transparent 30%,transparent 70%,#000 70%);mask:linear-gradient(90deg,#000 30%,transparent 30%,transparent 70%,#000 70%)}
+#ret:after{top:0;bottom:0;left:50%;width:1px;-webkit-mask:linear-gradient(#000 30%,transparent 30%,transparent 70%,#000 70%);mask:linear-gradient(#000 30%,transparent 30%,transparent 70%,#000 70%)}
+#mark{position:absolute;left:0;top:0;width:0;height:0}
+#mark .d{position:absolute;left:-13px;top:-13px;width:26px;height:26px;border:2px solid var(--gold);transform:rotate(45deg);box-shadow:0 0 10px rgba(255,212,138,.6)}
+#mark.lock .d{border-color:var(--warn);box-shadow:0 0 14px rgba(255,90,74,.9);animation:pl .35s infinite alternate}
+#mark.off .d{border-width:0 2px 2px 0;border-radius:0}
+@keyframes pl{to{transform:rotate(45deg) scale(1.25)}}
+#mark span{position:absolute;left:22px;top:-9px;white-space:nowrap;font-size:12px;color:var(--gold)}
+#warn{position:absolute;left:50%;top:25%;transform:translateX(-50%);font-size:20px;letter-spacing:.3em;color:var(--warn);
+  padding:6px 22px;border:1px solid var(--warn);background:rgba(60,0,0,.35);animation:bl .5s infinite alternate}
+@keyframes bl{to{opacity:.35}}
+#prompt{position:absolute;left:50%;top:15.5%;transform:translateX(-50%);text-align:center;font-size:14px;letter-spacing:.1em;min-width:280px}
+#prompt .bar{margin-top:7px;height:5px}
+#prompt .bar i{background:linear-gradient(90deg,#8dffb0,#eafff0)}
+#inst{position:absolute;left:22px;bottom:20px;font-size:12px;line-height:1.75;color:var(--hud);letter-spacing:.1em}
+#inst b{display:inline-block;min-width:64px;text-align:right;font-size:17px;color:#fff;font-weight:500;margin-right:5px}
+#radar{position:absolute;right:20px;bottom:18px;width:170px;height:170px;opacity:.92}
+#hint{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);font-size:13px;letter-spacing:.08em;color:#dbeaf3;
+  background:rgba(5,12,20,.5);padding:8px 18px;border-left:2px solid var(--hud2);white-space:nowrap}
+kbd{font:inherit;font-size:11px;border:1px solid rgba(220,240,255,.6);border-radius:3px;padding:1px 6px;margin:0 2px;background:rgba(255,255,255,.08)}
+#radio{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);width:min(760px,84vw);pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(4,10,16,.72) 12%,rgba(4,10,16,.72) 88%,transparent);padding:10px 60px;text-align:center;
+  transition:opacity .25s;opacity:0}
+#radio.on{opacity:1}
+#rwho{display:block;font-size:11px;letter-spacing:.3em;margin-bottom:4px}
+#rtext{font-size:17px;line-height:1.55;letter-spacing:.04em}
+.bars{position:fixed;left:0;right:0;height:11vh;background:#000;transition:transform .7s ease;pointer-events:none}
+#barT{top:0;transform:translateY(-100%)}#barB{bottom:0;transform:translateY(100%)}
+body.cine #barT,body.cine #barB{transform:none}
+body.cine #radio{bottom:calc(11vh + 14px)}
+#banner{position:fixed;left:0;right:0;top:34%;text-align:center;pointer-events:none;opacity:0;transition:opacity .6s}
+#banner.on{opacity:1}
+#banner small{display:block;font-size:12px;letter-spacing:.5em;color:var(--hud2);margin-bottom:8px}
+#banner b{font-size:34px;font-weight:300;letter-spacing:.24em;text-shadow:0 0 24px rgba(0,0,0,.9)}
+#banner:after{content:"";display:block;width:260px;height:1px;margin:14px auto 0;background:linear-gradient(90deg,transparent,#bfe9ff,transparent)}
+#card{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 1.2s}
+#card.on{opacity:1}
+.logo{font-family:var(--f-deco);font-size:min(11vw,104px);font-weight:400;letter-spacing:.16em;margin:0;padding-left:.16em;
+  background:linear-gradient(180deg,#fff 20%,#9fd8ff 75%,#4b8db8);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 4px 30px rgba(0,30,60,.9))}
+.sub{font-size:min(3.2vw,20px);letter-spacing:.7em;padding-left:.7em;margin-top:6px;color:#dcecf6;text-shadow:0 2px 12px #000}
+#skip{position:fixed;right:22px;bottom:calc(11vh + 12px);font-size:11px;letter-spacing:.2em;color:#9fb2bf;cursor:pointer;padding:6px 10px}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px}
+#title{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.05),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}
+#plate{position:relative;width:min(760px,92vw);margin-top:min(9vh,70px);padding:20px 30px 22px;border-radius:44px 44px 30px 30px;
+  background:linear-gradient(180deg,rgba(14,111,120,.30),rgba(6,44,54,.66));
+  border:2px solid var(--pd-copper);box-shadow:0 0 0 5px rgba(6,44,54,.75),0 0 0 6.5px var(--pd-brass),0 24px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(246,236,212,.25);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+#plate:before{content:"";position:absolute;inset:9px;border-radius:36px 36px 22px 22px;border:1px solid rgba(230,189,116,.45);pointer-events:none;
+  background:radial-gradient(circle at 16px 16px,var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 16px) 16px,var(--pd-brass) 0 3px,transparent 3.6px),
+    radial-gradient(circle at 16px calc(100% - 16px),var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 16px) calc(100% - 16px),var(--pd-brass) 0 3px,transparent 3.6px)}
+#dial{position:absolute;left:50%;top:-62px;width:124px;height:124px;margin-left:-62px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
+#dial .spin{transform-origin:74px 74px;animation:dspin 60s linear infinite}
+@keyframes dspin{to{transform:rotate(-360deg)}}
+@media (prefers-reduced-motion:reduce){#dial .spin{animation:none}}
+#title .logo{font-size:min(9.4vw,72px);letter-spacing:.14em;padding-left:.14em;margin-top:56px;line-height:1.05;white-space:nowrap;
+  background:linear-gradient(180deg,#fff7e2 8%,var(--pd-brass) 58%,var(--pd-copper));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 3px 0 rgba(4,26,32,.85)) drop-shadow(0 8px 22px rgba(0,0,0,.6))}
+#title .sub{font-family:var(--f-label);font-size:min(3.6vw,19px);letter-spacing:.62em;padding-left:.62em;margin-top:4px;color:var(--pd-cream);text-shadow:0 2px 8px rgba(0,0,0,.7)}
+#wave{display:block;width:min(330px,70%);height:16px;margin:6px auto 0}
+#eyebrow{font-size:10.5px;letter-spacing:.42em;padding-left:.42em;color:var(--pd-aqua);margin-top:2px}
+#title .menu{margin-top:14px;gap:8px}
+#title button{font-family:var(--f-label);width:268px;border-radius:999px;border:1.5px solid var(--pd-brass);color:var(--pd-cream);letter-spacing:.34em;padding:11px 0 9px;
+  background:linear-gradient(180deg,rgba(20,128,134,.75),rgba(8,70,80,.85));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 3px 0 rgba(4,26,32,.75);backdrop-filter:none;-webkit-backdrop-filter:none}
+#title button:hover,#title button:focus-visible{background:linear-gradient(180deg,rgba(40,160,160,.9),rgba(12,96,104,.95));border-color:#fff3d6;outline:none}
+#title button:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 0 rgba(4,26,32,.75)}
+#title button.pri{background:linear-gradient(180deg,#f08a55,var(--pd-coral) 55%,#b9431f);border-color:#ffe2b0;color:#fff8e8;font-size:17px;font-weight:600;padding:12px 0 9px;text-shadow:0 1px 0 rgba(90,30,10,.6)}
+#title button.pri:hover,#title button.pri:focus-visible{background:linear-gradient(180deg,#ffa06c,#f0703f 55%,#c94f27)}
+#title #diff{width:268px;gap:8px}
+#title #diff button{width:auto;flex:1;border-radius:999px;border-right-width:1.5px;padding:8px 0 6px;font-size:12px;letter-spacing:.22em;background:linear-gradient(180deg,rgba(8,60,70,.8),rgba(5,38,46,.9))}
+#title #diff button.on{background:linear-gradient(180deg,var(--pd-brass),#c99646);color:#0a2d35;border-color:#fff3d6;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 0 rgba(4,26,32,.75)}
+#title #diffT{font-family:var(--f-label);color:var(--pd-cream);font-size:12.5px;max-width:400px;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+@media (max-width:520px){#plate{padding:28px 18px 22px}#dial{width:112px;height:112px;margin-left:-56px;top:-56px}#dial .spin{transform-origin:74px 74px}#title .logo{margin-top:44px}}
+.menu{margin-top:44px;display:flex;flex-direction:column;gap:11px;align-items:center}
+button{font:inherit;color:#e8f1f7;background:rgba(10,24,36,.55);border:1px solid rgba(190,233,255,.4);padding:11px 0;width:250px;
+  letter-spacing:.3em;font-size:14px;cursor:pointer;transition:.15s;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+button:hover,button:focus-visible{background:rgba(111,211,255,.22);border-color:#dff4ff;outline:none}
+button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;padding:14px 0}
+.panel{position:relative;max-width:620px;width:100%;padding:28px 34px 22px;border-radius:36px 36px 26px 26px;font-family:var(--f-label);
+  background:linear-gradient(180deg,rgba(14,111,120,.52),rgba(6,44,54,.86));border:2px solid var(--pd-copper);
+  box-shadow:0 0 0 5px rgba(6,44,54,.75),0 0 0 6.5px var(--pd-brass),0 24px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(246,236,212,.25);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.panel:before{content:"";position:absolute;inset:9px;border-radius:28px 28px 18px 18px;border:1px solid rgba(230,189,116,.45);pointer-events:none;
+  background:radial-gradient(circle at 14px 14px,var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 14px) 14px,var(--pd-brass) 0 3px,transparent 3.6px),
+    radial-gradient(circle at 14px calc(100% - 14px),var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 14px) calc(100% - 14px),var(--pd-brass) 0 3px,transparent 3.6px)}
+.panel h2{margin:0;font-family:var(--f-deco);font-weight:400;letter-spacing:.3em;padding-left:.3em;font-size:28px;
+  background:linear-gradient(180deg,#fff7e2 8%,var(--pd-brass) 60%,var(--pd-copper));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 rgba(4,26,32,.85))}
+.panel h2:after{content:"";display:block;width:200px;max-width:70%;height:2px;margin:10px auto 12px;background:linear-gradient(90deg,transparent,var(--pd-brass) 30%,var(--pd-coral) 50%,var(--pd-brass) 70%,transparent)}
+.panel p,.panel li{font-size:13.5px;line-height:1.9;color:var(--pd-cream);text-align:left}
+.panel ul{padding-left:1.2em;margin:8px 0}
+.panel kbd{border-color:var(--pd-brass);color:#fff7e2;background:rgba(230,189,116,.14)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:7px 18px;text-align:left;font-size:13.5px;margin:6px 0 14px;color:var(--pd-cream)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:0;padding:9px 2px;font-size:13.5px;color:var(--pd-cream);border-bottom:1px solid rgba(230,189,116,.24);text-align:left}
+.row:last-of-type{border-bottom:0}
+.row b{font-weight:400;color:var(--pd-aqua);letter-spacing:.1em}
+.row input[type=range]{width:210px;accent-color:var(--pd-brass)}
+.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--pd-brass)}
+.row select{font:inherit;color:var(--pd-cream);background:rgba(8,60,70,.9);border:1.5px solid var(--pd-brass);border-radius:999px;padding:5px 14px}
+.sel{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.panel .sel button{width:auto;padding:6px 13px 4px;font-size:12px;letter-spacing:.14em;background:linear-gradient(180deg,rgba(8,60,70,.8),rgba(5,38,46,.9))}
+.panel .sel button.on{background:linear-gradient(180deg,var(--pd-brass),#c99646);color:#0a2d35;border-color:#fff3d6;font-weight:600}
+.sel.sw{flex-wrap:nowrap;gap:6px}
+.row b{white-space:nowrap}
+.panel .sel.sw button{flex:none;width:27px;height:27px;padding:0;border-radius:50%;overflow:hidden;background:none}
+.panel .sel.sw button i{display:block;width:100%;height:100%}
+.panel .sel.sw button.on{box-shadow:0 0 0 2px #06323c,0 0 0 4.5px #fff3d6}
+.panel .menu{margin-top:18px;flex-direction:row;justify-content:center;flex-wrap:wrap;gap:10px}
+.panel button{font-family:var(--f-label);border-radius:999px;border:1.5px solid var(--pd-brass);color:var(--pd-cream);letter-spacing:.3em;padding:11px 0 9px;
+  background:linear-gradient(180deg,rgba(20,128,134,.75),rgba(8,70,80,.85));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 3px 0 rgba(4,26,32,.75);backdrop-filter:none;-webkit-backdrop-filter:none}
+.panel .menu button{width:190px}
+.panel button:hover,.panel button:focus-visible{background:linear-gradient(180deg,rgba(40,160,160,.9),rgba(12,96,104,.95));border-color:#fff3d6;outline:none}
+.panel button.pri{background:linear-gradient(180deg,#f08a55,var(--pd-coral) 55%,#b9431f);border-color:#ffe2b0;color:#fff8e8;font-weight:600;text-shadow:0 1px 0 rgba(90,30,10,.6)}
+.panel button.pri:hover,.panel button.pri:focus-visible{background:linear-gradient(180deg,#ffa06c,#f0703f 55%,#c94f27)}
+.panel button:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 0 rgba(4,26,32,.75)}
+.dim{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.22),rgba(4,30,38,.60) 62%,rgba(2,16,22,.88))}
+#over h2{background:linear-gradient(180deg,#ffe6d8 8%,#f08a55 55%,var(--pd-coral));-webkit-background-clip:text;background-clip:text}
+#overP{color:var(--pd-cream)}
+#pause .panel{max-width:330px}
+/* 設定は右に寄せ、後ろの機体が見えるようにする */
+#opts{align-items:flex-end;background:linear-gradient(90deg,rgba(2,16,22,0) 30%,rgba(2,16,22,.55))}
+#oShape{max-width:250px}
+#opts .panel{max-width:440px;margin-right:min(4vw,48px)}
+#opts .row input[type=range]{width:150px}
+@media (max-width:760px){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}
+#res{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.10),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}
+.plate{position:relative;width:min(600px,92vw);margin-top:min(9vh,64px);padding:74px 34px 24px;border-radius:44px 44px 30px 30px;
+  background:linear-gradient(180deg,rgba(14,111,120,.42),rgba(6,44,54,.78));
+  border:2px solid var(--pd-copper);box-shadow:0 0 0 5px rgba(6,44,54,.75),0 0 0 6.5px var(--pd-brass),0 24px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(246,236,212,.25);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.plate:before{content:"";position:absolute;inset:9px;border-radius:36px 36px 22px 22px;border:1px solid rgba(230,189,116,.45);pointer-events:none;
+  background:radial-gradient(circle at 16px 16px,var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 16px) 16px,var(--pd-brass) 0 3px,transparent 3.6px),
+    radial-gradient(circle at 16px calc(100% - 16px),var(--pd-brass) 0 3px,transparent 3.6px),radial-gradient(circle at calc(100% - 16px) calc(100% - 16px),var(--pd-brass) 0 3px,transparent 3.6px)}
+#medal{position:absolute;left:50%;top:-70px;width:140px;height:140px;margin-left:-70px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.6))}
+#medal svg{position:absolute;inset:0;width:100%;height:100%}
+#rank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--f-deco);font-size:78px;line-height:1;padding-top:4px;
+  background:linear-gradient(180deg,#fff7e2 10%,var(--pd-brass) 62%,var(--pd-copper));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 rgba(4,26,32,.9))}
+#resEyebrow{font-family:var(--f-deco);font-size:min(6vw,30px);letter-spacing:.2em;padding-left:.2em;
+  background:linear-gradient(180deg,#fff7e2 8%,var(--pd-brass) 60%,var(--pd-copper));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 rgba(4,26,32,.85))}
+#resTitle{margin:2px 0 0;font-family:var(--f-label);font-weight:400;font-size:15px;letter-spacing:.6em;padding-left:.6em;color:var(--pd-cream)}
+.wave{display:block;width:min(300px,70%);height:16px;margin:8px auto 4px}
+#rankT{font-size:13px;letter-spacing:.3em;padding-left:.3em;color:var(--pd-aqua);margin-bottom:6px}
+#res table{margin:6px auto 0;border-collapse:collapse;font-size:14px;width:min(420px,100%);color:var(--pd-cream)}
+#res td{padding:7px 10px;text-align:left;border-bottom:1px solid rgba(230,189,116,.28)}
+#res tr:last-child td{border-bottom:0}
+#res td:first-child{letter-spacing:.12em;color:#d7e6e3}
+#res td:last-child{text-align:right;color:#fff7e2}
+#res .menu{margin-top:16px;flex-direction:row;justify-content:center;flex-wrap:wrap;gap:10px}
+#res button{font-family:var(--f-label);width:210px;border-radius:999px;border:1.5px solid var(--pd-brass);color:var(--pd-cream);letter-spacing:.3em;padding:11px 0 9px;
+  background:linear-gradient(180deg,rgba(20,128,134,.75),rgba(8,70,80,.85));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 3px 0 rgba(4,26,32,.75);backdrop-filter:none;-webkit-backdrop-filter:none}
+#res button:hover,#res button:focus-visible{background:linear-gradient(180deg,rgba(40,160,160,.9),rgba(12,96,104,.95));border-color:#fff3d6;outline:none}
+#res button.pri{background:linear-gradient(180deg,#f08a55,var(--pd-coral) 55%,#b9431f);border-color:#ffe2b0;color:#fff8e8;font-weight:600;text-shadow:0 1px 0 rgba(90,30,10,.6)}
+#res button.pri:hover,#res button.pri:focus-visible{background:linear-gradient(180deg,#ffa06c,#f0703f 55%,#c94f27)}
+#res button:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 0 rgba(4,26,32,.75)}
+@media (max-width:520px){.plate{padding:64px 16px 20px}#medal{width:116px;height:116px;margin-left:-58px;top:-58px}#rank{font-size:62px}#res button{width:100%}}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s}
+#load{position:fixed;inset:0;background:#05080c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:12px;letter-spacing:.3em;color:#9fb2bf}
+#load .bar{width:260px}
+#touch{position:fixed;inset:0;pointer-events:none}
+#stick{position:absolute;left:26px;bottom:26px;width:130px;height:130px;border-radius:50%;border:1px solid rgba(190,233,255,.4);background:rgba(10,24,36,.3);pointer-events:auto}
+#stick i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px;border-radius:50%;background:rgba(190,233,255,.4)}
+.tb{position:absolute;right:26px;width:78px;height:78px;border-radius:50%;padding:0;letter-spacing:.05em;font-size:12px;pointer-events:auto}
+#tbA{bottom:120px}#tbB{bottom:28px;right:112px}
+body.touch #radar{bottom:210px}body.touch #inst{left:176px}
+@media (max-width:700px){#tl{width:150px}#objText{font-size:12px}#radar{width:110px;height:110px}#rtext{font-size:14px}#wing{font-size:10px}#banner b{font-size:22px}#hint{font-size:11px;white-space:normal;width:86vw}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud" hidden>
+  <canvas id="fhud"></canvas>
+  <div id="tl">
+    <div class="gauge"><label><span>機体 HULL</span><span class="mono" id="hullN">100</span></label><div class="bar" id="hullBar"><i></i></div></div>
+    <div class="gauge"><label><span>ブースト BOOST</span><span class="mono" id="boostN">100</span></label><div class="bar" id="boostBar"><i></i></div></div>
+  </div>
+  <div id="obj"><div id="objPhase"></div><div id="objText"></div><div id="timer" class="mono" hidden></div></div>
+  <div id="wing"><div id="w1"></div><div id="w2"></div></div>
+  <div id="ret"></div>
+  <div id="mark" hidden><div class="d"></div><span class="mono"></span></div>
+  <div id="warn" hidden></div>
+  <div id="prompt" hidden><div id="promptT"></div><div class="bar"><i></i></div></div>
+  <div id="hint" hidden></div>
+  <div id="inst" class="mono"><div><b id="iAlt">0</b>m 高度</div><div><b id="iSpd">0</b>kt 速度</div><div><b id="iWind">0</b>m/s 風速</div><div><b id="iDist">0</b>km 中心まで</div></div>
+  <canvas id="radar" width="340" height="340"></canvas>
+</div>
+
+<div id="banner"><small></small><b></b></div>
+<div id="card"><h1 class="logo"></h1><div class="sub"></div></div>
+<div class="bars" id="barT"></div><div class="bars" id="barB"></div>
+<div id="radio"><span id="rwho"></span><span id="rtext"></span></div>
+<div id="skip" hidden>スキップ ▸ Enter</div>
+
+<div id="title" class="screen" hidden>
+ <div id="plate">
+  <svg id="dial" viewBox="0 0 148 148" aria-hidden="true">
+    <defs><radialGradient id="dg" cx="50%" cy="38%"><stop offset="0" stop-color="#1c8f92"/><stop offset="1" stop-color="#06323c"/></radialGradient>
+      <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c8"/><stop offset=".5" stop-color="#e6bd74"/><stop offset="1" stop-color="#b9682e"/></linearGradient></defs>
+    <circle cx="74" cy="74" r="71" fill="url(#bg)"/><circle cx="74" cy="74" r="64" fill="#06323c"/><circle cx="74" cy="74" r="61" fill="url(#dg)" stroke="#e6bd74" stroke-width="1"/>
+    <g class="spin" stroke="#f6ecd4" stroke-linecap="round" fill="none">
+      <g stroke-width="1.4" opacity=".85"><path d="M74 16v8M74 124v8M16 74h8M124 74h8"/></g>
+      <g stroke-width=".8" opacity=".6"><path d="M33 33l5 5M110 110l5 5M33 115l5-5M110 38l5-5M52 20l2.5 6M96 20l-2.5 6M52 128l2.5-6M96 128l-2.5-6M20 52l6 2.5M20 96l6-2.5M128 52l-6 2.5M128 96l-6-2.5"/></g>
+      <path stroke="#62d2cb" stroke-width="5" d="M74 74c8-3 14 4 12 12-3 12-18 16-29 8-14-10-13-31 2-41 18-12 43-4 49 17"/>
+      <path stroke="#62d2cb" stroke-width="5" d="M74 74c-8 3-14-4-12-12 3-12 18-16 29-8 14 10 13 31-2 41-18 12-43 4-49-17"/>
+    </g>
+    <circle cx="74" cy="74" r="6.5" fill="#06323c" stroke="#e9633d" stroke-width="2"/>
+    <circle cx="74" cy="7.5" r="2.4" fill="#06323c"/><circle cx="74" cy="140.5" r="2.4" fill="#06323c"/><circle cx="7.5" cy="74" r="2.4" fill="#06323c"/><circle cx="140.5" cy="74" r="2.4" fill="#06323c"/>
+  </svg>
+  <h1 class="logo">STORM RIDER</h1>
+  <svg id="wave" viewBox="0 0 330 16" aria-hidden="true"><path d="M2 8c14-9 27-9 41 0s27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 39 0" fill="none" stroke="#e6bd74" stroke-width="1.6" stroke-linecap="round"/><circle cx="165" cy="8" r="3.2" fill="#e9633d"/></svg>
+  <div class="sub">嵐を消す翼</div>
+  <div id="eyebrow">MIZUHA MARINE WEATHER STATION</div>
+  <div class="menu">
+    <div id="diff"><button data-d="0">訓練</button><button data-d="1">実戦</button><button data-d="2">極限</button></div>
+    <div id="diffT"></div>
+    <button class="pri" id="bStart">出撃する</button>
+    <button id="bHelp">操作と任務</button>
+    <button id="bOpts">設定</button>
+  </div>
+ </div>
+</div>
+
+<div id="help" class="screen dim" hidden><div class="panel">
+  <h2>操作と任務</h2>
+  <div class="keys">
+    <span><kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd></span><span>機首の上げ下げ</span>
+    <span><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></span><span>旋回</span>
+    <span><kbd>Shift</kbd></span><span>ブースト（ゲージを消費）</span>
+    <span><kbd>Space</kbd></span><span>ディフューザー発射・各種操作</span>
+    <span><kbd>Esc</kbd> / <kbd>P</kbd></span><span>一時停止</span>
+  </div>
+  <ul>
+    <li>黄色のマーカーが次の目標です。画面外にあるときは縁に矢印が出ます。</li>
+    <li>赤い光の柱は落雷の予告です。柱から離れてください。</li>
+    <li>僚機が助けを求めたら、そばを並んで飛ぶと支援できます。</li>
+    <li>台風の目でコアにディフューザーを撃ち込み、基地へ帰り着けば任務完了です。</li>
+  </ul>
+  <div class="menu"><button class="bBack">戻る</button></div>
+</div></div>
+
+<div id="opts" class="screen dim" hidden><div class="panel">
+  <h2>設定</h2>
+  <div class="row"><span>音楽の音量</span><input type="range" id="oMus" min="0" max="100"></div>
+  <div class="row"><span>音楽の音源</span><span id="oSrc">内蔵シンセ</span></div>
+  <div class="row"><span>音が出ないとき</span><span class="sel"><button type="button" id="oFix">音声を再起動</button></span></div>
+  <div class="row"><span>効果音の音量</span><input type="range" id="oSfx" min="0" max="100"></div>
+  <div class="row"><span>上下操作を反転（↓で機首上げ）</span><input type="checkbox" id="oInv"></div>
+  <div class="row"><span>機体の塗装　<b id="oColorN"></b></span><span class="sel sw" id="oColor"></span></div>
+  <div class="row"><span>機体の形</span><span class="sel" id="oShape"></span></div>
+  <div class="row"><span>画質</span><select id="oQ"><option value="0">軽量</option><option value="1">標準</option><option value="2">高画質</option></select></div>
+  <div class="menu"><button class="bBack">戻る</button></div>
+</div></div>
+
+<div id="pause" class="screen dim" hidden><div class="panel">
+  <h2>一時停止</h2>
+  <div class="menu"><button class="pri" id="bResume">再開</button><button id="bPOpts">設定</button><button id="bPTitle">タイトルへ</button></div>
+</div></div>
+
+<div id="over" class="screen dim" hidden><div class="panel">
+  <h2 id="overT">機体喪失</h2>
+  <p id="overP" style="text-align:center;white-space:pre-line"></p>
+  <div class="menu"><button class="pri" id="bRetry">直前から再挑戦</button><button id="bOTitle">タイトルへ</button></div>
+</div></div>
+
+<div id="res" class="screen" hidden>
+ <div class="plate" id="resPlate">
+  <div id="medal"><svg viewBox="0 0 148 148" aria-hidden="true">
+    <defs><radialGradient id="mg" cx="50%" cy="38%"><stop offset="0" stop-color="#1c8f92"/><stop offset="1" stop-color="#06323c"/></radialGradient>
+      <linearGradient id="mb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0c8"/><stop offset=".5" stop-color="#e6bd74"/><stop offset="1" stop-color="#b9682e"/></linearGradient></defs>
+    <circle cx="74" cy="74" r="71" fill="url(#mb)"/><circle cx="74" cy="74" r="64" fill="#06323c"/><circle cx="74" cy="74" r="61" fill="url(#mg)" stroke="#e6bd74" stroke-width="1"/>
+    <g stroke="#f6ecd4" stroke-linecap="round" fill="none" opacity=".75"><path stroke-width="1.4" d="M74 17v7M74 124v7M17 74h7M124 74h7"/><path stroke-width=".8" d="M34 34l4.5 4.5M109.5 109.5l4.5 4.5M34 114l4.5-4.5M109.5 38.5l4.5-4.5"/></g>
+    <circle cx="74" cy="74" r="45" fill="none" stroke="#62d2cb" stroke-width="1" stroke-dasharray="2 5"/>
+  </svg><div id="rank">A</div></div>
+  <div id="resEyebrow">MISSION COMPLETE</div>
+  <h2 id="resTitle">任務完了</h2>
+  <svg class="wave" viewBox="0 0 330 16" aria-hidden="true"><path d="M2 8c14-9 27-9 41 0s27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 39 0" fill="none" stroke="#e6bd74" stroke-width="1.6" stroke-linecap="round"/><circle cx="165" cy="8" r="3.2" fill="#e9633d"/></svg>
+  <div id="rankT"></div>
+  <table><tbody id="resT"></tbody></table>
+  <div class="menu"><button class="pri" id="bAgain">もう一度出撃</button><button id="bRTitle">タイトルへ</button></div>
+ </div>
+</div>
+
+<div id="touch" hidden><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button></div>
+<div id="sleep" hidden>休止中　―　クリックまたはキー操作で再開</div>
+<div id="fade"></div>
+<div id="load"><div>気象データを読み込み中</div><div class="bar"><i id="loadBar" style="transform:scaleX(0)"></i></div></div>
