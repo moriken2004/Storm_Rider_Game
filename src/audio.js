@@ -282,13 +282,19 @@ function pad(notes,t,dur,vol,bright){
   f.connect(g);g.connect(AU.mus);const r=ctx.createGain();r.gain.value=.5;g.connect(r);r.connect(AU.rev);
 }
 function brass(n,t,dur,vol){
-  const ctx=AU.ctx,g=ctx.createGain(),f=ctx.createBiquadFilter();f.type='lowpass';f.Q.value=1.2;
-  f.frequency.setValueAtTime(350,t);f.frequency.linearRampToValueAtTime(2300,t+.07);f.frequency.exponentialRampToValueAtTime(1100,t+dur);
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.045);g.gain.setValueAtTime(vol*.8,t+dur*.75);g.gain.linearRampToValueAtTime(0,t+dur+.12);
-  for(const[d,ty]of[[-6,'sawtooth'],[6,'sawtooth'],[0,'square']]){const o=ctx.createOscillator();o.type=ty;o.frequency.value=mtof(n);o.detune.value=d;const og=ctx.createGain();og.gain.value=ty==='square'?.25:.5;o.connect(og);og.connect(f);o.start(t);o.stop(t+dur+.2);}
-  f.connect(g);g.connect(AU.mus);const r=ctx.createGain();r.gain.value=.4;g.connect(r);r.connect(AU.rev);
+  const ctx=AU.ctx,g=ctx.createGain(),f=ctx.createBiquadFilter();f.type='lowpass';f.Q.value=.7;
+  const top=900+vol*9000+Math.min(900,n*9);f.frequency.setValueAtTime(300,t);f.frequency.linearRampToValueAtTime(top,t+.06);f.frequency.exponentialRampToValueAtTime(Math.max(500,top*.55),t+Math.max(.12,dur));
+  const at=Math.min(.05,dur*.25);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+at);g.gain.linearRampToValueAtTime(vol*.82,t+at+.08);g.gain.setValueAtTime(vol*.78,t+Math.max(at+.09,dur*.8));g.gain.linearRampToValueAtTime(0,t+dur+.09);
+  let vib=null;if(dur>.5){vib=ctx.createOscillator();vib.frequency.value=5.2;const vg=ctx.createGain();vg.gain.setValueAtTime(0,t);vg.gain.setValueAtTime(0,t+.28);vg.gain.linearRampToValueAtTime(9,t+.6);vib.connect(vg);vib._g=vg;vib.start(t);vib.stop(t+dur+.2);}
+  for(const[d,ty,lv]of[[-5,'sawtooth',.5],[5,'sawtooth',.5],[0,'triangle',.35]]){const o=ctx.createOscillator();o.type=ty;o.frequency.value=mtof(n);o.detune.value=d;if(vib)vib._g.connect(o.detune);const og=ctx.createGain();og.gain.value=lv;o.connect(og);og.connect(f);o.start(t);o.stop(t+dur+.2);}
+  f.connect(g);g.connect(AU.mus);const r=ctx.createGain();r.gain.value=.45;g.connect(r);r.connect(AU.rev);
 }
-const strg=(n,t,dur,vol)=>tone(AU.mus,'sawtooth',mtof(n),mtof(n),t,dur,vol,.012,{lp:2200,lp2:700,rev:.25});
+// 和音を、響きの落ち着く中音域（E3〜E4）へ寄せて並べ直す。進行しても各声部が大きく跳ばない
+const voice=c=>c.map(n=>{while(n<52)n+=12;while(n>=64)n-=12;return n;}).sort((x,y)=>x-y);
+// ニ短調の音階（和音が A のときだけ導音 C# を使う）の上で、根音から k 段上の音
+const SCALE=[2,4,5,7,9,10,0];
+function deg(root,k,lead){const pc=((root%12)+12)%12;let i=SCALE.indexOf(pc);if(i<0)i=0;let n=root,j=i;for(let s=0;s<k;s++){const a0=SCALE[j%7],b0=SCALE[(j+1)%7];n+=((b0-a0)+12)%12||12;j++;}if(lead&&((n%12)+12)%12===0)n+=1;return n;}
+const strg=(n,t,dur,vol)=>tone(AU.mus,'sawtooth',mtof(n),mtof(n),t,dur,vol,.014,{lp:1500+vol*9000,lp2:600,rev:.3});
 const bassN=(n,t,dur,vol)=>{tone(AU.mus,'sawtooth',mtof(n),mtof(n),t,dur,vol,.008,{lp:420,lp2:160});tone(AU.mus,'sine',mtof(n-12),mtof(n-12),t,dur,vol*.9,.008);};
 const bell=(n,t,vol)=>{tone(AU.mus,'sine',mtof(n),mtof(n),t,2.4,vol,.004,{rev:.9});tone(AU.mus,'sine',mtof(n)*2.76,mtof(n)*2.76,t,1.1,vol*.25,.004,{rev:.9});};
 const kick=(t,v)=>{tone(AU.mus,'sine',150,42,t,.3,v,.003);burst(AU.mus,t,.03,v*.3,'lowpass',2000,2000,.5);};
@@ -304,65 +310,70 @@ const VTHEME=[[0,74,4],[4,78,4],[8,81,8],[16,85,6],[22,83,2],[24,81,8],[32,86,8]
   [64,78,4],[68,81,4],[72,86,8],[80,88,8],[88,85,8],[96,86,6],[102,83,2],[104,79,8],[112,81,16]];
 const MOODS={
   none:{bpm:60,bars:1,step(){}},
-  title:{bpm:76,bars:8,ch:['Dm9','Bbmaj7','Gm9','A7s'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar%4]];
-    if(st===0){pad(c,t,sp*16,.05,1100);tone(AU.mus,'sine',mtof(c[0]-12),mtof(c[0]-12),t,sp*15,.16,.3);}
-    if(st===4||st===10||st===14){if(Math.random()<.7)bell(c[1+Math.floor(Math.random()*(c.length-1))]+24,t,.05);}
-    if(bar<4){const g=(bar*16+st);for(const[a,n,l]of[[0,74,12],[12,76,4],[16,77,16],[32,74,12],[44,77,4],[48,81,16]])if(a===g)tone(AU.mus,'triangle',mtof(n),mtof(n),t,sp*l*1.1,.07,.05,{lp:1800,rev:.8});}
+  // タイトル：ゆったりした和音の上に、8 小節で問いと答えになる旋律。鐘は決まった分散和音だけ
+  title:{bpm:76,bars:8,ch:['Dm9','Bbmaj7','Gm9','A7s'],mel:[[0,74,12],[12,76,4],[16,77,16],[32,74,12],[44,77,4],[48,81,14],[64,77,12],[76,76,4],[80,74,14],[96,72,8],[104,70,8],[112,69,14]],
+   step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar%4]],v=voice(c);
+    if(st===0){pad(v,t,sp*16,.05,1100);tone(AU.mus,'sine',mtof(c[0]-12),mtof(c[0]-12),t,sp*15,.15,.3);}
+    if(st===6)bell(v[1]+12,t,.035);if(st===10)bell(v[2]+12,t,.03);if(st===14&&bar%2===1)bell(v[v.length-1]+12,t,.028);
+    const gi=bar*16+st;for(const[a0,n,l]of this.mel)if(a0===gi)tone(AU.mus,'triangle',mtof(n),mtof(n),t,sp*l*1.05,.065,.06,{lp:1700,rev:.8});
   }},
-  launch:{bpm:132,bars:8,ch:['Dm','Dm','Bb','C','Dm','F','Gm','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]];
-    if(st===0)pad(c.map(n=>n+12),t,sp*16,.035,1500);
-    if(st%2===0)bassN(c[0]-12,t,sp*1.6,st%8===0?.2:.13);
-    strg(c[[0,2,1,2][st%4]]+12,t,sp*.9,st%4===0?.05:.032);
-    if(st===0||st===6||st===10)kick(t,.5);if(st===4||st===12)snare(t,.2);if(st%2===0)hat(t,.035);
+  launch:{bpm:132,bars:8,ch:['Dm','Dm','Bb','C','Dm','F','Gm','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]],v=voice(c);
+    if(st===0)pad(v.map(n=>n+12),t,sp*16,.032,1500);
+    if(st%2===0)bassN(c[0]-12,t,sp*1.6,st%8===0?.2:.12);
+    strg(v[[0,2,1,2][st%4]]+12,t,sp*.9,st%4===0?.048:.03);
+    if(st===0||st===6||st===10)kick(t,.5);if(st===4||st===12)snare(t,.2);if(st%2===0)hat(t,st%4===0?.035:.022);
     if(bar===7&&st>=8)taiko(t,.12+(st-8)*.045);
     if(bar===0&&st===0)cymbal(t,.07);
-    const g=bar*16+st;for(const[a,n,l]of THEME)if(a===g)brass(n-12,t,sp*l*.95,.085);
+    const gi=bar*16+st;for(const[a0,n,l]of THEME)if(a0===gi)brass(n-12,t,sp*l*.95,.085);
   }},
-  storm:{bpm:166,bars:8,ch:['Dm','Dm','Bb','Bb','Gm','Gm','A','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]],I=MUS.intensity;
-    // 低い不協和の持続音と、うなる低音
-    if(st===0){pad([c[0]-12,c[0]-5,c[0],c[0]+1],t,sp*16,.055,800+I*500);tone(AU.mus,'sawtooth',mtof(c[0]-24),mtof(c[0]-24),t,sp*15,.16,.05,{lp:160});}
-    bassN(c[0]-12,t,sp*.75,[.24,.1,.13,.2,.1,.13,.22,.1,.24,.1,.13,.2,.1,.2,.13,.16][st]);
-    // 刻み続ける弦
-    strg(c[[0,2,1,2][st%4]]+12,t,sp*.7,st%4===0?.07:.045);
-    if(I>=1)strg(c[[2,0,1,0][st%4]]+24+(bar%2&&st>11?1:0),t,sp*.5,.028);
+  // 嵐：音をぶつけて濁らせるのをやめ、ニ短調の音階の中で「低い呼びかけ → 半音上の隣の音で揺れる答え → 駆け上がり」を 4 小節ごとに繰り返す
+  storm:{bpm:166,bars:8,ch:['Dm','Dm','Bb','Bb','Gm','Gm','A','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]],v=voice(c),I=MUS.intensity,ld=this.ch[bar]==='A',r0=c[0];
+    if(st===0){pad([r0-12,r0-5,v[0],v[1]],t,sp*16,.05,800+I*450);tone(AU.mus,'sawtooth',mtof(r0-24),mtof(r0-24),t,sp*15,.15,.05,{lp:150});}
+    bassN(r0-12,t,sp*.75,[.24,.09,.12,.19,.09,.12,.21,.09,.24,.09,.12,.19,.09,.19,.12,.15][st]);
+    // 刻み続ける弦（和音の音だけ。強拍を少し強く）
+    strg(v[[0,2,1,2][st%4]]+12,t,sp*.7,st%4===0?.062:.038);
+    if(I>=1)strg(v[[2,0,1,0][st%4]]+24,t,sp*.5,st%4===0?.026:.018);
     // 太鼓
-    if([1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0][st])taiko(t,st===0?.6:.42);
-    if(st===4||st===12)snare(t,.3);
-    hat(t,st%2?.025:.05);
+    if([1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0][st])taiko(t,st===0?.6:.4);
+    if(st===4||st===12)snare(t,.28);
+    hat(t,st%4===2?.045:st%2?.016:.03);
     if(bar%2===1&&st>=12)taiko(t,.3+(st-12)*.1);
-    if(bar%4===0&&st===0)cymbal(t,.11);
-    // 低い金管の脅すような動機
-    if(bar%2===0){if(st===0){brass(c[0]-12,t,sp*7,.12);brass(c[0]-5,t,sp*7,.07);}if(st===8){brass(c[0]-11,t,sp*6,.12);brass(c[0]-4,t,sp*6,.06);}}
-    else if(bar%4===3&&st>=8&&st%2===0){const up=[0,3,7,10][(st-8)>>1];brass(c[0]+up,t,sp*1.9,.1);brass(c[0]+up-12,t,sp*1.9,.07);}
-    else if(st===0){brass(c[0],t,sp*3,.1);brass(c[0]+7,t,sp*3,.07);}else if(st===6){brass(c[0]+1,t,sp*8,.1);}
+    if(bar%4===0&&st===0)cymbal(t,.1);
+    // 低い金管：呼びかけ（根音 → 3 度）と答え（5 度 → 6 度 → 5 度）
+    const B=(k,len,vol,oct)=>{const n=deg(r0,k,ld)+(oct||0);brass(n-12,t,sp*len,vol);if(I>=2)brass(n,t,sp*len,vol*.5);};
+    if(bar%4===0){if(st===0)B(0,7,.12);if(st===8)B(2,7,.11);}
+    else if(bar%4===1){if(st===0)B(4,5.5,.12);if(st===6)B(5,1.8,.1);if(st===8)B(4,7,.11);}
+    else if(bar%4===2){if(st===0)B(0,7,.12);if(st===8)B(4,7,.11);}
+    else{if(st===0)B(2,7,.11);if(st>=8&&st%2===0)B([0,2,4,7][(st-8)>>1],1.8,.1+(st-8)*.004);}
     if(I>=2){
-      if(st%4===2)kick(t,.5);
-      if(bar%4===2&&st===0)tone(AU.mus,'sawtooth',260,980,t,sp*30,.05,sp*14,{lp:2600,rev:.6});
-      if(st%8===7)brass(c[0]+13,t,sp*.9,.07);
+      if(st%4===2)kick(t,.45);
+      if(bar%4===2&&st===0)tone(AU.mus,'sawtooth',260,980,t,sp*30,.045,sp*14,{lp:2600,rev:.6});
     }
   }},
-  eye:{bpm:66,bars:4,ch:['Ds2','Bbmaj7','Gm9','A7s'],step(s,t,sp){const bar=(s>>4)%4,st=s%16,c=CH[this.ch[bar]];
-    if(st===0)tone(AU.mus,'sawtooth',mtof(26),mtof(26),t,sp*16,.12,1.5,{lp:120});if(st===8&&bar%2)taiko(t,.25);
-    if(st===0){pad(c.map(n=>n+12),t,sp*16,.045,1400);tone(AU.mus,'sine',mtof(c[0]-12),mtof(c[0]-12),t,sp*15,.13,.5);}
-    if(st%4===2&&Math.random()<.75)bell(c[Math.floor(Math.random()*c.length)]+24,t,.06);
-    if(bar===0&&st===0&&Math.random()<.6)for(const[a,n,l]of[[0,74,12],[12,76,4],[16,77,14]])tone(AU.mus,'sine',mtof(n+12),mtof(n+12),t+a*sp,sp*l,.035,.2,{rev:.9});
+  // 台風の目：低い持続音と開いた和音。タイトルの旋律の頭だけが、高い所で 2 回に 1 回こだまする
+  eye:{bpm:66,bars:8,ch:['Ds2','Bbmaj7','Gm9','A7s'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar%4]],v=voice(c);
+    if(st===0)tone(AU.mus,'sawtooth',mtof(26),mtof(26),t,sp*16,.11,1.5,{lp:120});if(st===8&&bar%4===3)taiko(t,.22);
+    if(st===0){pad(v.map(n=>n+12),t,sp*16,.042,1400);tone(AU.mus,'sine',mtof(c[0]-12),mtof(c[0]-12),t,sp*15,.12,.5);}
+    if(st===4)bell(v[0]+24,t,.04);if(st===10)bell(v[2]+24,t,.034);if(st===14&&bar%2===0)bell(v[1]+24,t,.028);
+    if(bar===0&&st===0)for(const[a0,n,l]of[[0,74,12],[12,76,4],[16,77,14]])tone(AU.mus,'sine',mtof(n+12),mtof(n+12),t+a0*sp,sp*l,.032,.2,{rev:.9});
+    if(bar===4&&st===0)for(const[a0,n,l]of[[0,77,12],[12,76,4],[16,74,14]])tone(AU.mus,'sine',mtof(n+12),mtof(n+12),t+a0*sp,sp*l,.028,.2,{rev:.9});
   }},
-  climax:{bpm:160,bars:8,ch:['Dm','Dm','Bb','C','Dm','F','Gm','A'],tr:2,step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]].map(n=>n+2);
-    if(st===0)pad(c.map(n=>n+12),t,sp*16,.035,1900);
-    if(st%2===0)bassN(c[0]-12,t,sp*1.5,.2);
-    strg(c[[0,2,1,2][st%4]]+12,t,sp*.85,.05);strg(c[[2,1,0,1][st%4]]+24,t,sp*.6,.02);
-    if(st%4===0)kick(t,.55);if(st===4||st===12)snare(t,.26);hat(t,st%2?.022:.04);
+  climax:{bpm:160,bars:8,ch:['Dm','Dm','Bb','C','Dm','F','Gm','A'],tr:2,step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]].map(n=>n+2),v=voice(c);
+    if(st===0)pad(v.map(n=>n+12),t,sp*16,.033,1900);
+    if(st%2===0)bassN(c[0]-12,t,sp*1.5,st%8===0?.21:.17);
+    strg(v[[0,2,1,2][st%4]]+12,t,sp*.85,st%4===0?.05:.036);strg(v[[2,1,0,1][st%4]]+24,t,sp*.6,.017);
+    if(st%4===0)kick(t,.55);if(st===4||st===12)snare(t,.26);hat(t,st%4===2?.04:st%2?.015:.028);
     if(st===3||st===11||st===14)taiko(t,.3);
     if(bar===0&&st===0)cymbal(t,.08);
-    const g=bar*16+st;for(const[a,n,l]of THEME)if(a===g){brass(n-10,t,sp*l*.95,.085);brass(n-22,t,sp*l*.95,.04);}
+    const gi=bar*16+st;for(const[a0,n,l]of THEME)if(a0===gi){brass(n-10,t,sp*l*.95,.085);brass(n-22,t,sp*l*.95,.04);}
   }},
-  victory:{bpm:104,bars:8,ch:['D','A','Bm','G','D','A','G','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]];
-    if(st===0){pad(c.map(n=>n+12),t,sp*16,.05,2000);bassN(c[0]-12,t,sp*7,.2);taiko(t,.36);}
-    if(st===8){bassN(c[0]-12,t,sp*7,.15);}
-    if(st===14&&bar%2===1)taiko(t,.22);
-    if(st%2===0)strg(c[[0,1,2,1,0,2,1,2][st>>1]]+24,t,sp*1.8,.026);
-    if(bar%4===0&&st===0)cymbal(t,.09);
-    if(st%4===0&&Math.random()<.5)bell(c[Math.floor(Math.random()*3)]+36,t,.03);
+  victory:{bpm:104,bars:8,ch:['D','A','Bm','G','D','A','G','A'],step(s,t,sp){const bar=(s>>4)%8,st=s%16,c=CH[this.ch[bar]],v=voice(c);
+    if(st===0){pad(v.map(n=>n+12),t,sp*16,.048,2000);bassN(c[0]-12,t,sp*7,.2);taiko(t,.34);}
+    if(st===8){bassN(c[0]-12,t,sp*7,.14);}
+    if(st===14&&bar%2===1)taiko(t,.2);
+    if(st%2===0)strg(v[[0,1,2,1,0,2,1,2][st>>1]]+24,t,sp*1.8,st%8===0?.028:.02);
+    if(bar%4===0&&st===0)cymbal(t,.085);
+    if(st===8&&bar%2===0)bell(v[2]+24,t,.026);
     const g=bar*16+st;for(const[a,n,l]of VTHEME)if(a===g){brass(n-12,t,sp*l*.96,.09);brass(n-24,t,sp*l*.96,.035);}
   }},
 };

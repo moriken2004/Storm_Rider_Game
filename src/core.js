@@ -472,7 +472,7 @@ function makeRT(w,h,depth){
 }
 function resize(force){
   const cw=window.innerWidth||800,ch=window.innerHeight||600;
-  const dpr=Math.min(window.devicePixelRatio||1,[1,1.5,2][view.q]);
+  const dpr=Math.min(window.devicePixelRatio||1,(view.touch?[1.3,1.6,2]:[1,1.5,2])[view.q]);
   const w=Math.max(320,Math.round(cw*dpr*view.scale)),h=Math.max(200,Math.round(ch*dpr*view.scale));
   view.cssW=cw;view.cssH=ch;
   if(!force&&w===RW&&h===RH)return;

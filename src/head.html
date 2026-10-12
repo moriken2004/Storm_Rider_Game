@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#06323c">
 <title>STORM RIDER 嵐を消す翼</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Josefin+Sans:wght@300;400;600&display=swap">
 <style>
@@ -195,13 +198,46 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s}
 #load{position:fixed;inset:0;background:#05080c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:12px;letter-spacing:.3em;color:#9fb2bf}
 #load .bar{width:260px}
-#touch{position:fixed;inset:0;pointer-events:none}
-#stick{position:absolute;left:26px;bottom:26px;width:130px;height:130px;border-radius:50%;border:1px solid rgba(190,233,255,.4);background:rgba(10,24,36,.3);pointer-events:auto}
-#stick i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px;border-radius:50%;background:rgba(190,233,255,.4)}
-.tb{position:absolute;right:26px;width:78px;height:78px;border-radius:50%;padding:0;letter-spacing:.05em;font-size:12px;pointer-events:auto}
-#tbA{bottom:120px}#tbB{bottom:28px;right:112px}
-body.touch #radar{bottom:210px}body.touch #inst{left:176px}
-@media (max-width:700px){#tl{width:150px}#objText{font-size:12px}#radar{width:110px;height:110px}#rtext{font-size:14px}#wing{font-size:10px}#banner b{font-size:22px}#hint{font-size:11px;white-space:normal;width:86vw}}
+/* ── タッチ操作：左半分のどこでも操縦桿、右下に発射とブースト、右上に一時停止 ── */
+:root{--ui:1;--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);--sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px)}
+#touch{position:fixed;inset:0;pointer-events:none;display:none}
+body.touch.inplay #touch{display:block}
+#stickZone{position:absolute;left:0;top:18%;bottom:0;width:46%;pointer-events:auto}
+#stick{position:absolute;left:calc(34px + var(--sl));bottom:calc(30px + var(--sb));width:124px;height:124px;border-radius:50%;border:1.5px solid rgba(190,233,255,.42);background:radial-gradient(circle,rgba(10,24,36,.1),rgba(10,24,36,.38));pointer-events:none;opacity:.75}
+#stick.on{opacity:1;border-color:rgba(190,233,255,.8)}
+#stick i{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:rgba(190,233,255,.45);box-shadow:0 0 12px rgba(120,200,255,.35)}
+.tb{position:absolute;border-radius:50%;padding:0;letter-spacing:.06em;font-size:13px;pointer-events:auto;border:1.5px solid rgba(190,233,255,.55);background:rgba(10,24,36,.42);color:#eaf6fb;-webkit-tap-highlight-color:transparent;touch-action:none}
+.tb.on{background:rgba(120,200,255,.4);border-color:#fff}
+#tbA{right:calc(26px + var(--sr));bottom:calc(118px + var(--sb));width:88px;height:88px;border-color:rgba(255,190,120,.8);background:rgba(120,50,20,.42)}
+#tbB{right:calc(122px + var(--sr));bottom:calc(26px + var(--sb));width:82px;height:82px}
+#tbP{right:calc(14px + var(--sr));top:calc(10px + var(--st));width:44px;height:44px;border-radius:10px;font-size:15px;letter-spacing:0}
+#tbF{position:static;width:auto;height:auto;border-radius:999px;padding:8px 16px;font-size:12px;margin-top:10px;display:none}
+body.touch #tbF.can{display:inline-block}
+body.touch #skip{font-size:13px;padding:14px 18px;right:calc(14px + var(--sr));color:#dbeaf3;border:1px solid rgba(190,233,255,.4);border-radius:999px;background:rgba(5,12,20,.5)}
+.touchOnly{display:none}body.touch .touchOnly{display:grid}body.touch .keyOnly{display:none}
+/* 縦向きのときの案内 */
+#rot{position:fixed;inset:0;z-index:99;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#06222b;color:var(--pd-cream);font-family:var(--f-label);letter-spacing:.2em;text-align:center}
+#rot svg{width:84px;height:84px;animation:rotp 2.2s ease-in-out infinite}
+@keyframes rotp{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait){body.touch #rot{display:flex}}
+/* 小さい画面：四隅の表示を縮める（--ui は JS が画面の高さから決める） */
+body.small #tl{transform:scale(var(--ui));transform-origin:0 0;left:calc(14px + var(--sl));top:calc(10px + var(--st))}
+body.small #obj{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 0;top:calc(8px + var(--st));max-width:none;width:max-content}
+body.small #wing{transform:scale(var(--ui));transform-origin:100% 0;right:calc(70px + var(--sr));top:calc(10px + var(--st))}
+body.small #radar{transform:scale(var(--ui));transform-origin:100% 0;right:calc(14px + var(--sr));top:calc(62px + var(--st));bottom:auto}
+body.small #inst{display:none}
+body.small #prompt{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 0;top:24%}
+body.small #warn{transform:translateX(-50%) scale(var(--ui));top:36%}
+body.small #hint{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 100%;bottom:calc(58px + var(--sb));white-space:nowrap}
+body.small #banner{transform:scale(var(--ui));top:30%}
+body.small #radio{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 100%;bottom:calc(6px + var(--sb));width:min(760px,calc(52vw / var(--ui)));padding:8px 30px}
+body.small.cine #radio{bottom:calc(11vh + 6px);width:min(760px,calc(80vw / var(--ui)))}
+body.small .screen{padding:6px;overflow:hidden}
+body.small #plate,body.small .panel,body.small .plate{transform:scale(var(--ui));transform-origin:50% 50%;flex:none;margin-top:0}
+body.small #plate{margin-top:calc(30px * var(--ui))}
+body.small #opts{align-items:center}body.small #opts .panel{margin-right:0;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
+body.small #help .panel{max-width:760px}
+body.small .panel p,body.small .panel li{line-height:1.6}
 </style>
 </head>
 <body>
@@ -261,7 +297,13 @@ body.touch #radar{bottom:210px}body.touch #inst{left:176px}
 
 <div id="help" class="screen dim" hidden><div class="panel">
   <h2>操作と任務</h2>
-  <div class="keys">
+  <div class="keys touchOnly">
+    <span><kbd>画面の左側</kbd></span><span>指を置いて動かすと操縦（上下で機首、左右で旋回）</span>
+    <span><kbd>ブースト</kbd></span><span>押している間だけ加速（ゲージを消費）</span>
+    <span><kbd>発射</kbd></span><span>ディフューザー発射・各種操作（消火、再始動など）</span>
+    <span><kbd>Ⅱ</kbd></span><span>一時停止</span>
+  </div>
+  <div class="keys keyOnly">
     <span><kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd></span><span>機首の上げ下げ</span>
     <span><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></span><span>旋回</span>
     <span><kbd>Shift</kbd></span><span>ブースト（ゲージを消費）</span>
@@ -319,7 +361,8 @@ body.touch #radar{bottom:210px}body.touch #inst{left:176px}
  </div>
 </div>
 
-<div id="touch" hidden><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button></div>
+<div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button></div>
+<div id="rot"><svg viewBox="0 0 64 64" fill="none" stroke="#e6bd74" stroke-width="3" stroke-linecap="round"><rect x="20" y="8" width="24" height="48" rx="5"/><line x1="29" y1="50" x2="35" y2="50"/></svg><div>端末を横向きにしてください</div></div>
 <div id="sleep" hidden>休止中　―　クリックまたはキー操作で再開</div>
 <div id="fade"></div>
 <div id="load"><div>気象データを読み込み中</div><div class="bar"><i id="loadBar" style="transform:scaleX(0)"></i></div></div>

@@ -31,6 +31,7 @@ npm install
 | `node test/insp.mjs <形> <塗装> a\|b\|c\|d\|s [strip]` | 機体を滑走路に置いて 6 方向から撮ります（`s strip` は装甲を全部剥がした状態） |
 | `node test/hangar.mjs` | 格納庫の中を 6 方向から撮ります |
 | `node test/cloudab.mjs [km]` | 雲の描画の設定を変えた前後を並べて撮ります |
+| `node test/mobile.mjs` | スマートフォンの画面（横向き 844×390 と縦向き）で 7 場面を撮ります |
 | `node test/cost.mjs` | 1 コマの描画にかかる時間を場面別に測ります |
 | `node test/bgmflow.mjs [?synth]` | 任務を通しで進め、どの場面でどの区間が鳴り始めたかを記録します（同じ曲の鳴り直しなどを見つける用） |
 | `node test/bgm.mjs` | 音楽の再生状態と出力の大きさを、画面遷移ごとに調べます |

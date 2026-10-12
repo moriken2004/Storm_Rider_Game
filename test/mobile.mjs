@@ -1,0 +1,20 @@
+// スマートフォンでの見え方の点検：node test/mobile.mjs → test/out/mobile.png（横向き 844×390 の 6 画面＋縦向き 1 画面）
+import puppeteer from 'puppeteer';import fs from 'fs';
+const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist','--autoplay-policy=no-user-gesture-required']});
+const dir=new URL('./out/',import.meta.url).pathname,shots=[];
+const open=async(w,h)=>{const p=await b.newPage();await p.setViewport({width:w,height:h,deviceScaleFactor:2,isMobile:true,hasTouch:true,isLandscape:w>h});p.on('pageerror',e=>console.log('PAGEERR '+e.message));
+  await p.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
+  await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR',{timeout:60000});return p;};
+const snap=async(p,name,code,ms)=>{if(code)await p.evaluate(code);await new Promise(r=>setTimeout(r,ms||500));shots.push([name,(await p.screenshot({type:'jpeg',quality:80})).toString('base64')]);};
+let p=await open(844,390);
+await snap(p,'タイトル','1',900);
+await snap(p,'操作説明',"document.getElementById('bHelp').click()",400);
+await snap(p,'設定',"document.querySelector('#help .bBack').click();document.getElementById('bOpts').click()",700);
+await snap(p,'飛行中',"document.querySelector('#opts .bBack').click();(()=>{const S=__SR;window.requestAnimationFrame=()=>0;S.opts.diff=2;S.startRun('bands');S.P.pos.set(0,420,7600);for(let i=0;i<150;i++){S.P.inv=1;S.input.tx=0;S.input.ty=0;S.step(1/30);}S.opts.diff=0;})()",500);
+await snap(p,'一時停止',"(()=>{const e=document.getElementById('tbP');if(e)e.dispatchEvent(new Event('click'));else window.dispatchEvent(new KeyboardEvent('keydown',{code:'Escape',key:'Escape'}));})()",400);
+await snap(p,'カットシーン',"(()=>{const S=__SR;if(S.G.mode==='pause')document.getElementById('bResume').click();S.startCut(S.CUTS.CUT_INTRO);S.tick(330,1/30);})()",500);
+console.log('view',await p.evaluate(()=>JSON.stringify({q:__SR.opts.q,scale:__SR.view.scale,touch:document.body.classList.contains('touch'),dpr:devicePixelRatio,canvas:[document.getElementById('gl').width,document.getElementById('gl').height]})));
+await p.close();p=await open(390,844);await snap(p,'縦向き','1',900);await p.close();
+const q=await b.newPage();await q.setViewport({width:1688,height:1220});
+await q.setContent('<!doctype html><body style="margin:0;background:#222;display:flex;flex-wrap:wrap;gap:0;font:13px sans-serif;color:#fff">'+shots.map(([n,d])=>`<div style="position:relative"><img style="display:block;height:390px" src="data:image/jpeg;base64,${d}"><b style="position:absolute;left:3px;top:3px;background:rgba(0,0,0,.75);padding:0 4px">${n}</b></div>`).join('')+'</body>');
+await q.screenshot({path:dir+'mobile.png',fullPage:true});console.log('done');await b.close();
