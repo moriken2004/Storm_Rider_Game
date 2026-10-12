@@ -208,7 +208,7 @@ body.touch.inplay #touch{display:block}
 #stick i{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:rgba(190,233,255,.45);box-shadow:0 0 12px rgba(120,200,255,.35)}
 .tb{position:absolute;border-radius:50%;padding:0;letter-spacing:.06em;font-size:13px;pointer-events:auto;border:1.5px solid rgba(190,233,255,.55);background:rgba(10,24,36,.42);color:#eaf6fb;-webkit-tap-highlight-color:transparent;touch-action:none}
 .tb.on{background:rgba(120,200,255,.4);border-color:#fff}
-#tbA{right:calc(26px + var(--sr));bottom:calc(118px + var(--sb));width:88px;height:88px;border-color:rgba(255,190,120,.8);background:rgba(120,50,20,.42)}
+#tbA{right:calc(26px + var(--sr));bottom:calc(112px + var(--sb));width:88px;height:88px;border-color:rgba(255,190,120,.8);background:rgba(120,50,20,.42)}
 #tbB{right:calc(122px + var(--sr));bottom:calc(26px + var(--sb));width:82px;height:82px}
 #tbP{right:calc(14px + var(--sr));top:calc(10px + var(--st));width:44px;height:44px;border-radius:10px;font-size:15px;letter-spacing:0}
 #tbF{position:static;width:auto;height:auto;border-radius:999px;padding:8px 16px;font-size:12px;margin-top:10px;display:none}
@@ -223,8 +223,11 @@ body.touch #skip{font-size:13px;padding:14px 18px;right:calc(14px + var(--sr));c
 /* 小さい画面：四隅の表示を縮める（--ui は JS が画面の高さから決める） */
 body.small #tl{transform:scale(var(--ui));transform-origin:0 0;left:calc(14px + var(--sl));top:calc(10px + var(--st))}
 body.small #obj{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 0;top:calc(8px + var(--st));max-width:none;width:max-content}
-body.small #wing{transform:scale(var(--ui));transform-origin:100% 0;right:calc(70px + var(--sr));top:calc(10px + var(--st))}
-body.small #radar{transform:scale(var(--ui));transform-origin:100% 0;right:calc(14px + var(--sr));top:calc(62px + var(--st));bottom:auto}
+body.small #wing{transform:scale(var(--ui));transform-origin:100% 0;right:calc(76px + 150px * var(--ui) + var(--sr));top:calc(10px + var(--st))}
+body.small #radar{width:140px;height:140px;transform:scale(var(--ui));transform-origin:100% 0;right:calc(68px + var(--sr));top:calc(8px + var(--st));bottom:auto}
+body.touch.small #radio{left:calc(50% - 4vw);width:min(760px,calc(44vw / var(--ui)))}
+body.touch.small.cine #radio{left:50%}
+.tb.want{animation:want .7s ease-in-out infinite alternate}@keyframes want{to{box-shadow:0 0 0 6px rgba(255,220,150,.35),0 0 22px rgba(255,200,120,.8);border-color:#fff}}
 body.small #inst{display:none}
 body.small #prompt{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 0;top:24%}
 body.small #warn{transform:translateX(-50%) scale(var(--ui));top:36%}

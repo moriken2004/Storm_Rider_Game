@@ -310,7 +310,7 @@ function nextRing(){
   else{coreShell.visible=coreGlow.visible=true;G.target=CORE;G.targetLabel='コア';setObj('PHASE 3　台風の目','コアに機首を向けてロックオンせよ');
     say(W[1].state!=='gone'?'H':'C','コアの座標、確定しました！');say('C','高度3400、目の中心です。機首を向け続ければロックオンします');}
 }
-function startRun0(){G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
+function startRun0(){G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
 function startRun(ph){startRun0();
   resetHaz();clearRadio();
   U.uStorm.value=1;U.uEye.value=1;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
@@ -616,12 +616,15 @@ function showResult(){
     `<tr><td>再挑戦</td><td class="mono">${G.retries} 回</td></tr>`;
 }
 function updateDying(dt){
-  G.dieT+=dt;if(G.crash){G.shake=Math.max(0,.8-G.dieT*.5);chaseCam(dt);if(G.dieT>2.6)$('fade').style.opacity=1;if(G.dieT>3.6){G.crash=0;P.mesh.visible=true;G.dieT=9;}else return;}
-  P.pitch=damp(P.pitch,-.7,1.2,dt);P.roll+=dt*2.4;P.speed=damp(P.speed,90,1,dt);fwdOf(P.yaw,P.pitch,tA);P.pos.addScaledVector(tA,P.speed*dt);if(P.pos.y<8&&!G.crash){P.pos.y=8;G.crash=1;G.dieT=Math.min(G.dieT,.2);P.mesh.visible=false;explode(P.pos,.8);return;}syncAC(P);
+  G.dieWall=(G.dieWall||0)+dt;if(G.dieWall>9){gameOver();return;}
+  G.dieT+=dt;if(G.crash){G.shake=Math.max(0,.8-G.dieT*.5);chaseCam(dt);if(G.dieT>2.6)$('fade').style.opacity=1;if(G.dieT>3.6){G.crash=2;P.mesh.visible=true;G.dieT=9;}else return;}
+  if(G.crash===2){gameOver();return;}
+  P.pitch=damp(P.pitch,-.7,1.2,dt);P.roll+=dt*2.4;P.speed=damp(P.speed,90,1,dt);fwdOf(P.yaw,P.pitch,tA);P.pos.addScaledVector(tA,P.speed*dt);if(P.pos.y<8&&!G.crash){P.pos.y=8;P.speed=0;G.crash=1;G.dieT=Math.min(G.dieT,.2);P.mesh.visible=false;explode(P.pos,.8);return;}syncAC(P);
   P.power=.1;G.shake=.5;chaseCam(dt);
   if(G.dieT>1.0)$('fade').style.opacity=1;
-  if(G.dieT>2.1){G.mode='over';$('fade').style.opacity=0;$('over').hidden=false;$('hud').hidden=true;$('overT').textContent=P.hull<=0?'機体喪失':'任務失敗';$('overP').textContent=causeText();clearRadio();setMood('title');}
+  if(G.dieT>2.1)gameOver();
 }
+function gameOver(){G.mode='over';G.crash=0;$('fade').style.opacity=0;$('over').hidden=false;$('hud').hidden=true;$('overT').textContent=P.hull<=0?'機体喪失':'任務失敗';$('overP').textContent=causeText();clearRadio();setMood('title');}
 
 // ───────────────────────── HUD ─────────────────────────
 let rctx,hudN=0,hctx,pullT=0;
@@ -710,7 +713,8 @@ function updateHUD(dt){
     const d=G.target.distanceTo(P.pos);el.lastElementChild.textContent=G.targetLabel+' '+(d>=1000?(d/1000).toFixed(1)+'km':Math.round(d)+'m');
     el.lastElementChild.style.left=x>mx-140?'-150px':'22px';
   }else el.hidden=true;
-  const pr=$('prompt');if(G.prompt){pr.hidden=false;if(pr.dataset.t!==G.prompt.t){pr.dataset.t=G.prompt.t;$('promptT').innerHTML=tk(G.prompt.t);}pr.querySelector('i').style.transform=`scaleX(${sat(G.prompt.p)})`;}else pr.hidden=true;
+  if(IS_TOUCH&&!G.prompt&&G.wantOn){G.wantOn=0;$('tbA').classList.remove('want');$('tbB').classList.remove('want');$('prompt').dataset.t='';}if(G.prompt)G.wantOn=1;
+  const pr=$('prompt');if(G.prompt){pr.hidden=false;if(pr.dataset.t!==G.prompt.t){pr.dataset.t=G.prompt.t;$('promptT').innerHTML=tk(G.prompt.t);if(IS_TOUCH){$('tbA').classList.toggle('want',/Space/.test(G.prompt.t));$('tbB').classList.toggle('want',/Shift/.test(G.prompt.t));}}pr.querySelector('i').style.transform=`scaleX(${sat(G.prompt.p)})`;}else pr.hidden=true;
   if(G.warnT>0){G.warnT-=dt;if(G.warnT<=0)$('warn').hidden=true;}
   if(G.hintT>0){G.hintT-=dt;if(G.hintT<=0)$('hint').hidden=true;}
 }
