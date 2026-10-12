@@ -1,5 +1,9 @@
 # セットアップ
 
+遊ぶだけなら、準備は要りません。**<https://moriken2004.github.io/Storm_Rider_Game/>** を開いてください。
+
+以下は、手元に置いて動かしたい人、中身を書き換えたい人向けです。
+
 ## 方法 1：ファイルを開くだけ（おすすめ）
 
 1. リポジトリのページで **Code → Download ZIP** を押して展開します。
@@ -27,8 +31,9 @@ python3 -m http.server 8795 --bind 127.0.0.1
 
 macOS では `start.command` をダブルクリックすると、サーバーの起動とブラウザを開くところまで自動で行います。
 
-## 方法 3：GitHub Pages で公開する
+## 方法 3：自分の GitHub Pages で公開する
 
+このリポジトリは <https://moriken2004.github.io/Storm_Rider_Game/> で公開しています。書き換えた版を自分で公開したいときは、
 自分のリポジトリに複製（フォーク）して、**Settings → Pages → Branch を `main`、フォルダを `/ (root)`** にすると、
 `https://<ユーザー名>.github.io/Storm_Rider_Game/` で誰でも遊べるようになります。
 
