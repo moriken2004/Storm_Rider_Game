@@ -2881,7 +2881,7 @@ const CUES={
 };
 CUES.launch={start:33.4135,loop:[33.4135,61.3133]};
 const BGM={ready:false,buf:null,cur:null,mood:null,
-  load(){if(/[?&]synth/.test(location.search))return;fetch('bgm/src/storm_rider.mp3').then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>new Promise((ok,ng)=>{const p=AU.ctx.decodeAudioData(b,ok,ng);if(p&&p.catch)p.catch(()=>{});})).then(buf=>{BGM.buf=buf;BGM.ready=true;const el=document.getElementById('oSrc');if(el)el.textContent='メドレー音源（ローカル）';if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}).catch(e=>{if(e)console.warn('BGM load',e);});},
+  load(){if(/[?&]synth/.test(location.search))return;fetch('bgm/cues.json').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{if(j)for(const k in j)if(k[0]!=='_'&&j[k]&&(j[k].loop||j[k].once))CUES[k]=j[k];return fetch('bgm/src/storm_rider.mp3');}).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>new Promise((ok,ng)=>{const p=AU.ctx.decodeAudioData(b,ok,ng);if(p&&p.catch)p.catch(()=>{});})).then(buf=>{BGM.buf=buf;BGM.ready=true;const el=document.getElementById('oSrc');if(el)el.textContent='手元の音源';if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}).catch(e=>{if(e)console.warn('BGM load',e);});},
   curve(up,n){const c=new Float32Array(n);for(let i=0;i<n;i++){const u=i/(n-1);c[i]=up?Math.sin(u*Math.PI/2):Math.cos(u*Math.PI/2);}return c;},
   node(g,t,off,dur,fin,fout){const ctx=AU.ctx,s=ctx.createBufferSource();s.buffer=BGM.buf;const e=ctx.createGain();
     const N=8,G=e.gain;

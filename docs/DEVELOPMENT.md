@@ -54,6 +54,7 @@ npm install
 | 塗装を足す | `src/world.js` の `SCHEMES` |
 | 難易度の数値 | `src/game.js` の `DIFFS` |
 | 無線の台詞 | `src/game.js` の `say(...)` と各カットの `subs` |
+| BGM の区間（内蔵の既定値） | `src/audio.js` の `CUES`。`bgm/cues.json` があればそちらが優先 |
 | 台風の大きさと形 | `src/core.js` の `stormCover` と `stormAt`（両方を同じに保つ） |
 | 地上の車両 | `src/world.js` の `buildVehicle` |
 | 港 | `src/world.js` の `buildPort` |

@@ -12,7 +12,8 @@
     "test:hard": "node test/play.mjs d2 god",
     "check:parts": "node test/interf.mjs",
     "check:zfight": "node test/zfight.mjs",
-    "survey": "node test/survey.mjs a && node test/survey.mjs b && node test/survey.mjs c"
+    "survey": "node test/survey.mjs a && node test/survey.mjs b && node test/survey.mjs c",
+    "bgm": "node bgm/setup.mjs"
   },
   "devDependencies": {
     "puppeteer": "^24.0.0"

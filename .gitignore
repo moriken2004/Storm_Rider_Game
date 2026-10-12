@@ -10,3 +10,4 @@ trailer/frames/
 bgm/src/*
 !bgm/src/.gitkeep
 bgm/work/
+bgm/cues.json
