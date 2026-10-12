@@ -296,7 +296,7 @@ function enterPhase(ph,fresh){
     if(fresh)hint('2番機には発射装置が無い。並走して予備弾を受け取る',8);
   }else if(ph==='ret'){
     U.uStorm.value=0;U.uEye.value=1;applyEnv(1);saveCkpt('ret');G.gate=0;
-    setMood('victory');banner('PHASE 5','帰投');
+    setMood('return');banner('PHASE 5','帰投');
     setObj('PHASE 5　帰投','ミズハ基地へ帰投せよ');G.target=new V3(0,420,BASE.z-4300);G.targetLabel='進入開始点';
     gateRings.forEach(r=>r.visible=true);
     if(fresh)say('C','全機、帰投コースに乗ってください。追い風です、ブーストが早く回復します');
@@ -572,7 +572,7 @@ const CUT_LAND={
   blendIn:1.2,
   subs:[[.5,'C','ストームライダー1、着陸を許可します。風は南西、3メートル。穏やかな夕方です',5.4],[8.6,'C','接地を確認。…全機帰還、任務完了です。おかえりなさい',5.4],
     [14.6,'H','隊長！　次の出撃も、ご一緒させてください！',3.6],[18.4,'G','その前に、俺の機体に発射装置を付けてくれ',3.2]],
-  begin(){U.uStorm.value=0;applyEnv(1);gearOf(P,true);SFX.gear();gateRings.forEach(g=>g.visible=false);setMood('victory');},
+  begin(){U.uStorm.value=0;applyEnv(1);gearOf(P,true);SFX.gear();gateRings.forEach(g=>g.visible=false);setMood('return');},
   shots:[
     // その時点の位置から、そのまま滑走路へ降りていく
     {dur:8,setup(){this.td=0;this.p0=P.pos.clone();this.y0=nearAngle(P.yaw,Math.PI);this.pt=P.pitch;},

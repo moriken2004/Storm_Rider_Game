@@ -2707,7 +2707,7 @@ function initAudio(){
   setVolumes();setTimeout(buildThunderPool,300);
   MUS.tNext=ctx.currentTime+.1;
   if(!AU.timer)AU.timer=setInterval(()=>{musTick();BGM.tick();},40);
-  if(BGM.buf){BGM.ready=true;if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}else BGM.load();
+  if(BGM.buf){fixCues(BGM.buf.duration);BGM.ready=true;if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}else BGM.load();
   keepAlive();
 }
 // Safari では、音声が「動作中」と表示されたまま無音になることがある。無音の audio 要素を鳴らし続けて、ページを再生中として扱わせる
@@ -2866,7 +2866,7 @@ const SFX={
 
 // ───────────────────────── 音楽 ─────────────────────────
 const MUS={mood:'none',pending:null,step:0,tNext:0,intensity:0};
-function setMood(m){MUS.want=m;if(m==='victory'&&!BGM.ready&&MUS.mood!==m){MUS.mood=m;MUS.step=0;MUS.pending=null;return;}if(BGM.ready){BGM.play(m);if(MUS.mood!=='none')MUS.pending='none';return;}if(MUS.mood!==m)MUS.pending=m;}
+function setMood(m){MUS.want=m;MUS.wantT=AU.ctx?AU.ctx.currentTime:0;if(!BGM.ready&&m==='return')m=MUS.mood==='victory'||MUS.pending==='victory'?'victory':'launch';if(m==='victory'&&!BGM.ready&&MUS.mood!==m){MUS.mood=m;MUS.step=0;MUS.pending=null;return;}if(BGM.ready){BGM.play(m);if(MUS.mood!=='none')MUS.pending='none';return;}if(MUS.mood!==m)MUS.pending=m;}
 // ───────────────────────── 音源ファイルの BGM（ローカルに bgm/src/storm_rider.mp3 があるときだけ） ─────────────────────────
 // start: 最初に鳴らし始める位置、loop:[a,b] を等パワーでつないで繰り返す。once は 1 回きりで next へ渡す
 const CUES={
@@ -2880,31 +2880,44 @@ const CUES={
   theme:{start:33.4135,loop:[33.4135,61.3133]},
 };
 CUES.launch={start:33.4135,loop:[33.4135,61.3133]};
+// 設定を読んだあとに決まる場面（帰投は主題の繰り返し）と、音源の長さに合わない設定の手当て
+function fixCues(dur){
+  let bad=false;for(const k in CUES){const c=CUES[k],hi=c.once?c.once[1]:c.loop[1],lo=c.once?c.once[0]:Math.min(c.start,c.loop[0]);if(!(lo>=0&&hi<=dur+.05&&hi>lo+.5))bad=true;}
+  if(bad){const sc=dur/212.136;console.warn('BGM: 区間の設定が音源の長さ（'+dur.toFixed(1)+' 秒）に合いません。node bgm/setup.mjs <音楽ファイル> で作り直してください。内蔵の区間を曲の長さに合わせて伸縮して使います。');
+    const D={title:{start:2.18,loop:[33.4135,61.3133]},intro:{start:3.46,loop:[33.4135,61.3133]},storm:{start:131.2,loop:[148.2362,162.7533]},eye:{start:89.7,loop:[93.112,116.2891],vol:.9},climax:{start:168.1,loop:[179.3974,198.6695]},victory:{once:[198.6695,211.3],next:'theme'},theme:{start:33.4135,loop:[33.4135,61.3133]},launch:{start:33.4135,loop:[33.4135,61.3133]}};
+    for(const k in D){const c=D[k];CUES[k]=c.once?{once:c.once.map(v=>v*sc),next:c.next}:{start:c.start*sc,loop:c.loop.map(v=>v*sc),vol:c.vol};}}
+  CUES.return={start:CUES.theme.loop[0],loop:CUES.theme.loop.slice()};
+}
 const BGM={ready:false,buf:null,cur:null,mood:null,
-  load(){if(/[?&]synth/.test(location.search))return;fetch('bgm/cues.json').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{if(j)for(const k in j)if(k[0]!=='_'&&j[k]&&(j[k].loop||j[k].once))CUES[k]=j[k];return fetch('bgm/src/storm_rider.mp3');}).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>new Promise((ok,ng)=>{const p=AU.ctx.decodeAudioData(b,ok,ng);if(p&&p.catch)p.catch(()=>{});})).then(buf=>{BGM.buf=buf;BGM.ready=true;const el=document.getElementById('oSrc');if(el)el.textContent='手元の音源';if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}).catch(e=>{if(e)console.warn('BGM load',e);});},
+  load(){if(/[?&]synth/.test(location.search))return;fetch('bgm/cues.json').then(r=>r.ok?r.json():null).catch(()=>null).then(j=>{if(j)for(const k in j)if(k[0]!=='_'&&j[k]&&(j[k].loop||j[k].once))CUES[k]=j[k];return fetch('bgm/src/storm_rider.mp3');}).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>new Promise((ok,ng)=>{const p=AU.ctx.decodeAudioData(b,ok,ng);if(p&&p.catch)p.catch(()=>{});})).then(buf=>{BGM.buf=buf;fixCues(buf.duration);BGM.ready=true;const el=document.getElementById('oSrc');if(el)el.textContent='手元の音源';if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}).catch(e=>{if(e)console.warn('BGM load',e);});},
   curve(up,n){const c=new Float32Array(n);for(let i=0;i<n;i++){const u=i/(n-1);c[i]=up?Math.sin(u*Math.PI/2):Math.cos(u*Math.PI/2);}return c;},
   node(g,t,off,dur,fin,fout){const ctx=AU.ctx,s=ctx.createBufferSource();s.buffer=BGM.buf;const e=ctx.createGain();
     const N=8,G=e.gain;
     if(fin>0){G.setValueAtTime(0,t);for(let i=1;i<=N;i++)G.linearRampToValueAtTime(Math.sin(i/N*Math.PI/2),t+fin*i/N);}else G.setValueAtTime(1,t);
     if(fout>0){const t1=Math.max(t+dur-fout,t+fin+.001);G.setValueAtTime(1,t1);for(let i=1;i<=N;i++)G.linearRampToValueAtTime(Math.cos(i/N*Math.PI/2),t1+fout*i/N);}
-    s.connect(e);e.connect(g);s.start(t,off,dur+.02);},
+    s.connect(e);e.connect(g);s.start(t,off,dur+.02);(g._src||(g._src=[])).push(s);if(g._src.length>8)g._src.shift();},
   fail(e){console.warn('BGM',e);BGM.ready=false;BGM.cur=null;BGM.mood=null;const el=document.getElementById('oSrc');if(el)el.textContent='内蔵シンセ';if(MUS.want){const w=MUS.want;MUS.mood='none';MUS.pending=w;}},
   play(m){try{BGM.play0(m);}catch(e){BGM.fail(e);}},
-  play0(m){if(!BGM.ready||BGM.mood===m)return;const ctx=AU.ctx,t=ctx.currentTime+.05;BGM.mood=m;if(BGM.cur&&!BGM.cur.chain&&BGM.cur.c===CUES[m])return;
+  play0(m){if(!BGM.ready||BGM.mood===m)return;BGM.mood=m;BGM.start(m,MUS.wantT);},
+  // late：場面が求められた時刻。読み込み待ちで遅れて始まるときは、その分だけ先から鳴らす（出撃カットの離陸に主題を合わせるため）
+  start(m,late){const ctx=AU.ctx,t=ctx.currentTime+.05;if(BGM.cur&&!BGM.cur.chain&&BGM.cur.c===CUES[m])return;
     {const k=BGM.cur,n=CUES[m];if(k&&n&&!k.chain&&k.c.loop&&n.loop&&k.c!==n&&k.c.loop[0]===n.loop[0]&&k.c.loop[1]===n.loop[1]&&k.t0!==undefined&&ctx.currentTime>=k.t0+(k.c.loop[0]-k.c.start)-1&&m!=='intro')return;}
-    if(BGM.cur){const g=BGM.cur.g;g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(0,t+(m==='victory'?.22:1.1));setTimeout(()=>g.disconnect(),1600);BGM.cur=null;}
+    // 消滅の曲が鳴っている間に帰投へ移るときは、鳴り終わってから主題へつなぐ（途中で切らない）
+    if(m==='return'&&BGM.cur&&BGM.cur.chain){BGM.cur.chain='return';return;}
+    if(BGM.cur){const g=BGM.cur.g;g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);const fd=m==='victory'?.22:1.1;g.gain.linearRampToValueAtTime(0,t+fd);for(const s of g._src||[]){try{s.stop(t+fd+.05);}catch(e){}}setTimeout(()=>{try{g.disconnect();}catch(e){}},(fd+.6)*1000);BGM.cur=null;}
     const c=CUES[m];if(!c)return;
     const g=ctx.createGain();g.gain.value=c.vol||1;g.connect(AU.mus);const xf=c.xf||.12;
     if(c.once){const d=c.once[1]-c.once[0];BGM.node(g,t,c.once[0],d,.25,.6);BGM.cur={g,c,next:t+d-1.2,chain:c.next};return;}
-    const b=c.loop[1],d=b-c.start;
-    if(d>xf+.5){BGM.node(g,t,c.start,d+xf,.4,xf);BGM.cur={g,c,next:t+d,xf,t0:t};}
+    let st=c.start;if(m==='intro'&&late!==undefined){const dl=ctx.currentTime-late;if(dl>.15&&dl<20)st=Math.min(c.start+dl,c.loop[1]-2);}
+    const b=c.loop[1],d=b-st;
+    if(d>xf+.5){BGM.node(g,t,st,d+xf,.4,xf);BGM.cur={g,c,next:t+d,xf,t0:t-(st-c.start)};}
     else BGM.cur={g,c,next:t,xf};
   },
   tick(){try{BGM.tick0();}catch(e){BGM.fail(e);}},
   tick0(){const k=BGM.cur;if(!k||!AU.ctx||AU.ctx.state!=='running')return;const now=AU.ctx.currentTime;
-    if(k.chain){if(now>k.next){const n=k.chain;BGM.mood=null;BGM.play(n);}return;}
+    if(k.chain){if(now>k.next){const n=k.chain;BGM.start(n);}return;}
     if(k.next<now-.3)k.next=now+.05;
-    while(k.next<now+.7){const[a,b]=k.c.loop;BGM.node(k.g,k.next,a,(b-a)+k.xf,k.xf,k.xf);k.next+=b-a;}
+    while(k.next<now+4){const[a,b]=k.c.loop;BGM.node(k.g,k.next,a,(b-a)+k.xf,k.xf,k.xf);k.next+=b-a;}
   }};
 function pad(notes,t,dur,vol,bright){
   const ctx=AU.ctx,g=ctx.createGain(),f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(bright*.5,t);f.frequency.linearRampToValueAtTime(bright,t+dur*.5);f.frequency.linearRampToValueAtTime(bright*.6,t+dur);
@@ -3000,15 +3013,15 @@ const MOODS={
 function musTick(){
   const ctx=AU.ctx;if(!ctx||ctx.state!=='running')return;
   if(MUS.tNext<ctx.currentTime-.5)MUS.tNext=ctx.currentTime+.05;
-  let guard=0;
-  while(MUS.tNext<ctx.currentTime+.18&&guard++<16){
+  let guard=0;const ahead=document.hidden?1.7:.3;
+  while(MUS.tNext<ctx.currentTime+ahead&&guard++<48){
     if(MUS.pending&&(MUS.step%16===0||MUS.mood==='none'||MUS.pending==='none'||MOODS[MUS.mood].bpm<90)){MUS.mood=MUS.pending;MUS.pending=null;MUS.step=0;}
     const m=MOODS[MUS.mood],sp=60/m.bpm/4;
     try{m.step(MUS.step,MUS.tNext,sp);}catch(e){}
     MUS.tNext+=sp;MUS.step++;
   }
 }
-MOODS.intro=MOODS.title; // 出撃カット（内蔵シンセではタイトルと同じ曲）
+MOODS.intro=MOODS.title;MOODS.return=MOODS.victory; // 出撃カット（内蔵シンセではタイトルと同じ曲）
 
 // ───────────────────────── 状態 ─────────────────────────
 const DIFFS=[
@@ -3308,7 +3321,7 @@ function enterPhase(ph,fresh){
     if(fresh)hint('2番機には発射装置が無い。並走して予備弾を受け取る',8);
   }else if(ph==='ret'){
     U.uStorm.value=0;U.uEye.value=1;applyEnv(1);saveCkpt('ret');G.gate=0;
-    setMood('victory');banner('PHASE 5','帰投');
+    setMood('return');banner('PHASE 5','帰投');
     setObj('PHASE 5　帰投','ミズハ基地へ帰投せよ');G.target=new V3(0,420,BASE.z-4300);G.targetLabel='進入開始点';
     gateRings.forEach(r=>r.visible=true);
     if(fresh)say('C','全機、帰投コースに乗ってください。追い風です、ブーストが早く回復します');
@@ -3584,7 +3597,7 @@ const CUT_LAND={
   blendIn:1.2,
   subs:[[.5,'C','ストームライダー1、着陸を許可します。風は南西、3メートル。穏やかな夕方です',5.4],[8.6,'C','接地を確認。…全機帰還、任務完了です。おかえりなさい',5.4],
     [14.6,'H','隊長！　次の出撃も、ご一緒させてください！',3.6],[18.4,'G','その前に、俺の機体に発射装置を付けてくれ',3.2]],
-  begin(){U.uStorm.value=0;applyEnv(1);gearOf(P,true);SFX.gear();gateRings.forEach(g=>g.visible=false);setMood('victory');},
+  begin(){U.uStorm.value=0;applyEnv(1);gearOf(P,true);SFX.gear();gateRings.forEach(g=>g.visible=false);setMood('return');},
   shots:[
     // その時点の位置から、そのまま滑走路へ降りていく
     {dur:8,setup(){this.td=0;this.p0=P.pos.clone();this.y0=nearAngle(P.yaw,Math.PI);this.pt=P.pitch;},
