@@ -1219,31 +1219,83 @@ function mergeStatic(root){
     const m=new THREE.Mesh(G,b.m);m.castShadow=b.c;m.receiveShadow=b.r;m.renderOrder=b.ro||0;root.add(m);}
   for(const o of kill){if(o.children.length){const g=new THREE.Group();g.position.copy(o.position);g.quaternion.copy(o.quaternion);g.scale.copy(o.scale);for(const c of o.children.slice())g.add(c);o.parent.add(g);}o.parent.remove(o);}
 }
-// 迎撃機：双発・双垂直尾翼の戦闘機。機首は -z
+// 迎撃機：双発・双垂直尾翼の制空戦闘機（架空）。機首は -z。
+// 平たい胴体の下に左右のエンジン、前縁の張り出し、斜めに開いた垂直尾翼、翼下と翼端のミサイル
+let FTR_DECAL=null;
+function fighterDecal(){if(FTR_DECAL)return FTR_DECAL;const c=document.createElement('canvas');c.width=128;c.height=64;const x=c.getContext('2d');
+  // 架空の国籍標識：白縁の赤い山形 2 本
+  x.lineJoin='miter';for(const[col,lw]of[['#f2f0ea',13],['#b3261c',8]]){x.strokeStyle=col;x.lineWidth=lw;for(const oy of[0,16]){x.beginPath();x.moveTo(8,44-oy+8);x.lineTo(32,20-oy+8);x.lineTo(56,44-oy+8);x.stroke();}}
+  x.fillStyle='#f2f0ea';x.font='bold 30px Arial';x.fillText('27',74,44);
+  FTR_DECAL=new THREE.CanvasTexture(c);FTR_DECAL.encoding=THREE.sRGBEncoding;FTR_DECAL.anisotropy=4;return FTR_DECAL;}
 function buildFighter(){
-  const g=new THREE.Group(),grey=std({color:lin(0x4d555d),metalness:.6,roughness:.45,side:THREE.DoubleSide}),belly=std({color:lin(0x8c969e),metalness:.5,roughness:.5,side:THREE.DoubleSide}),dk=std({color:lin(0x1c2024),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
-    red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x3a3010),metalness:.95,roughness:.08}),wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),UP=new V3(0,1,0),XA=new V3(1,0,0);
+  const g=new THREE.Group(),ud=g.userData,WX=new V3(1.25,-.35,5.5);
+  const top=panelize(std({color:lin(0x56626d),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),top2=panelize(std({color:lin(0x3f4a54),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),
+    bot=panelize(std({color:lin(0x93a0aa),metalness:.5,roughness:.5,side:THREE.DoubleSide}),WX),dk=std({color:lin(0x16191c),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
+    radome=std({color:lin(0x2c3338),metalness:.2,roughness:.6}),hot=std({color:lin(0x4a4038),metalness:.95,roughness:.34,side:THREE.DoubleSide}),metal=std({color:lin(0x9aa0a6),metalness:.95,roughness:.25}),
+    wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x4a3a12),metalness:.95,roughness:.06});glass.envMapIntensity=2;
+  const UP=new V3(0,1,0);
   const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
-  A(latheZ([[-12.4,.02],[-11.6,.22],[-10.4,.5]],14),dk).scale.set(1.1,.85,1);
-  A(latheZ([[-10.4,.5],[-7.5,.95],[-3,1.25],[3,1.3],[8,1.05],[9.6,.9]],18),grey).scale.set(1.25,.78,1);
-  A(new THREE.SphereGeometry(1,18,12),glass,0,.78,-6.2).scale.set(.62,.6,2.3);
-  A(new THREE.BoxGeometry(.5,.34,3.2),grey,0,.9,-2.6);
+  const L=(secs,m)=>{const o=new THREE.Mesh(loft(secs),m);o.castShadow=true;g.add(o);return o;};
+  // 機首：レドーム、前部胴体、ピトー管、光学センサー
+  A(latheZ([[-15.2,.02],[-14.6,.2],[-13.2,.5],[-11.8,.72]],16),radome).scale.set(1,.92,1);
+  A(latheZ([[-11.8,.72],[-9,1.0],[-6,1.15],[-2.5,1.1],[0,.9]],18),top).scale.set(1,.95,1);
+  {const p=A(new THREE.CylinderGeometry(.02,.045,1.9,6),metal,0,0,-16.0);p.rotation.x=Math.PI/2;}
+  A(new THREE.SphereGeometry(.2,12,10),glass,.0,.98,-9.6);
+  // 風防と枠、背中の盛り上がり
+  const can=A(new THREE.SphereGeometry(1,22,14),glass,0,1.02,-7.2);can.scale.set(.58,.62,2.5);
+  for(const z of[-8.6,-6.4]){const r=.6*Math.sqrt(1-((z+7.2)/2.5)**2),b=A(new THREE.TorusGeometry(r,.035,6,18,Math.PI),dk,0,1.02,z);b.scale.set(1,.62/.58,1);}
+  A(new THREE.SphereGeometry(1,16,10),top2,0,.85,-2.6).scale.set(.6,.5,4.6);
+  // 平たい中央胴体（左右のエンジンの間まで続く揚力胴体）
+  L([foil(new V3(-2.5,.1,-4.6),15.2,.07,UP),foil(new V3(0,.22,-5.2),16.2,.085,UP),foil(new V3(2.5,.1,-4.6),15.2,.07,UP)],top);
   for(const s of[1,-1]){
-    A(new THREE.BoxGeometry(1.15,1.05,6.4),grey,s*1.5,-.25,.2);A(new THREE.BoxGeometry(1.0,.9,.1),dk,s*1.5,-.25,-3.02);
-    g.add(new THREE.Mesh(loft([foil(new V3(s*1.9,0,-3.4),9.4,.05,UP),foil(new V3(s*6.9,.1,3.4),2.2,.045,UP)]),grey));
-    g.add(new THREE.Mesh(loft([foil(new V3(s*1.4,-.05,6.6),3.4,.05,UP),foil(new V3(s*4.2,-.05,8.6),1.4,.04,UP)]),grey));
-    const cu=new V3(.96,-.28*s,0);g.add(new THREE.Mesh(loft([foil(new V3(s*1.25,.5,4.4),4.4,.06,cu),foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu)]),grey));
-    g.add(new THREE.Mesh(loft([foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu),foil(new V3(s*2.24,4.25,7.9),1.3,.05,cu)]),red));
-    A(new THREE.BoxGeometry(.06,.9,1.1),red,s*1.72,2.1,6.6).rotation.z=-s*.24;
-    const nz=A(new THREE.CylinderGeometry(.6,.7,1.7,16,1,true),dk,s*.82,0,10.2);nz.rotation.x=Math.PI/2;
-    A(new THREE.CircleGeometry(.56,14),new THREE.MeshBasicMaterial({color:new THREE.Color(4.5,2.2,.8)}),s*.82,0,10.6);
-    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.2,.6,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(s*.82,0,11.6);gl.scale.set(5.5,5.5,1);g.add(gl);
-    for(const[mx,mz]of[[3.6,.9],[5.2,2.2]]){const m=A(new THREE.CylinderGeometry(.11,.11,3.2,8),wh,s*mx,-.42,mz);m.rotation.x=Math.PI/2;A(new THREE.BoxGeometry(.08,.3,.5),dk,s*mx,-.2,mz);}
-    const nv=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:s>0?new THREE.Color(.1,1.6,.3):new THREE.Color(1.9,.12,.08),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));nv.position.set(s*6.9,.15,4.6);nv.scale.set(1.2,1.2,1);g.add(nv);
+    // 前縁の張り出し（LERX）
+    L([foil(new V3(s*.7,.2,-9.6),5.2,.03,UP),foil(new V3(s*2.5,.12,-4.6),6.0,.05,UP)],top);
+    // エンジン：吸気口（斜めの口と境界層の隙間）、胴、可変ノズル、噴射
+    const ex=s*1.3,ey=-.55;
+    A(new THREE.BoxGeometry(1.3,1.15,3.4),bot,ex,ey,-2.2);{const lip=A(new THREE.BoxGeometry(1.34,1.19,.5),bot,ex,ey+.12,-4.05);lip.rotation.x=.42;}
+    A(new THREE.BoxGeometry(1.1,.95,.06),dk,ex,ey+.02,-3.86).rotation.x=.42;
+    A(new THREE.BoxGeometry(1.3,.08,2.4),dk,ex,ey+.62,-2.6);
+    A(latheZ([[-.6,.72],[1.5,.86],[5,.88],[8,.8],[9.3,.74]],18),bot,ex,ey+.12,0);
+    A(latheZ([[9.3,.76],[10.0,.72],[10.9,.6]],18),hot,ex,ey+.12,0);
+    for(let k=0;k<12;k++){const a=k/12*6.283,p=A(new THREE.BoxGeometry(.3,.03,1.0),hot,ex+Math.cos(a)*.66,ey+.12+Math.sin(a)*.66,10.4);p.rotation.z=a+Math.PI/2;}
+    A(new THREE.CircleGeometry(.55,16),new THREE.MeshBasicMaterial({color:new THREE.Color(4.2,2.0,.7)}),ex,ey+.12,10.5);
+    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.3,.65,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(ex,ey+.12,11.5);gl.scale.set(5,5,1);g.add(gl);(ud.glows=ud.glows||[]).push(gl);
+    {const pg=new THREE.CylinderGeometry(.12,.56,1,14,1,true);pg.translate(0,.5,0);pg.rotateX(Math.PI/2);const pl=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.75,.35),transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));pl.position.set(ex,ey+.12,10.9);pl.frustumCulled=false;g.add(pl);(ud.plumes=ud.plumes||[]).push(pl);}
+    // 主翼（後退角 42°、わずかな下反角）と動翼の線、翼端のランチャー
+    L([foil(new V3(s*2.5,.1,-3.2),8.6,.05,UP),foil(new V3(s*5.2,.04,-.6),5.4,.045,UP),foil(new V3(s*8.0,-.04,2.2),2.4,.04,UP)],top);
+    L([foil(new V3(s*4.6,.07,-2.6),2.2,.06,UP),foil(new V3(s*7.4,-.01,.6),1.6,.05,UP)],top2);
+    {const h=A(new THREE.BoxGeometry(3.6,.07,.06),dk,s*5.3,.06,3.6);h.rotation.y=-s*.2;const h2=A(new THREE.BoxGeometry(2.0,.07,.06),dk,s*3.4,.1,4.3);h2.rotation.y=-s*.06;}
+    A(new THREE.BoxGeometry(.12,.12,3.4),dk,s*8.05,-.04,3.3);
+    // 水平尾翼（全遊動式）
+    L([foil(new V3(s*2.1,-.05,7.4),4.0,.05,UP),foil(new V3(s*5.3,-.12,10.0),1.5,.04,UP)],top);
+    // 垂直尾翼（外へ 14° 開く）、方向舵の線、先端のアンテナ、腹びれ
+    const cu=new V3(.97,-.24*s,0).normalize();
+    L([foil(new V3(s*2.0,.5,4.2),5.0,.055,cu),foil(new V3(s*2.5,2.6,6.2),3.3,.05,cu),foil(new V3(s*2.95,4.5,8.0),1.9,.045,cu)],top2);
+    L([foil(new V3(s*2.95,4.5,8.0),1.9,.05,cu),foil(new V3(s*3.06,4.95,8.4),1.5,.05,cu)],dk);
+    {const r=A(new THREE.BoxGeometry(.05,3.0,.07),dk,s*2.56,2.75,8.75);r.rotation.z=-s*.245;r.rotation.x=-.42;}
+    L([foil(new V3(s*1.9,-1.2,6.6),2.6,.05,new V3(1,0,0)),foil(new V3(s*2.2,-2.1,7.4),1.3,.04,new V3(1,0,0))],bot);
+    // 標識（主翼上面と垂直尾翼の外側）
+    {const dm=new THREE.MeshStandardMaterial({map:fighterDecal(),transparent:true,roughness:.6,metalness:.1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3});ENVMATS.push(dm);
+      const d1=A(new THREE.PlaneGeometry(2.8,1.4),dm,s*5.0,.24,1.3);d1.rotation.x=-Math.PI/2;d1.rotation.z=s>0?Math.PI/2:-Math.PI/2;d1.castShadow=false;
+      const d2=A(new THREE.PlaneGeometry(2.0,1.0),dm,s*(2.56+.06),2.5,6.9);d2.rotation.y=s*Math.PI/2;d2.rotation.z=0;d2.rotation.order='YXZ';d2.rotation.x=-s*0;d2.rotateY(0);d2.rotation.z=-s*0;d2.rotateX(0);d2.rotateZ(0);d2.rotation.set(0,s*Math.PI/2,0);d2.rotateX(-.245*1);d2.castShadow=false;}
+    // 兵装：翼下のパイロン 2 つと翼端。ミサイルは胴・前後の小翼・先端のシーカー
+    const missile=(x,y,z,len)=>{const m=A(new THREE.CylinderGeometry(.1,.1,len,10),wh,x,y,z);m.rotation.x=Math.PI/2;A(new THREE.SphereGeometry(.1,10,8),dk,x,y,z-len/2);
+      for(const[fz,fs]of[[len/2-.25,.34],[-len/2+.9,.2]])for(const a of[Math.PI/4,-Math.PI/4]){const f=A(new THREE.BoxGeometry(fs*2,.02,.42),wh,x,y,z+fz);f.rotation.z=a;}};
+    for(const[mx,mz,my,ln]of[[4.0,.6,-.52,3.6],[6.0,1.9,-.5,3.0]]){A(new THREE.BoxGeometry(.1,.34,1.6),bot,s*mx,my+.24,mz);missile(s*mx,my,mz,ln);}
+    missile(s*8.05,-.2,3.1,2.9);
+    // 翼端灯と編隊灯
+    const nv=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:s>0?new THREE.Color(.1,1.6,.3):new THREE.Color(1.9,.12,.08),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));nv.position.set(s*8.1,0,4.6);nv.scale.set(1.2,1.2,1);g.add(nv);
+    A(new THREE.BoxGeometry(.03,.08,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color(.5,.9,.3)}),s*1.02,.35,-10.4).castShadow=false;
   }
-  A(new THREE.BoxGeometry(2.9,.04,1.0),red,0,.99,1.4);
-  A(new THREE.SphereGeometry(1,14,10),belly,0,-.62,1).scale.set(1.9,.35,6.5);
+  // 腹：機関砲の覆い、増槽、アンテナ
+  A(new THREE.BoxGeometry(.24,.2,2.6),dk,.95,.55,-8.6);
+  {const t=A(latheZ([[-3.2,.02],[-2.6,.34],[0,.46],[2.4,.36],[3.2,.02]],14),bot,0,-1.25,1.4);A(new THREE.BoxGeometry(.14,.5,1.8),bot,0,-.75,1.4);}
+  for(const[z,y]of[[-3.6,1.35],[2.2,.72]])A(new THREE.BoxGeometry(.04,.42,.5),dk,0,y,z);
+  // 衝突防止灯
+  const bc=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(4,.3,.2),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));bc.position.set(0,1.0,3.5);bc.scale.set(1.5,1.5,1);g.add(bc);ud.beacon=bc;
   g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
+  // 推力に合わせて噴射の長さと光を変える
+  ud.setPower=k=>{for(const p of ud.plumes)p.scale.set(1,1,1.5+k*9);for(const s of ud.glows){const q=3.5+k*5;s.scale.set(q,q,1);}};ud.setPower(.3);
   return g;
 }
 // 地上車両。原点は車体中央の接地面、前が -z。kind：tug 牽引車／fuel 給油車／fire 化学消防車／gpu 電源車（台車）／follow 誘導車／car 乗用車／cart 工具車
