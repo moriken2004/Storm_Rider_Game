@@ -1219,6 +1219,33 @@ function mergeStatic(root){
     const m=new THREE.Mesh(G,b.m);m.castShadow=b.c;m.receiveShadow=b.r;m.renderOrder=b.ro||0;root.add(m);}
   for(const o of kill){if(o.children.length){const g=new THREE.Group();g.position.copy(o.position);g.quaternion.copy(o.quaternion);g.scale.copy(o.scale);for(const c of o.children.slice())g.add(c);o.parent.add(g);}o.parent.remove(o);}
 }
+// 迎撃機：双発・双垂直尾翼の戦闘機。機首は -z
+function buildFighter(){
+  const g=new THREE.Group(),grey=std({color:lin(0x4d555d),metalness:.6,roughness:.45,side:THREE.DoubleSide}),belly=std({color:lin(0x8c969e),metalness:.5,roughness:.5,side:THREE.DoubleSide}),dk=std({color:lin(0x1c2024),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
+    red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x3a3010),metalness:.95,roughness:.08}),wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),UP=new V3(0,1,0),XA=new V3(1,0,0);
+  const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
+  A(latheZ([[-12.4,.02],[-11.6,.22],[-10.4,.5]],14),dk).scale.set(1.1,.85,1);
+  A(latheZ([[-10.4,.5],[-7.5,.95],[-3,1.25],[3,1.3],[8,1.05],[9.6,.9]],18),grey).scale.set(1.25,.78,1);
+  A(new THREE.SphereGeometry(1,18,12),glass,0,.78,-6.2).scale.set(.62,.6,2.3);
+  A(new THREE.BoxGeometry(.5,.34,3.2),grey,0,.9,-2.6);
+  for(const s of[1,-1]){
+    A(new THREE.BoxGeometry(1.15,1.05,6.4),grey,s*1.5,-.25,.2);A(new THREE.BoxGeometry(1.0,.9,.1),dk,s*1.5,-.25,-3.02);
+    g.add(new THREE.Mesh(loft([foil(new V3(s*1.9,0,-3.4),9.4,.05,UP),foil(new V3(s*6.9,.1,3.4),2.2,.045,UP)]),grey));
+    g.add(new THREE.Mesh(loft([foil(new V3(s*1.4,-.05,6.6),3.4,.05,UP),foil(new V3(s*4.2,-.05,8.6),1.4,.04,UP)]),grey));
+    const cu=new V3(.96,-.28*s,0);g.add(new THREE.Mesh(loft([foil(new V3(s*1.25,.5,4.4),4.4,.06,cu),foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu)]),grey));
+    g.add(new THREE.Mesh(loft([foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu),foil(new V3(s*2.24,4.25,7.9),1.3,.05,cu)]),red));
+    A(new THREE.BoxGeometry(.06,.9,1.1),red,s*1.72,2.1,6.6).rotation.z=-s*.24;
+    const nz=A(new THREE.CylinderGeometry(.6,.7,1.7,16,1,true),dk,s*.82,0,10.2);nz.rotation.x=Math.PI/2;
+    A(new THREE.CircleGeometry(.56,14),new THREE.MeshBasicMaterial({color:new THREE.Color(4.5,2.2,.8)}),s*.82,0,10.6);
+    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.2,.6,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(s*.82,0,11.6);gl.scale.set(5.5,5.5,1);g.add(gl);
+    for(const[mx,mz]of[[3.6,.9],[5.2,2.2]]){const m=A(new THREE.CylinderGeometry(.11,.11,3.2,8),wh,s*mx,-.42,mz);m.rotation.x=Math.PI/2;A(new THREE.BoxGeometry(.08,.3,.5),dk,s*mx,-.2,mz);}
+    const nv=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:s>0?new THREE.Color(.1,1.6,.3):new THREE.Color(1.9,.12,.08),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));nv.position.set(s*6.9,.15,4.6);nv.scale.set(1.2,1.2,1);g.add(nv);
+  }
+  A(new THREE.BoxGeometry(2.9,.04,1.0),red,0,.99,1.4);
+  A(new THREE.SphereGeometry(1,14,10),belly,0,-.62,1).scale.set(1.9,.35,6.5);
+  g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
+  return g;
+}
 // 地上車両。原点は車体中央の接地面、前が -z。kind：tug 牽引車／fuel 給油車／fire 化学消防車／gpu 電源車（台車）／follow 誘導車／car 乗用車／cart 工具車
 const VEH={};
 function buildVehicle(kind,hex){

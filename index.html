@@ -2151,6 +2151,33 @@ function mergeStatic(root){
     const m=new THREE.Mesh(G,b.m);m.castShadow=b.c;m.receiveShadow=b.r;m.renderOrder=b.ro||0;root.add(m);}
   for(const o of kill){if(o.children.length){const g=new THREE.Group();g.position.copy(o.position);g.quaternion.copy(o.quaternion);g.scale.copy(o.scale);for(const c of o.children.slice())g.add(c);o.parent.add(g);}o.parent.remove(o);}
 }
+// 迎撃機：双発・双垂直尾翼の戦闘機。機首は -z
+function buildFighter(){
+  const g=new THREE.Group(),grey=std({color:lin(0x4d555d),metalness:.6,roughness:.45,side:THREE.DoubleSide}),belly=std({color:lin(0x8c969e),metalness:.5,roughness:.5,side:THREE.DoubleSide}),dk=std({color:lin(0x1c2024),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
+    red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x3a3010),metalness:.95,roughness:.08}),wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),UP=new V3(0,1,0),XA=new V3(1,0,0);
+  const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
+  A(latheZ([[-12.4,.02],[-11.6,.22],[-10.4,.5]],14),dk).scale.set(1.1,.85,1);
+  A(latheZ([[-10.4,.5],[-7.5,.95],[-3,1.25],[3,1.3],[8,1.05],[9.6,.9]],18),grey).scale.set(1.25,.78,1);
+  A(new THREE.SphereGeometry(1,18,12),glass,0,.78,-6.2).scale.set(.62,.6,2.3);
+  A(new THREE.BoxGeometry(.5,.34,3.2),grey,0,.9,-2.6);
+  for(const s of[1,-1]){
+    A(new THREE.BoxGeometry(1.15,1.05,6.4),grey,s*1.5,-.25,.2);A(new THREE.BoxGeometry(1.0,.9,.1),dk,s*1.5,-.25,-3.02);
+    g.add(new THREE.Mesh(loft([foil(new V3(s*1.9,0,-3.4),9.4,.05,UP),foil(new V3(s*6.9,.1,3.4),2.2,.045,UP)]),grey));
+    g.add(new THREE.Mesh(loft([foil(new V3(s*1.4,-.05,6.6),3.4,.05,UP),foil(new V3(s*4.2,-.05,8.6),1.4,.04,UP)]),grey));
+    const cu=new V3(.96,-.28*s,0);g.add(new THREE.Mesh(loft([foil(new V3(s*1.25,.5,4.4),4.4,.06,cu),foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu)]),grey));
+    g.add(new THREE.Mesh(loft([foil(new V3(s*2.1,3.7,7.4),1.9,.05,cu),foil(new V3(s*2.24,4.25,7.9),1.3,.05,cu)]),red));
+    A(new THREE.BoxGeometry(.06,.9,1.1),red,s*1.72,2.1,6.6).rotation.z=-s*.24;
+    const nz=A(new THREE.CylinderGeometry(.6,.7,1.7,16,1,true),dk,s*.82,0,10.2);nz.rotation.x=Math.PI/2;
+    A(new THREE.CircleGeometry(.56,14),new THREE.MeshBasicMaterial({color:new THREE.Color(4.5,2.2,.8)}),s*.82,0,10.6);
+    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.2,.6,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(s*.82,0,11.6);gl.scale.set(5.5,5.5,1);g.add(gl);
+    for(const[mx,mz]of[[3.6,.9],[5.2,2.2]]){const m=A(new THREE.CylinderGeometry(.11,.11,3.2,8),wh,s*mx,-.42,mz);m.rotation.x=Math.PI/2;A(new THREE.BoxGeometry(.08,.3,.5),dk,s*mx,-.2,mz);}
+    const nv=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:s>0?new THREE.Color(.1,1.6,.3):new THREE.Color(1.9,.12,.08),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));nv.position.set(s*6.9,.15,4.6);nv.scale.set(1.2,1.2,1);g.add(nv);
+  }
+  A(new THREE.BoxGeometry(2.9,.04,1.0),red,0,.99,1.4);
+  A(new THREE.SphereGeometry(1,14,10),belly,0,-.62,1).scale.set(1.9,.35,6.5);
+  g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
+  return g;
+}
 // 地上車両。原点は車体中央の接地面、前が -z。kind：tug 牽引車／fuel 給油車／fire 化学消防車／gpu 電源車（台車）／follow 誘導車／car 乗用車／cart 工具車
 const VEH={};
 function buildVehicle(kind,hex){
@@ -3093,7 +3120,7 @@ const G={mode:'boot',phase:'',t:0,pt:0,missionT:0,retries:0,flags:{},flash:0,scr
 const P={pos:new V3(0,400,14400),vel:new V3(),yaw:0,pitch:0,roll:0,speed:150,hull:100,boost:100,inv:0,engineOut:false,restart:0,hasPod:true,power:1,mesh:null,camYaw:0,camPitch:0,fling:new V3(),spin:0,wind:0};
 const W=[{who:'G',pos:new V3(),yaw:0,pitch:0,roll:0,state:'form',mesh:null,ph:1.3,side:-50,fw:24,up:3,ang:0},
          {who:'H',pos:new V3(),yaw:0,pitch:0,roll:0,state:'form',mesh:null,ph:4.1,side:46,fw:12,up:1,ang:0}];
-const WHO={C:['ミズハ管制','#8fd4ff'],G:['2番機 ゴウ','#ffc57a'],H:['3番機 ハル','#a6f0b4'],S:['機体システム','#ff8a7a']};
+const WHO={C:['ミズハ管制','#8fd4ff'],G:['2番機 ゴウ','#ffc57a'],H:['3番機 ハル','#a6f0b4'],S:['機体システム','#ff8a7a'],F:['ノルド連邦 防空軍','#ff7466']};
 const CORE=new V3(0,3400,0);
 const input={x:0,y:0,boost:false,act:false,actHit:false,keys:{},tx:0,ty:0,tBoost:false,tAct:false};
 let sunL,hemiL,trails=[],bolts=[],columns=[],rings=[],gateRings=[],spouts=[],coreShell,coreGlow,shock,boomFx,proj,carrierRing;
@@ -3170,7 +3197,7 @@ function glitch(){const h=$('hud');h.classList.remove('glitch');void h.offsetWid
 // 落雷で計器が落ちる（実戦以上）
 function hudFail(p){if((opts.diff||0)<1||G.hudFail>0||Math.random()>p)return;G.hudFail=opts.diff>=2?10:6;if(!G.flags.hfSay){G.flags.hfSay=1;say('S','雷サージで計器が落ちた。復旧まで目視で飛べ');}}
 // 損傷の出どころを数えておき、最後の文言に使う
-function srcOf(c){return/落雷/.test(c)?'落雷':/竜巻/.test(c)?'海上竜巻':/雹/.test(c)?'雹':/火災/.test(c)?'エンジン火災':/海面/.test(c)?'海面との衝突':/建物|施設|灯台|格納庫/.test(c)?'建物との衝突':/滑走路|地面|山肌/.test(c)?'地面との衝突':'';}
+function srcOf(c){return/ミサイル|機関砲/.test(c)?'迎撃機の攻撃':/落雷/.test(c)?'落雷':/竜巻/.test(c)?'海上竜巻':/雹/.test(c)?'雹':/火災/.test(c)?'エンジン火災':/海面/.test(c)?'海面との衝突':/建物|施設|灯台|格納庫/.test(c)?'建物との衝突':/滑走路|地面|山肌/.test(c)?'地面との衝突':'';}
 function hurtBy(k,n){if(!k)return;const d=G.dmgBy||(G.dmgBy={});d[k]=(d[k]||0)+n;}
 function causeText(){
   let s=(G.cause||'').replace(/。$/,'')+'。';
@@ -3392,7 +3419,7 @@ function nextRing(){
   else{coreShell.visible=coreGlow.visible=true;G.target=CORE;G.targetLabel='コア';setObj('PHASE 3　台風の目','コアに機首を向けてロックオンせよ');
     say(W[1].state!=='gone'?'H':'C','コアの座標、確定しました！');say('C','高度3400、目の中心です。機首を向け続ければロックオンします');}
 }
-function startRun0(){G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
+function startRun0(){icpReset();G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
 function startRun(ph){startRun0();
   resetHaz();clearRadio();
   U.uStorm.value=1;U.uEye.value=1;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
@@ -3807,6 +3834,8 @@ function drawRadar(){
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   const tr=(x,z)=>{const dx=x-P.pos.x,dz=z-P.pos.z;return[cx+(dx*rx+dz*rz)*sc,cy-(dx*fx+dz*fz)*sc];};
   c.strokeStyle='rgba(190,233,255,.22)';c.lineWidth=2;for(const r of[1500,3000,4500]){c.beginPath();c.arc(cx,cy,r*sc,0,6.283);c.stroke();}
+  if(ICP.st){c.fillStyle='#ff5a4a';for(const f of ICP.f){if(!f.mesh.visible)continue;const[x,y]=tr(f.pos.x,f.pos.z);c.beginPath();c.moveTo(x,y-9);c.lineTo(x+7,y+7);c.lineTo(x-7,y+7);c.fill();}
+    c.fillStyle='#fff';for(const m of ICP.mis){if(m.life<=0)continue;const[x,y]=tr(m.pos.x,m.pos.z);c.beginPath();c.arc(x,y,4.5,0,6.283);c.fill();}}
   if(U.uStorm.value>.3){const[ox,oy]=tr(0,0);c.strokeStyle='rgba(255,255,255,.5)';c.setLineDash([8,8]);c.beginPath();c.arc(ox,oy,EYE_R*U.uEye.value*sc,0,6.283);c.stroke();c.setLineDash([]);
     c.strokeStyle='rgba(160,180,200,.3)';c.lineWidth=(WALL_OUT-EYE_R)*sc*.5;c.beginPath();c.arc(ox,oy,(WALL_OUT+EYE_R)*.5*sc,0,6.283);c.stroke();c.lineWidth=2;
     for(const s of spouts){const[x,y]=tr(s.mesh.position.x,s.mesh.position.z);c.fillStyle='rgba(235,240,245,.9)';c.beginPath();c.arc(x,y,7,0,6.283);c.fill();c.strokeStyle='rgba(235,240,245,.5)';c.beginPath();c.arc(x,y,13,0,4);c.stroke();}}
@@ -3893,6 +3922,86 @@ function togglePause(){
 }
 
 // ───────────────────────── メインループ ─────────────────────────
+// ───────────────────────── 領空侵犯と迎撃機 ─────────────────────────
+// 任務空域は「台風の中心〜基地」を結ぶ線から 18km 以内。外へ出ると、隣国（架空）の迎撃機が来る
+// st：0 何もなし／1 接近中／2 警告（横に並ぶ）／3 最終警告（威嚇射撃）／4 攻撃／5 離脱していく
+const AREA_R=18000,ICP={st:0,t:0,n:0,pre:0,f:[],mis:[],trc:[],misT:0,gunT:0,atkT:0,beep:0};
+function areaDist(){const z=clamp(P.pos.z,0,BASE.z);return Math.hypot(P.pos.x,P.pos.z-z);}
+function icpInit(){
+  for(let i=0;i<2;i++){const mesh=buildFighter();mesh.visible=false;scene.add(mesh);ICP.f.push({mesh,pos:new V3(),yaw:0,pitch:0,roll:0,sd:i?-1:1,vel:new V3()});}
+  for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,3.4,8).rotateX(Math.PI/2),new THREE.MeshStandardMaterial({color:lin(0xdfe3e6),roughness:.5}));m.visible=false;m.frustumCulled=false;scene.add(m);
+    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(3,1.6,.5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.scale.set(9,9,1);gl.visible=false;scene.add(gl);ICP.mis.push({m,gl,pos:new V3(),dir:new V3(),life:0,smoke:0,lost:false});}
+  const tm=new THREE.MeshBasicMaterial({color:new THREE.Color(4,2.8,.9)});for(let i=0;i<18;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.22,.22,16),tm);m.visible=false;m.frustumCulled=false;scene.add(m);ICP.trc.push({m,pos:new V3(),dir:new V3(),life:0,live:true});}
+}
+function icpReset(){ICP.st=0;ICP.t=0;ICP.n=0;ICP.pre=0;ICP.atkT=0;for(const f of ICP.f)f.mesh.visible=false;for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}for(const t of ICP.trc){t.life=0;t.m.visible=false;}}
+function icpTracer(from,to,spread,live){const t=ICP.trc.find(q=>q.life<=0);if(!t)return;t.pos.copy(from);t.dir.copy(to).sub(from).normalize();t.dir.x+=(Math.random()-.5)*spread;t.dir.y+=(Math.random()-.5)*spread;t.dir.z+=(Math.random()-.5)*spread;t.dir.normalize();t.life=1.3;t.live=live;t.m.visible=true;}
+function icpMissile(f){const m=ICP.mis.find(q=>q.life<=0);if(!m)return false;fwdOf(f.yaw,f.pitch,tA);m.pos.copy(f.pos).addScaledVector(tA,6);m.pos.y-=1.5;m.dir.copy(tA);m.life=9;m.lost=false;m.smoke=0;m.m.visible=m.gl.visible=true;SFX.launch();return true;}
+function updateIntercept(dt){
+  const playing=G.mode==='play'&&!P.wingLost,d=areaDist();
+  if(!ICP.st){
+    if(!playing)return;
+    if(d>AREA_R-1500&&!ICP.pre){ICP.pre=1;say('C','この先は隣国ノルド連邦の領空です。任務空域へ引き返してください');warn('任務空域の外縁',3);}
+    if(d<AREA_R-2200)ICP.pre=0;
+    if(d<=AREA_R)return;
+    if(!ICP.f.length)icpInit();
+    ICP.st=1;ICP.t=0;ICP.atkT=0;SFX.caution();say('C','国籍不明機が 2 機、急速に接近！　ノルド連邦の迎撃機です');
+    fwdOf(P.yaw,0,tA);ICP.f.forEach((f,i)=>{f.pos.copy(P.pos).addScaledVector(tA,-2600-i*300);f.pos.y=Math.max(260,P.pos.y+320);f.yaw=P.yaw;f.pitch=0;f.roll=0;f.mesh.visible=true;});
+  }
+  // 空域へ向かって戻っている間は、警告の時間を進めず、攻撃も控える
+  const back=playing&&ICP.dPrev!==undefined&&(ICP.dPrev-d)/Math.max(dt,1e-3)>55;ICP.dPrev=d;
+  ICP.t+=(back&&(ICP.st===2||ICP.st===3))?0:dt;const st=ICP.st;
+  // 空域へ戻ったら離脱していく
+  if(playing&&st>=1&&st<=4&&d<AREA_R-500){ICP.st=5;ICP.t=0;ICP.n++;setAlarm(false);G.prompt=null;if(st>=2)say('F','退去を確認した。二度と我が国の空に近づくな');for(const m of ICP.mis)if(m.life>0)m.life=Math.min(m.life,.4);}
+  if(!playing&&st>=1&&st<=4){ICP.st=5;ICP.t=0;if(G.mode==='dying'&&st===4)say('F','目標の撃墜を確認。帰投する');}
+  fwdOf(P.yaw,0,tA);tB.set(-tA.z,0,tA.x);  // tA=前、tB=右
+  // ── 迎撃機の動き
+  ICP.f.forEach((f,i)=>{if(!f.mesh.visible)return;let vmax=560;
+    if(ICP.st<=3){tC.copy(P.pos).addScaledVector(tB,f.sd*(34+i*4)).addScaledVector(tA,10-i*16);tC.y+=5+i*3+Math.sin(G.t*1.1+i*2)*1.5;}
+    else if(ICP.st===4){const wv=Math.sin(G.t*.7+i*2.6);tC.copy(P.pos).addScaledVector(tA,-(430+i*190)).addScaledVector(tB,f.sd*(60+i*50)+wv*90);tC.y+=45+i*30+Math.cos(G.t*.9+i)*25;vmax=340;}
+    else{fwdOf(f.yaw+f.sd*1.9,0,tC);tC.multiplyScalar(4000).add(f.pos);tC.y=f.pos.y+900;vmax=360;}
+    // 目標の位置との差に比例した速度を、隊長機の速度に上乗せする（離脱中は自分の針路だけ）
+    tD.subVectors(tC,f.pos);const L=tD.length();tD.multiplyScalar(Math.min(1.3,vmax/Math.max(L,1)));if(ICP.st<=4)tD.add(P.vel);f.vel.lerp(tD,Math.min(1,dt*2.6));
+    f.pos.addScaledVector(f.vel,dt);if(f.pos.y<30)f.pos.y=30;
+    const v=f.vel,h=Math.hypot(v.x,v.z);let wy=h>20?Math.atan2(-v.x,-v.z):f.yaw;if(ICP.st<=3&&L<220)wy=P.yaw;let dy=wy-f.yaw;while(dy>Math.PI)dy-=6.2832;while(dy<-Math.PI)dy+=6.2832;
+    f.yaw+=dy*Math.min(1,dt*2.4);f.roll=damp(f.roll,clamp(-dy*1.6,-1.1,1.1)+(ICP.st<=3&&L<220?P.roll*.8:0),3,dt);f.pitch=damp(f.pitch,clamp(Math.atan2(v.y,Math.max(h,60)),-.6,.6),2.5,dt);
+    f.mesh.position.copy(f.pos);f.mesh.rotation.set(f.pitch,f.yaw,f.roll,'YXZ');
+    if(ICP.st===5&&f.pos.distanceTo(P.pos)>4200)f.mesh.visible=false;});
+  if(ICP.st===5){if(ICP.f.every(f=>!f.mesh.visible)){ICP.st=0;ICP.pre=1;}}
+  // ── 段階の進行
+  const near=ICP.f.length&&ICP.f[0].pos.distanceTo(P.pos)<260;
+  if(ICP.st===1&&(near||ICP.t>11)){ICP.st=2;ICP.t=0;SFX.warn&&SFX.warn();
+    say('F',ICP.n?'再び領空に入ったな。次は警告しない。ただちに反転せよ':'警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ');
+    if(!ICP.n)say('G','隊長、相手は本気だ。こっちは丸腰だぞ、引き返せ！');}
+  const T2=ICP.n?5:13,T3=ICP.n?4:8;
+  if(ICP.st===2){G.prompt={t:'領空侵犯　反転して任務空域へ戻れ',p:ICP.t/T2};if(ICP.t>T2){ICP.st=3;ICP.t=0;ICP.shot=0;say('F','最終警告だ。従わなければ撃墜する');}}
+  if(ICP.st===3){G.prompt={t:'最終警告　反転して任務空域へ戻れ',p:ICP.t/T3};
+    // 威嚇射撃：機首の前を横切る曳光弾
+    if(ICP.t>1.2&&ICP.t<2.6){ICP.shot-=dt;if(ICP.shot<=0){ICP.shot=.07;const f=ICP.f[0];tC.copy(f.pos).addScaledVector(tA,400);tC.y+=8;icpTracer(f.pos,tC,.004,false);if(Math.random()<.4)SFX.spark();}}
+    if(ICP.t>T3){ICP.st=4;ICP.t=0;ICP.misT=1.2;ICP.gunT=4;setAlarm(true);say('F','警告は終わりだ。攻撃する');if(W[1].state!=='gone')say('H','ミ、ミサイルです！　隊長、回避を！');}}
+  if(ICP.st===4){ICP.atkT+=dt;
+    // ミサイル：時間がたつほど間隔が詰まる
+    if(!back)ICP.misT-=dt;if(ICP.misT<=0){const f=ICP.f[Math.floor(Math.random()*2)];if(icpMissile(f))ICP.misT=Math.max(2.4,6.2-ICP.atkT*.11)*(.8+Math.random()*.4);else ICP.misT=.5;}
+    // 機関砲：未来位置を狙うので、まっすぐ飛んでいると当たる
+    if(!back)ICP.gunT-=dt;if(ICP.gunT<=0){ICP.gunT=Math.max(1.6,4.2-ICP.atkT*.06);ICP.burst=7;ICP.bf=ICP.f[Math.floor(Math.random()*2)];}
+    if(ICP.burst>0){ICP.bT=(ICP.bT||0)-dt;if(ICP.bT<=0){ICP.bT=.06;ICP.burst--;const f=ICP.bf,tt=f.pos.distanceTo(P.pos)/720;tC.copy(P.pos).addScaledVector(P.vel,tt);icpTracer(f.pos,tC,.006,true);if(ICP.burst%2===0)SFX.spark();}}
+  }
+  // ── ミサイル
+  let closest=1e9;const turn=[.72,.86,1.0][opts.diff||0];
+  for(const m of ICP.mis){if(m.life<=0)continue;m.life-=dt;
+    tC.copy(P.pos).sub(m.pos);const dist=tC.length();closest=Math.min(closest,dist);
+    if(!m.lost&&playing){tC.addScaledVector(P.vel,Math.min(1.2,dist/300)).normalize();const ang=Math.acos(clamp(m.dir.dot(tC),-1,1));if(ang>1.35)m.lost=true;else if(ang>1e-4){m.dir.lerp(tC,Math.min(1,turn*dt/ang)).normalize();}}
+    m.pos.addScaledVector(m.dir,300*dt);m.m.position.copy(m.pos);tD.copy(m.pos).add(m.dir);m.m.lookAt(tD);m.gl.position.copy(m.pos).addScaledVector(m.dir,-2.5);
+    m.smoke-=dt;if(m.smoke<=0){m.smoke=.025;puff(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,0,1.5,0,2.2,1.6,.55);}
+    let boom=false;if(playing&&dist<15){boom=true;P.fling.addScaledVector(m.dir,30);damage(24,'迎撃機のミサイルが命中した');}
+    if(m.life<=0||m.pos.y<4)boom=true;
+    if(boom){m.life=0;m.m.visible=m.gl.visible=false;explode(m.pos,.3);SFX.hit();}}
+  if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけてから急旋回でかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
+  else if(ICP.st===4&&playing)G.prompt={t:back?'任務空域へ戻れ（あと '+Math.max(0,(d-AREA_R+500)/1000).toFixed(1)+' km）':'攻撃を受けている　反転して任務空域へ戻れ',p:back?sat(1-(d-AREA_R+500)/3000):0};
+  // ── 曳光弾
+  for(const t of ICP.trc){if(t.life<=0)continue;t.life-=dt;t.pos.addScaledVector(t.dir,720*dt);t.m.position.copy(t.pos);tD.copy(t.pos).add(t.dir);t.m.lookAt(tD);
+    if(t.live&&playing&&t.pos.distanceTo(P.pos)<7){t.life=0;damage(6,'迎撃機の機関砲に撃たれた');}
+    if(t.life<=0)t.m.visible=false;}
+}
 const EXP={fire:[],smoke:[],sparks:null,sv:[],ring:null,light:null,t:9,ringT:9};
 function initExplosion(){
   const tex=(dark)=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');for(let i=0;i<26;i++){const a=Math.random()*6.283,r=Math.random()*30,px=64+Math.cos(a)*r,py=64+Math.sin(a)*r,s=14+Math.random()*22,g=x.createRadialGradient(px,py,0,px,py,s);g.addColorStop(0,dark?'rgba(255,255,255,.5)':'rgba(255,255,255,.75)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,128,128);}
@@ -3989,9 +4098,9 @@ function step(dt){
   if(G.mode==='pause'){renderFrame();return;}
   G.t+=dt;U.uTime.value+=dt;U.uSpin.value+=dt*.01;
   readInput();
-  if(G.mode==='play'){G.missionT+=dt;updatePlayer(dt);updateWing(dt);updatePhase(dt);if(G.mode==='play'){chaseCam(dt);updateHUD(dt);}}
+  if(G.mode==='play'){G.missionT+=dt;updatePlayer(dt);updateWing(dt);updatePhase(dt);updateIntercept(dt);if(G.mode==='play'){chaseCam(dt);updateHUD(dt);}}
   else if(G.mode==='cut')updateCut(dt);
-  else if(G.mode==='dying'){updateDying(dt);updateWing(dt);}
+  else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
     else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=innerWidth>760?9:0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
