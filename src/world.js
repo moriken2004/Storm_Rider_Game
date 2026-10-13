@@ -1275,9 +1275,10 @@ function buildFighter(){
     {const r=A(new THREE.BoxGeometry(.05,3.0,.07),dk,s*2.56,2.75,8.75);r.rotation.z=-s*.245;r.rotation.x=-.42;}
     L([foil(new V3(s*1.9,-1.2,6.6),2.6,.05,new V3(1,0,0)),foil(new V3(s*2.2,-2.1,7.4),1.3,.04,new V3(1,0,0))],bot);
     // 標識（主翼上面と垂直尾翼の外側）
-    {const dm=new THREE.MeshStandardMaterial({map:fighterDecal(),transparent:true,roughness:.6,metalness:.1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3});ENVMATS.push(dm);
-      const d1=A(new THREE.PlaneGeometry(2.8,1.4),dm,s*5.0,.24,1.3);d1.rotation.x=-Math.PI/2;d1.rotation.z=s>0?Math.PI/2:-Math.PI/2;d1.castShadow=false;
-      const d2=A(new THREE.PlaneGeometry(2.0,1.0),dm,s*(2.56+.06),2.5,6.9);d2.rotation.y=s*Math.PI/2;d2.rotation.z=0;d2.rotation.order='YXZ';d2.rotation.x=-s*0;d2.rotateY(0);d2.rotation.z=-s*0;d2.rotateX(0);d2.rotateZ(0);d2.rotation.set(0,s*Math.PI/2,0);d2.rotateX(-.245*1);d2.castShadow=false;}
+    {const dm=new THREE.MeshStandardMaterial({map:fighterDecal(),alphaTest:.5,roughness:.6,metalness:.1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3});ENVMATS.push(dm);
+      const d1=A(new THREE.PlaneGeometry(2.8,1.4),dm,s*5.0,.25,1.3);d1.rotation.x=-Math.PI/2;d1.castShadow=false;
+      const n=new V3(s*.97,-.24,0).normalize(),u=new V3(s*.24,.97,0).normalize(),xa=new V3().crossVectors(u,n);
+      const d2=A(new THREE.PlaneGeometry(2.0,1.0),dm,s*2.48,2.5,7.75);d2.position.addScaledVector(n,.17);d2.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa,u,n));d2.castShadow=false;}
     // 兵装：翼下のパイロン 2 つと翼端。ミサイルは胴・前後の小翼・先端のシーカー
     const missile=(x,y,z,len)=>{const m=A(new THREE.CylinderGeometry(.1,.1,len,10),wh,x,y,z);m.rotation.x=Math.PI/2;A(new THREE.SphereGeometry(.1,10,8),dk,x,y,z-len/2);
       for(const[fz,fs]of[[len/2-.25,.34],[-len/2+.9,.2]])for(const a of[Math.PI/4,-Math.PI/4]){const f=A(new THREE.BoxGeometry(fs*2,.02,.42),wh,x,y,z+fz);f.rotation.z=a;}};
