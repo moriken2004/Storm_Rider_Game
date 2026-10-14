@@ -2072,7 +2072,7 @@ function buildGear(sh,hex){
 
 // ───────────────────────── 船とイルカ ─────────────────────────
 function buildShip(kind){
-  const g=new THREE.Group();
+  const g=new THREE.Group();g.userData.kind=kind;
   const sec=(z,w,top,d)=>[new V3(-w,top,z),new V3(-w,0,z),new V3(-w*.82,-d,z),new V3(w*.82,-d,z),new V3(w,0,z),new V3(w,top,z)];
   if(kind==='cargo'){
     const hull=std({color:lin(0x18222e),metalness:.4,roughness:.6,side:THREE.DoubleSide}),red=std({color:lin(0x6e1f18),metalness:.3,roughness:.7,side:THREE.DoubleSide}),deck=std({color:lin(0x5a2f26),roughness:.85,metalness:.1}),white=std({color:lin(0xd6d9da),roughness:.6,metalness:.1});
@@ -4369,7 +4369,7 @@ function strHit(t,a,st){
       const c=Math.cos(s.h),sn=Math.sin(s.h),lx=dx*c-dz*sn,lz=dx*sn+dz*c,top=L>100?30:L>50?15:7;
       if(Math.abs(lx)<B/2+1&&Math.abs(lz)<L/2+1&&q.y<top){
         if(s.hp===undefined)s.hp=L>100?70:L>50?28:10;s.hp--;puff(q.x,q.y,q.z,0,3,0,1.6,.5,.9);if(Math.random()<.4)SFX.spark();
-        strSay(s.m.userData.radar?'patrol':'ship',s.m.userData.radar?'C':'C',s.m.userData.radar?'自国の巡視船を撃っています！　射撃を中止してください':'民間船への発砲を確認。ただちに射撃を中止してください');
+        {const pt=s.m.userData.kind==='patrol';strSay(pt?'patrol':'ship','C',pt?'自国の巡視船を撃っています！　射撃を中止してください':'民間船への発砲を確認。ただちに射撃を中止してください');}
         if(s.hp<=0)strSink(s);return true;}}
     const lx=q.x-BASE.x,lz=q.z-BASE.z;
     if(Math.abs(lx)<2700&&Math.abs(lz)<3100&&q.y<260){

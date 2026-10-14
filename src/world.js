@@ -1124,7 +1124,7 @@ function buildGear(sh,hex){
 
 // ───────────────────────── 船とイルカ ─────────────────────────
 function buildShip(kind){
-  const g=new THREE.Group();
+  const g=new THREE.Group();g.userData.kind=kind;
   const sec=(z,w,top,d)=>[new V3(-w,top,z),new V3(-w,0,z),new V3(-w*.82,-d,z),new V3(w*.82,-d,z),new V3(w,0,z),new V3(w,top,z)];
   if(kind==='cargo'){
     const hull=std({color:lin(0x18222e),metalness:.4,roughness:.6,side:THREE.DoubleSide}),red=std({color:lin(0x6e1f18),metalness:.3,roughness:.7,side:THREE.DoubleSide}),deck=std({color:lin(0x5a2f26),roughness:.85,metalness:.1}),white=std({color:lin(0xd6d9da),roughness:.6,metalness:.1});
