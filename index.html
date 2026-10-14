@@ -3669,7 +3669,7 @@ function updateCut(dt){
   if(bi&&c.tot<bi){const k=ease(c.tot/bi);tD.copy(camera.position);qT.copy(camera.quaternion);camera.position.copy(c.fp).lerp(tD,k);camera.quaternion.copy(c.fq).slerp(qT,k);camera.fov=lerp(c.ff,camera.fov,k);camera.updateProjectionMatrix();}
   else if(bo&&c.i===c.def.shots.length-1&&s.dur-c.t<bo){const k=ease(1-(s.dur-c.t)/bo),f0=camera.fov;tD.copy(camera.position);qT.copy(camera.quaternion);const sh=G.shake;G.shake=0;P.camYaw=P.yaw;P.camPitch=P.pitch*.62;chaseCam(0,true);G.shake=sh;
     camera.position.lerpVectors(tD,camera.position,k);const qc=camera.quaternion.clone();camera.quaternion.copy(qT).slerp(qc,k);camera.fov=lerp(f0,62,k);camera.updateProjectionMatrix();}
-  const subs=c.def.subs||[];while(c.si<subs.length&&c.tot>=subs[c.si][0]){const u=subs[c.si++];if(u[1]!=='H'||W[1].state!=='gone')say(u[1],u[2],u[3]);}
+  const subs=c.def.subs||[];while(c.si<subs.length&&c.tot>=subs[c.si][0]){const u=subs[c.si++];if(u[1]!=='H'||W[1].state!=='gone')say(u[1],typeof u[2]==='function'?u[2]():u[2],u[3]);}
   W.forEach(w=>{if(w.state!=='gone'){syncAC(w);animAircraft(w.mesh,G.t,w.power===undefined?.8:w.power,w.ph);}});syncAC(P);
 }
 function endCut(){
@@ -4122,7 +4122,7 @@ function updateIntercept(dt){
     say('F',ICP.n?'再び領空に入ったな。次は警告しない。ただちに反転せよ':'警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ');}
   const T2=ICP.n?5:13,T3=ICP.n?4:8;
   if(ICP.st===2){G.prompt={t:'領空侵犯　反転して任務空域へ戻れ',p:ICP.t/T2};if(ICP.t>T2){ICP.st=3;ICP.t=0;ICP.shot=0;say('F','最終警告だ。従わなければ撃墜する');}}
-  if(ICP.st===3){G.prompt={t:'最終警告　反転して任務空域へ戻れ',p:ICP.t/T3};
+  if(ICP.st===3){G.prompt={t:G.armed?'最終警告　反転して戻るか、交戦に備えろ':'最終警告　反転して任務空域へ戻れ',p:ICP.t/T3};
     // 威嚇射撃：機首の前を横切る曳光弾
     if(ICP.t>1.2&&ICP.t<2.6){ICP.shot-=dt;if(ICP.shot<=0){ICP.shot=.07;const f=ICP.f[0];tC.copy(f.pos).addScaledVector(tA,400);tC.y+=8;icpTracer(f.pos,tC,.004,false);if(Math.random()<.4)SFX.spark();}}
     if(ICP.t>T3){ICP.st=4;ICP.t=0;ICP.misT=3.5;ICP.gunT=6;setAlarm(true);G.prompt=null;
@@ -4165,7 +4165,7 @@ const icpCam=(f0,r0,u0,lf,lr,lu,fov)=>{fwdOf(P.yaw,0,tA);tB.set(-tA.z,0,tA.x);se
 const icpLevel=dt=>{P.pitch=damp(P.pitch,0,2,dt);P.roll=damp(P.roll,0,2,dt);cutFly(dt,150);P.power=1;};
 const CUT_ICP={
   blendIn:.7,blendOut:1.1,
-  subs:[[.2,'C','国籍不明機が 2 機、急速に接近！　ノルド連邦の迎撃機です',3.6],[5.2,'F','警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ',5.6],[11.6,'G','隊長、相手は本気だ。こっちは丸腰だぞ、引き返せ！',3.4]],
+  subs:[[.2,'C','国籍不明機が 2 機、急速に接近！　ノルド連邦の迎撃機です',3.6],[5.2,'F','警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ',5.6],[11.6,'G',()=>G.armed?'隊長、相手は本気だ。こっちも積んではいるが、撃ち合えば戦争だぞ。引き返せ！':'隊長、相手は本気だ。こっちは丸腰だぞ、引き返せ！',3.6]],
   begin(){SFX.caution();},
   shots:[
     // 後ろの空から 2 機が迫ってくる（隊長機の前から振り返る）
@@ -4508,7 +4508,7 @@ function fighterHit(f,dmg){if(f.dead)return;f.hp-=dmg;if(f.hp>0){if(Math.random(
   f.dead=true;f.downT=0;explode(f.pos,.6);SFX.boom();G.stats.kills=(G.stats.kills||0)+1;
   say('F',['メーデー、メーデー！　被弾した、脱出する！','ぐっ…！　制御不能、脱出する！'][ICP.f.indexOf(f)%2],2.6);
   if(ICP.st>=1&&ICP.st<=3){ICP.st=4;ICP.t=0;ICP.misT=2;ICP.gunT=4;setAlarm(true);say('F','撃ってきたぞ！　全機、交戦せよ！',2.2);}
-  if(ICP.f.every(q=>q.dead||!q.mesh.visible)){setAlarm(false);G.prompt=null;say('C','迎撃機、2 機とも撃墜を確認…。隊長、これは国際問題になりますよ',4);ICP.cleared=true;}}
+  if(ICP.f.every(q=>q.dead||!q.mesh.visible)){setAlarm(false);G.prompt=null;say('C','迎撃機、2 機とも撃墜を確認…。隊長、これは国際問題になりますよ',4);ICP.cleared=true;ICP.st=5;ICP.t=0;G.lockF=null;}}
 function boot(){
   const steps=[
     ()=>{view.q=opts.q;resize(true);U.tNoise.value=makeNoise3D(96);},

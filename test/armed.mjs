@@ -17,6 +17,6 @@ const r=await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR,P=
     S.step(1/30);if(ICP.st!==last){log.push(t.toFixed(1)+'s st'+ICP.st+(ICP.cleared?'c':'')+' out'+Math.round(Math.hypot(P.pos.x,P.pos.z))+' '+G.mode+' '+G.phase);last=ICP.st;}
     if(ICP.cleared&&shotT<0){shotT=t;log.push(t.toFixed(0)+'s 2 機撃墜');}
     if(shotT>0&&t>shotT+12)break;}
-  return{log:log.join(' → '),mode:G.mode,hull:Math.round(P.hull),kills:G.stats.kills||0,msl:P.msl,wing:S.W.map(w=>w.state+(w.shot?'*':'')).join(','),out:Math.round(Math.min(Math.hypot(P.pos.x,P.pos.z)-16500,9e9))};});
+  return{prompt:G.prompt&&G.prompt.t,st:ICP.st,log:log.join(' → '),mode:G.mode,hull:Math.round(P.hull),kills:G.stats.kills||0,msl:P.msl,wing:S.W.map(w=>w.state+(w.shot?'*':'')).join(','),out:Math.round(Math.min(Math.hypot(P.pos.x,P.pos.z)-16500,9e9))};});
 console.log('交戦',JSON.stringify(r));
 await b.close();
