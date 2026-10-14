@@ -3404,6 +3404,7 @@ function updatePlayer(dt){
 // 僚機が撃たれた瞬間
 function wingHit(w){
   if(w.state==='gone'||w.state==='down')return;explode(w.pos,.55);SFX.boom();G.shake=Math.max(G.shake,.5);w.state='down';w.downT=0;w.shot=true;w.power=.05;G.stats.shot=true;G.stats.saved=false;
+  if(w===W[1]&&G.flags.stall){G.flags.stall=0;G.prompt=null;carrierRing.visible=false;G.target=G.prevTarget;G.targetLabel=G.prevLabel;setObj('PHASE 1　レインバンド','落雷を避けて中心へ進め');}
   const i=W.indexOf(w);if(i===0){say('G','ぐあっ…！　やられた、操縦が利かん…隊長、逃げろ！',3.2);if(!G.spareGiven&&G.phase!=='ret')ICP.doomed=true;}else say('H','うわあっ！　た、隊長…っ！',2.6);
 }
 // 撃たれた僚機が煙を引いて落ちていく
@@ -3659,8 +3660,11 @@ function fail(cause){G.cause=cause;G.mode='dying';G.dieT=1.2;setAlarm(false);}
 
 // ───────────────────────── カットシーン ─────────────────────────
 let CUT=null;
-function startCut(def){P.br=null;P.brA=0;
-  resetHaz();clearRadio();CUT={def,i:-1,t:0,tot:0,si:0,skip:false,fp:camera.position.clone(),fq:camera.quaternion.clone(),ff:camera.fov};G.mode='cut';
+function startCut(def){P.br=null;P.brA=0;let save=null;
+  if(def.mid){const vis=[...rings,...gateRings,coreShell,coreGlow];save={vis,v:vis.map(o=>o.visible),timer:$('timer').hidden};vis.forEach(o=>o.visible=false);
+    G.prompt=null;$('prompt').hidden=true;$('warn').hidden=true;strikes.forEach(q=>q.col.visible=false);strikes.length=0;carrierRing.visible=false;if(tether)tether.visible=false;}
+  else resetHaz();
+  clearRadio();CUT={def,save,i:-1,t:0,tot:0,si:0,skip:false,fp:camera.position.clone(),fq:camera.quaternion.clone(),ff:camera.fov};G.mode='cut';
   document.body.classList.add('cine');$('hud').hidden=true;$('skip').hidden=false;$('banner').classList.remove('on');
   if(def.begin)def.begin();nextShot();
 }
@@ -3681,6 +3685,7 @@ function endCut(){
   finalMat.uniforms.uWhite.value=0;G.white=0;shock.visible=false;boomFx.visible=false;proj.g.visible=false;proj.glow.visible=false;
   W.forEach(w=>{w.power=.8;});camera.fov=62;camera.updateProjectionMatrix();G.indoor=0;setDoors(1);hangarLight(1);
   c.def.end();
+  if(c.save&&G.mode==='play'){c.save.vis.forEach((o,i)=>o.visible=c.save.v[i]);$('timer').hidden=c.save.timer;}
 }
 function skipCut(){if(!CUT||CUT.skip)return;CUT.skip=true;$('fade').style.opacity=1;setTimeout(()=>{if(CUT)endCut();$('fade').style.opacity=0;},520);}
 function cutFly(dt,spd){fwdOf(P.yaw,P.pitch,tA);P.pos.addScaledVector(tA,spd*dt);W.forEach(w=>{if(w.state==='gone')return;slotOf(w,tB);tB.y+=Math.sin(G.t*1.1+w.ph)*3;w.pos.lerp(tB,1-Math.exp(-dt*3));w.yaw=P.yaw;w.pitch=P.pitch;w.roll=Math.sin(G.t*1.6+w.ph)*.05;});}
@@ -4167,7 +4172,7 @@ function icpPose(i,f0,r0,u0,roll,pw){const f=ICP.f[i];fwdOf(P.yaw,0,tA);tB.set(-
   f.mesh.visible=true;f.mesh.position.copy(f.pos);f.mesh.rotation.set(0,f.yaw,f.roll,'YXZ');f.mesh.userData.setPower(pw===undefined?.3:pw);f.mesh.userData.beacon.visible=(G.t*1.2+i*.4)%1<.12;}
 const icpCam=(f0,r0,u0,lf,lr,lu,fov)=>{fwdOf(P.yaw,0,tA);tB.set(-tA.z,0,tA.x);setCam(P.pos.x+tA.x*f0+tB.x*r0,P.pos.y+u0,P.pos.z+tA.z*f0+tB.z*r0,P.pos.x+tA.x*lf+tB.x*lr,P.pos.y+lu,P.pos.z+tA.z*lf+tB.z*lr,fov);};
 const icpLevel=dt=>{P.pitch=damp(P.pitch,0,2,dt);P.roll=damp(P.roll,0,2,dt);cutFly(dt,150);P.power=1;};
-const CUT_ICP={
+const CUT_ICP={mid:true,
   blendIn:.7,blendOut:1.1,
   subs:[[.2,'C','国籍不明機が 2 機、急速に接近！　ノルド連邦の迎撃機です',3.6],[5.2,'F','警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ',5.6],[11.6,'G',()=>G.armed?'隊長、相手は本気だ。こっちも積んではいるが、撃ち合えば戦争だぞ。引き返せ！':'隊長、相手は本気だ。こっちは丸腰だぞ、引き返せ！',3.6]],
   begin(){SFX.caution();},
@@ -4194,7 +4199,7 @@ function ckMissile(fi,wi,u,dt){const m=ICP.mis[fi],f=ICP.f[fi],wv=W[wi];if(u<=0|
   if(!m.m.visible){m.m.visible=m.gl.visible=true;SFX.launch();}tC.copy(f.pos);tC.y-=1.5;const e=u*u*(3-2*u)*.4+u*.6;m.pos.lerpVectors(tC,wv.pos,e);m.dir.copy(wv.pos).sub(tC).normalize();m.m.position.copy(m.pos);tD.copy(m.pos).add(m.dir);m.m.lookAt(tD);m.gl.position.copy(m.pos).addScaledVector(m.dir,-2.5);
   CK.sm=(CK.sm||0)-dt;if(CK.sm<=0){CK.sm=.02;puff(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,0,1.5,0,2.4,1.8,.6);}}
 const ckSkip=wi=>{if(W[wi].state==='gone'&&CUT)CUT.t=1e9;};
-const CUT_KILL={
+const CUT_KILL={mid:true,
   blendIn:.6,blendOut:1.0,
   subs:[[.2,'F','警告は終わりだ。攻撃する',2.6],[2.9,'H','ミ、ミサイルです！　2番機、後ろ！',2.4]],
   begin(){SFX.caution();setAlarm(true);for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}},
@@ -4551,7 +4556,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();
