@@ -439,6 +439,8 @@ void main(){
   float f=abs(dot(normalize(vN),normalize(vV)));a*=pow(1.0-f,2.2)+0.06;
 #elif MODE==3
   float r=length(vUv-0.5)*2.0;a*=pow(max(1.0-r,0.0),2.4);
+#elif MODE==5
+  a*=pow(max(1.0-abs(vUv.x-0.5)*2.0,0.0),1.6)*pow(vUv.y,1.4);
 #elif MODE==4
   a*=0.35+0.65*pow(abs(sin(vUv.y*40.0)),6.0);float f=abs(dot(normalize(vN),normalize(vV)));a*=0.02+0.98*pow(1.0-f,2.0);
 #endif

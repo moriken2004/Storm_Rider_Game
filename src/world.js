@@ -591,7 +591,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   {const rg=new THREE.IcosahedronGeometry(1,4),rp=rg.attributes.position;for(let i=0;i<rp.count;i++){const x=rp.getX(i),y=rp.getY(i),z=rp.getZ(i),k=.62+.5*vnoise2(x*1.7+y*2.1+3,z*1.7+y+8)+.2*vnoise2(x*5+y*4,z*5-y*3)+.08*vnoise2(x*13,z*13+y*11);rp.setXYZ(i,x*k,y*k*(y>0?1:.4),z*k);}rg.computeVertexNormals();
     const rm=std({color:lin(0x3d3832),roughness:.95,metalness:0});rm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nvarying vec3 vRP;").replace("#include <begin_vertex>","#include <begin_vertex>\nvRP=(modelMatrix*vec4(position,1.0)).xyz;");
       sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\nvarying vec3 vRP;uniform sampler2D tN2;").replace("#include <color_fragment>","#include <color_fragment>\nfloat ra=texture2D(tN2,vRP.xy/23.0+vRP.z*0.03).b,rb=texture2D(tN2,vRP.zy/7.0).b;diffuseColor.rgb*=(0.5+1.1*ra)*(0.7+0.6*rb)*(0.85+0.3*sin(vRP.y*0.6+ra*6.0));diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.02,0.03,0.025),1.0-smoothstep(0.5,5.0,vRP.y));");};
-    for(const[x,z,s,hh]of[[-1420,-760,34,60],[-1500,-640,22,38],[-1380,-900,18,26],[-1250,1480,30,44],[-1330,1400,16,22],[900,-1620,20,24]]){const r=new THREE.Mesh(rg,rm);r.position.set(x,hh*.2,z);r.scale.set(s,hh,s*.8);r.rotation.y=x;B.add(r);}
+    for(const[x,z,s,hh]of[[-1420,-760,34,60],[-1500,-640,22,38],[-1380,-900,18,26],[-1250,1480,30,44],[-1330,1400,16,22],[900,-1620,20,24]]){const r=new THREE.Mesh(rg,rm);r.position.set(x,hh*.2,z);r.scale.set(s,hh,s*.8);r.rotation.y=x;r.userData.rock=1;B.add(r);}
     const lx=250,lz=-1330,ly=Math.max(islandH(lx,lz),2);
     const LH=new THREE.Group();B.add(LH);B.userData.lodLH=LH;buildLighthouse(LH,lx,ly,lz);Object.assign(B.userData,LH.userData,{lodLH:LH});}
   // 滑走路（幅64m×長さ1900m、方位 18/36）。標識は実際の精密進入滑走路の並びに合わせる
@@ -761,7 +761,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   {B.updateMatrixWorld(true);const cols=[],bx=new THREE.Box3(),skip=o=>{for(let q=o;q&&q!==B;q=q.parent)if(q===HG)return true;return false;};
     B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=o.material;if(Array.isArray(m)||m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;if(o.geometry.attributes.position.count>20000)return;
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
-      if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0]);});
+      if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0,o.userData.rock?1:0]);});
     B.userData.colliders=cols;}
   mergeStatic(HG);mergeStatic(LOD);mergeStatic(B.userData.lodLH);
 }
@@ -1184,9 +1184,9 @@ function buildShip(kind){
     g.userData.len=28;g.userData.beam=7;
   }
   // 航跡（白い泡の帯）
-  const L=g.userData.len,wk=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.34,.37,.39),1));wk.rotation.x=-Math.PI/2;wk.scale.set(g.userData.beam*1.5,L*3.4,1);wk.position.set(0,.6,L*2.0);wk.frustumCulled=false;
+  const L=g.userData.len,wk=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.4,.43,.45),5));wk.rotation.x=-Math.PI/2;wk.scale.set(g.userData.beam*1.5,L*3.4,1);wk.position.set(0,.6,L*2.0);wk.frustumCulled=false;
   g.userData.wake=wk;
-  {const bw=new THREE.Group(),a=.3,len=L*1.15;for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.3,.33,.35),1));p.frustumCulled=false;p.rotation.set(-Math.PI/2,-s*a,0,'YXZ');p.scale.set(g.userData.beam*.42,len,1);p.position.set(s*Math.sin(a)*len*.5,0,-L/2+Math.cos(a)*len*.5);bw.add(p);}g.userData.bow=bw;}g.traverse(o=>{if(o.isMesh)o.castShadow=false;});
+  {const bw=new THREE.Group(),a=.3,len=L*1.15;for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.34,.37,.39),5));p.frustumCulled=false;p.rotation.set(-Math.PI/2,s*a,0,'YXZ');p.scale.set(g.userData.beam*.42,len,1);p.position.set(s*Math.sin(a)*len*.5,0,-L/2+Math.cos(a)*len*.5);bw.add(p);}g.userData.bow=bw;}g.traverse(o=>{if(o.isMesh)o.castShadow=false;});
   return g;
 }
 function buildDolphin(){
