@@ -210,10 +210,18 @@ body.touch.inplay #touch{display:block}
 .tb.on{background:rgba(120,200,255,.4);border-color:#fff}
 #tbA{right:calc(26px + var(--sr));bottom:calc(112px + var(--sb));width:88px;height:88px;border-color:rgba(255,190,120,.8);background:rgba(120,50,20,.42)}
 #tbB{right:calc(122px + var(--sr));bottom:calc(26px + var(--sb));width:82px;height:82px}
+#tbG{right:calc(218px + var(--sr));bottom:calc(30px + var(--sb));width:72px;height:72px;display:none;border-color:rgba(255,220,140,.8)}
+#tbM{right:calc(128px + var(--sr));bottom:calc(122px + var(--sb));width:64px;height:64px;display:none;border-color:rgba(255,120,100,.85);background:rgba(110,24,20,.45)}
+body.armed #tbG,body.armed #tbM{display:block}
+#wpn{display:none;font-size:11px;letter-spacing:.16em;color:#ffd48a;margin-top:2px}body.armed #wpn{display:block}
+#lockBox{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border:2px solid #ff5a4a;display:none;box-shadow:0 0 10px rgba(255,90,74,.7)}#lockBox.ok{border-width:3px;animation:pl .25s infinite alternate}
+#toast{position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:60;padding:10px 26px;border:1.5px solid var(--pd-brass);border-radius:999px;background:rgba(6,44,54,.9);color:#ffe6b0;font-family:var(--f-label);letter-spacing:.3em;font-size:14px;opacity:0;transition:opacity .4s;pointer-events:none}#toast.on{opacity:1}
+#armBadge{display:none;margin:6px auto 0;width:max-content;padding:2px 14px;border:1px solid #e0573a;border-radius:999px;color:#ff9a7a;font-family:var(--f-label);font-size:11px;letter-spacing:.4em}body.armed #armBadge{display:block}
 #tbP{right:calc(14px + var(--sr));top:calc(10px + var(--st));width:44px;height:44px;border-radius:10px;font-size:15px;letter-spacing:0}
 #tbF{position:static;width:auto;height:auto;border-radius:999px;padding:8px 16px;font-size:12px;margin-top:10px;display:none}
 body.touch #tbF.can{display:inline-block}
 body.touch #skip{font-size:13px;padding:14px 18px;right:calc(14px + var(--sr));color:#dbeaf3;border:1px solid rgba(190,233,255,.4);border-radius:999px;background:rgba(5,12,20,.5)}
+.armedOnly{display:none}body.armed .keyOnly .armedOnly{display:inline}
 .touchOnly{display:none}body.touch .touchOnly{display:grid}body.touch .keyOnly{display:none}
 /* 縦向きのときの案内 */
 #rot{position:fixed;inset:0;z-index:99;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#06222b;color:var(--pd-cream);font-family:var(--f-label);letter-spacing:.2em;text-align:center}
@@ -225,7 +233,7 @@ body.small #tl{transform:scale(var(--ui));transform-origin:0 0;left:calc(14px + 
 body.small #obj{transform:translateX(-50%) scale(var(--ui));transform-origin:50% 0;top:calc(8px + var(--st));max-width:none;width:max-content}
 body.small #wing{transform:scale(var(--ui));transform-origin:100% 0;right:calc(76px + 150px * var(--ui) + var(--sr));top:calc(10px + var(--st))}
 body.small #radar{width:140px;height:140px;transform:scale(var(--ui));transform-origin:100% 0;right:calc(68px + var(--sr));top:calc(8px + var(--st));bottom:auto}
-body.touch.small #radio{left:calc(50% - 4vw);width:min(760px,calc(44vw / var(--ui)))}
+body.touch.small #radio{left:calc(50% - 4vw);width:min(760px,calc(44vw / var(--ui)))}body.touch.small.armed #radio{left:calc(50% - 9vw);width:min(760px,calc(30vw / var(--ui)))}
 body.touch.small.cine #radio{left:50%}
 .tb.want{animation:want .7s ease-in-out infinite alternate}@keyframes want{to{box-shadow:0 0 0 6px rgba(255,220,150,.35),0 0 22px rgba(255,200,120,.8);border-color:#fff}}
 body.small #inst{display:none}
@@ -251,11 +259,13 @@ body.small .panel p,body.small .panel li{line-height:1.6}
   <div id="tl">
     <div class="gauge"><label><span>機体 HULL</span><span class="mono" id="hullN">100</span></label><div class="bar" id="hullBar"><i></i></div></div>
     <div class="gauge"><label><span>ブースト BOOST</span><span class="mono" id="boostN">100</span></label><div class="bar" id="boostBar"><i></i></div></div>
+    <div id="wpn" class="mono"></div>
   </div>
   <div id="obj"><div id="objPhase"></div><div id="objText"></div><div id="timer" class="mono" hidden></div></div>
   <div id="wing"><div id="w1"></div><div id="w2"></div></div>
   <div id="ret"></div>
   <div id="mark" hidden><div class="d"></div><span class="mono"></span></div>
+  <div id="lockBox"></div>
   <div id="warn" hidden></div>
   <div id="prompt" hidden><div id="promptT"></div><div class="bar"><i></i></div></div>
   <div id="hint" hidden></div>
@@ -288,6 +298,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
   <svg id="wave" viewBox="0 0 330 16" aria-hidden="true"><path d="M2 8c14-9 27-9 41 0s27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 41 0 27-9 41 0 27 9 39 0" fill="none" stroke="#e6bd74" stroke-width="1.6" stroke-linecap="round"/><circle cx="165" cy="8" r="3.2" fill="#e9633d"/></svg>
   <div class="sub">嵐を消す翼</div>
   <div id="eyebrow">MIZUHA MARINE WEATHER STATION</div>
+  <div id="armBadge">武装モード</div>
   <div class="menu">
     <div id="diff"><button data-d="0">訓練</button><button data-d="1">実戦</button><button data-d="2">極限</button></div>
     <div id="diffT"></div>
@@ -312,6 +323,8 @@ body.small .panel p,body.small .panel li{line-height:1.6}
     <span><kbd>Shift</kbd></span><span>ブースト（ゲージを消費）</span>
     <span><kbd>Space</kbd></span><span>ディフューザー発射・各種操作</span>
     <span><kbd>Esc</kbd> / <kbd>P</kbd></span><span>一時停止</span>
+    <span class="armedOnly"><kbd>F</kbd></span><span class="armedOnly">機銃（押している間）</span>
+    <span class="armedOnly"><kbd>R</kbd></span><span class="armedOnly">ミサイル（赤い枠が点滅してロックしてから）</span>
   </div>
   <ul>
     <li>黄色のマーカーが次の目標です。画面外にあるときは縁に矢印が出ます。</li>
@@ -364,8 +377,9 @@ body.small .panel p,body.small .panel li{line-height:1.6}
  </div>
 </div>
 
-<div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button></div>
+<div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button><button class="tb" id="tbG">機銃</button><button class="tb" id="tbM">ミサイル</button></div>
 <div id="rot"><svg viewBox="0 0 64 64" fill="none" stroke="#e6bd74" stroke-width="3" stroke-linecap="round"><rect x="20" y="8" width="24" height="48" rx="5"/><line x1="29" y1="50" x2="35" y2="50"/></svg><div>端末を横向きにしてください</div></div>
 <div id="sleep" hidden>休止中　―　クリックまたはキー操作で再開</div>
+<div id="toast"></div>
 <div id="fade"></div>
 <div id="load"><div>気象データを読み込み中</div><div class="bar"><i id="loadBar" style="transform:scaleX(0)"></i></div></div>
