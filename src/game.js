@@ -817,7 +817,7 @@ function bindInput(){
   const ap=()=>{opts.mus=+$('oMus').value;opts.sfx=+$('oSfx').value;opts.inv=$('oInv').checked;opts.q=+$('oQ').value;AU.musVol=opts.mus/100;AU.sfxVol=opts.sfx/100;setVolumes();
     if(view.q!==opts.q){view.q=opts.q;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize(true);}saveOpts();};
   ['oMus','oSfx','oInv','oQ'].forEach(i=>$(i).addEventListener('input',ap));ap();
-  try{G.armed=!!localStorage.getItem('stormrider_armed');}catch(e){}applyArmed();
+  G.armed=false;try{localStorage.removeItem('stormrider_armed');}catch(e){}applyArmed();   // 武装モードは保存しない（読み込み直すと解除）
   {let n=0,t0=0;$('dial').addEventListener('pointerdown',e=>{const t=performance.now();if(t-t0>2500)n=0;t0=t;n++;if(n>=7){n=0;toggleArmed();}});$('dial').style.pointerEvents='auto';}
   fitUI();addEventListener('resize',fitUI);addEventListener('orientationchange',()=>setTimeout(fitUI,250));
   // タッチ
@@ -1284,7 +1284,7 @@ function tk(s){if(!IS_TOUCH)return s;return s.replace(/<kbd>A<\/kbd><kbd>D<\/kbd
 const CHEAT=[];
 function toast(t,s){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),(s||2.4)*1000);}
 function applyArmed(){document.body.classList.toggle('armed',!!G.armed);armMeshes();}
-function toggleArmed(){G.armed=!G.armed;try{localStorage.setItem('stormrider_armed',G.armed?'1':'');}catch(e){}applyArmed();initAudio();
+function toggleArmed(){G.armed=!G.armed;applyArmed();initAudio();
   if(G.armed){SFX.lockOn();setTimeout(()=>SFX.launch(),180);toast('武装モード：有効');}else{SFX.ui();toast('武装モード：無効');}}
 // 翼下のミサイル（武装モードのときだけ、残弾ぶん見せる）
 function armMeshes(){const m=P.mesh;if(!m)return;if(!m.userData.arm){const ud=m.userData,wh=new THREE.MeshStandardMaterial({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),dk=new THREE.MeshStandardMaterial({color:lin(0x1c2024),roughness:.5});ENVMATS.push(wh,dk);ud.arm=[];

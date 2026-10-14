@@ -4,7 +4,7 @@ const out=n=>new URL('./out/'+n,import.meta.url).pathname;
 const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});
 const p=await b.newPage();await p.setViewport({width:1280,height:720});p.on('pageerror',e=>console.log('PAGEERR '+e.message));
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR');
-await p.evaluate(()=>{try{localStorage.setItem('stormrider_armed','1');}catch(e){}});await p.reload();await p.waitForFunction('window.__SR');
+for(const k of['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA']){await p.keyboard.down(k);await p.keyboard.up(k);}
 // 引き波：上空から船を見下ろす
 await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR;S.startRun('approach');for(let i=0;i<30;i++)S.step(1/30);const s=S.ships[0];
   window.__PCAM=c=>{c.position.set(s.x+120,260,s.z+160);c.lookAt(s.x+Math.sin(s.h)*120,0,s.z+Math.cos(s.h)*120);};S.step(1/30);S.step(1/30);});

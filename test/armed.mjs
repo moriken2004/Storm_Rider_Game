@@ -3,11 +3,12 @@ import puppeteer from 'puppeteer';
 const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist','--autoplay-policy=no-user-gesture-required']});
 const p=await b.newPage();await p.setViewport({width:1280,height:720});p.on('pageerror',e=>console.log('PAGEERR '+e.message));
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR');
-await p.evaluate(()=>{try{localStorage.removeItem('stormrider_armed');}catch(e){}});
 for(const k of['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA']){await p.keyboard.down(k);await p.keyboard.up(k);}
 await new Promise(r=>setTimeout(r,300));
 console.log('隠しコマンド後',await p.evaluate(()=>JSON.stringify({armed:__SR.G.armed,badge:getComputedStyle(document.getElementById('armBadge')).display,toast:document.getElementById('toast').textContent})));
 await p.screenshot({path:new URL('./out/armed_title.png',import.meta.url).pathname});
+await p.reload();await p.waitForFunction('window.__SR');console.log('読み込み直し後',await p.evaluate(()=>__SR.G.armed));
+for(const k of['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA']){await p.keyboard.down(k);await p.keyboard.up(k);}
 const r=await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR,P=S.P,G=S.G,I=S.input,ICP=S.ICP,log=[];S.startRun('eye');P.pos.set(0,500,-16000);P.yaw=0;P.pitch=0;let last=-1,shotT=-1;
   for(let i=0;i<30*240&&G.mode!=='over';i++){const t=i/30;I.tx=0;I.ty=Math.max(-1,Math.min(1,(500-P.pos.y)/200));I.tGun=false;I.tMsl=false;
     if(G.mode==='cut'){S.endCut();continue;}
