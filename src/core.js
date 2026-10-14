@@ -455,6 +455,31 @@ void main(){
   return m;
 }
 
+// 白波：ノイズを流して泡のまだらを作る（加算、水面より奥は捨てる）。uv の x は横、y は長さ方向。
+// MODE 1 船体沿いの帯（x=0 が船体側）／2 船尾の泡立ち（中心ほど濃い）／3 岸に寄せる波（周期で強まる）／4 航跡と船首波（左右と遠い端で薄れる）
+function foamMat(mode,o){o=o||{};
+  return new THREE.ShaderMaterial({uniforms:{tN:U.tNoise2,uT:U.uTime,uAlpha:{value:o.alpha===undefined?1:o.alpha},uSc:{value:new THREE.Vector2(o.sx||1,o.sy||1)},uSp:{value:o.speed||0},tDepth:U.tDepth,uRes:U.uRes},defines:Object.assign({MODE:mode},o.inScene?{IN_SCENE:1}:{}),
+    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader:`uniform sampler2D tN,tDepth;uniform float uT,uAlpha,uSp;uniform vec2 uSc,uRes;varying vec2 vUv;
+void main(){
+#ifndef IN_SCENE
+  float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;
+#endif
+  vec2 p=vUv*uSc;float n=texture2D(tN,p*.13+vec2(0.,-uT*uSp*.13)).b*.62+texture2D(tN,p*.41+vec2(uT*.02,-uT*uSp*.31)).b*.38;
+  float e;
+#if MODE==1
+  e=pow(1.0-vUv.x,1.1)*(0.62+0.5*smoothstep(0.22,0.0,vUv.y)+0.35*smoothstep(0.75,1.0,vUv.y));
+#elif MODE==2
+  vec2 c=vUv-vec2(.5,.0);e=(1.0-smoothstep(.0,.55,abs(c.x)*(1.3-vUv.y*.6)))*(1.0-smoothstep(.1,1.0,vUv.y))*.85;
+#elif MODE==3
+  e=pow(1.0-vUv.x,1.3)*(.45+.55*pow(.5+.5*sin(uT*1.1-vUv.y*uSc.y*.08),3.0));
+#else
+  e=pow(max(1.0-abs(vUv.x-.5)*2.0,0.0),1.1)*pow(vUv.y,1.2)*.68;
+#endif
+  float f=smoothstep(.56-e*.46,.86-e*.26,n)*min(e*1.6,1.0);
+  gl_FragColor=vec4(vec3(.86,.92,.97)*f*uAlpha,1.0);}`,
+    transparent:true,depthTest:!!o.inScene,depthWrite:false,side:THREE.DoubleSide,blending:THREE.CustomBlending,blendEquation:THREE.AddEquation,blendSrc:THREE.OneFactor,blendDst:THREE.OneFactor});}
+
 // ───────────────────────── レンダーターゲットと描画 ─────────────────────────
 let rtScene,rtCloud,rtHDR,rtB1,rtB2,rtCH=[null,null],chI=0,RW=0,RH=0;
 const resolveMat=new THREE.ShaderMaterial({uniforms:{tCur:{value:null},tHist:{value:null},uInvPV:cloudMat.uniforms.uInvPV,uCam:cloudMat.uniforms.uCam,uPrevPV:{value:new THREE.Matrix4()},uBlend:{value:1},uCRes:compMat.uniforms.uCRes},

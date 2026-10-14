@@ -1275,27 +1275,57 @@ function strHit(t,a,st){
 }
 function strSink(s){s.dead=true;s.sinkT=0;const L=s.m.userData.len;_sq.set(s.x,6,s.z);explode(_sq,L>100?1:L>50?.7:.45);STR.burn.push({ship:s,x:s.x,y:6,z:s.z,r:Math.min(14,L/8+3),t:0,max:L>100?80:45});
   strSay('sink','G',L>100?'貨物船が……沈んでいく。乗組員は無事なのか':'……船が沈んだ。何をしてるんだ、隊長');}
+const _fv=new V3();
+function exhaust(x,y,z,s){if(!STR.init)strInit();const p=STR.smoke.find(q=>q.life<=0);if(!p)return;p.life=p.max=7+Math.random()*3;p.s=3.4+Math.random();p.a=.9;
+  p.m.position.set(x+(Math.random()-.5)*2,y,z+(Math.random()-.5)*2);p.vel.set(3.5+Math.sin(s.h)*s.sp*.4,4+Math.random()*2,Math.cos(s.h)*s.sp*.4);p.m.visible=true;}
 function strUpdate(dt){
   if(!STR.init)return;let fi=0;
   for(let i=STR.burn.length-1;i>=0;i--){const b=STR.burn[i];b.t+=dt;if(b.ship){const s=b.ship;b.x=s.x;b.z=s.z;b.y=Math.max(1,6+s.m.position.y);}
     const k=sat(1-(b.t-b.max+15)/15);if(k<=0){STR.burn.splice(i,1);continue;}
-    b.e=(b.e||0)-dt;if(b.e<=0){b.e=.1/Math.max(.25,k);const p=STR.smoke.find(q=>q.life<=0);if(p){p.life=p.max=5+Math.random()*3;p.s=b.r*(.7+Math.random()*.5);p.m.position.set(b.x+(Math.random()-.5)*b.r,b.y+2,b.z+(Math.random()-.5)*b.r);p.vel.set(3+(Math.random()-.5)*4,9+Math.random()*6,(Math.random()-.5)*4);p.m.visible=true;}}
+    b.e=(b.e||0)-dt;if(b.e<=0){b.e=.1/Math.max(.25,k);const p=STR.smoke.find(q=>q.life<=0);if(p){p.a=1;p.life=p.max=5+Math.random()*3;p.s=b.r*(.7+Math.random()*.5);p.m.position.set(b.x+(Math.random()-.5)*b.r,b.y+2,b.z+(Math.random()-.5)*b.r);p.vel.set(3+(Math.random()-.5)*4,9+Math.random()*6,(Math.random()-.5)*4);p.m.visible=true;}}
     if(fi<STR.fire.length&&k>.3){const f=STR.fire[fi++];f.visible=true;const s=b.r*(1.6+Math.sin(G.t*13+i*3)*.25+Math.random()*.2);f.scale.set(s,s*1.3,1);f.position.set(b.x,b.y+s*.35,b.z);f.quaternion.copy(camera.quaternion);f.material.uniforms.uAlpha.value=k*(.75+Math.random()*.25);}}
   for(;fi<STR.fire.length;fi++)STR.fire[fi].visible=false;
   for(const p of STR.smoke){if(p.life<=0)continue;p.life-=dt;if(p.life<=0){p.m.visible=false;continue;}const k=p.life/p.max;p.vel.multiplyScalar(Math.exp(-dt*.3));p.m.position.addScaledVector(p.vel,dt);
-    const s=p.s*(1+(1-k)*5);p.m.scale.set(s,s,1);p.m.quaternion.copy(camera.quaternion);p.m.material.uniforms.uAlpha.value=Math.min((1-k)*5,1)*k*.85;}
+    const s=p.s*(1+(1-k)*5);p.m.scale.set(s,s,1);p.m.quaternion.copy(camera.quaternion);p.m.material.uniforms.uAlpha.value=Math.min((1-k)*(p.a<1?14:5),1)*k*.85*(p.a||1);}
 }
 function puff(x,y,z,vx,vy,vz,s,life,a){const p=puffs.find(q=>q.life<=0);if(!p)return;p.a=a||1;p.life=p.max=life;p.m.position.set(x,y,z);p.vel.set(vx,vy,vz);p.s=s;p.m.visible=true;}
+// ── 港の動き：岸壁クレーンの荷役、RTG の走行、トレーラーの周回
+function animPort(dt){const B=baseGroup.userData.lodPort;if(!B)return;if(camera.position.distanceTo(_fv.set(BASE.x+1250,0,BASE.z+150))>4000)return;const t=G.t;
+  for(const c of B.userData.cranes||[]){const a=c.userData.anim,T=(t*.035+a.ph)%1;
+    // 1 周：船の上で降ろす→巻き上げ→陸側へ→降ろす→巻き上げ→船へ戻る
+    const seg=[[0,0,30],[.12,0,21],[.2,0,21],[.3,0,31],[.48,-30,31],[.58,-30,4.5],[.66,-30,4.5],[.76,-30,31],[1,0,31]];let i=0;while(i<seg.length-2&&T>seg[i+1][0])i++;
+    const s0=seg[i],s1=seg[i+1],u=ease(sat((T-s0[0])/(s1[0]-s0[0])));a.tro.position.x=lerp(s0[1],s1[1],u);const sy=lerp(s0[2],s1[2],u);a.sp.position.y=sy;a.bx.visible=T>.2&&T<.62;
+    for(const r of a.r){const top=35,bot=sy+.4;r.scale.y=top-bot;r.position.y=(top+bot)/2;}}
+  for(const g of B.userData.rtgs||[])g.position.z=g.userData.z0+Math.sin(t*.05+g.userData.z0)*14;
+  for(const tr of B.userData.trucks||[]){tr.userData.s=(tr.userData.s+dt*7)%1244;const d=tr.userData.s;let x,z,yaw;
+    if(d<580){x=1276;z=-140+d;yaw=Math.PI;}else if(d<622){x=1276-(d-580);z=440;yaw=-Math.PI/2;}else if(d<1202){x=1234;z=440-(d-622);yaw=0;}else{x=1234+(d-1202);z=-140;yaw=Math.PI/2;}
+    tr.position.set(x,4.65,z);let dy=yaw-tr.rotation.y;while(dy>Math.PI)dy-=6.2832;while(dy<-Math.PI)dy+=6.2832;tr.rotation.y+=dy*Math.min(1,dt*3);}}
+// ── カモメ：港と船のまわりを旋回し、ときどき羽ばたく
+const GULLS=[];
+function initGulls(){const wm=new THREE.MeshStandardMaterial({color:0xe8eae8,roughness:.8,side:THREE.DoubleSide}),tip=new THREE.MeshStandardMaterial({color:0x2a2c2e,roughness:.8,side:THREE.DoubleSide});
+  const wing=new THREE.Shape();wing.moveTo(0,0);wing.lineTo(.95,.18);wing.lineTo(.8,-.12);wing.lineTo(0,-.22);const wg=new THREE.ShapeGeometry(wing);wg.rotateX(Math.PI/2);
+  for(let i=0;i<16;i++){const g=new THREE.Group();const b=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),wm);b.scale.set(1,1,2.6);g.add(b);const wl=[];
+    for(const s of[-1,1]){const p=new THREE.Group();const w=new THREE.Mesh(wg,wm);w.scale.set(s,1,1);p.add(w);const tp=new THREE.Mesh(new THREE.BoxGeometry(.2,.01,.12),tip);tp.position.set(s*.85,0,0);p.add(tp);p.position.x=s*.08;g.add(p);wl.push(p);}
+    g.scale.setScalar(2.2);scene.add(g);const port=i<10;GULLS.push({g,wl,cx:port?BASE.x+1200+Math.random()*250:0,cz:port?BASE.z+Math.random()*400-50:0,ship:port?null:ships[i%2?0:2],R:30+Math.random()*80,h:14+Math.random()*40,a:Math.random()*6.3,w:(.25+Math.random()*.2)*(Math.random()<.5?-1:1),ph:Math.random()*10});}}
+function animGulls(dt){if(!GULLS.length)initGulls();const t=G.t;for(const q of GULLS){let cx=q.cx,cz=q.cz;if(q.ship){cx=q.ship.x+Math.sin(q.ship.h)*40;cz=q.ship.z+Math.cos(q.ship.h)*40;}
+    if(camera.position.distanceTo(_fv.set(cx,q.h,cz))>2500){q.g.visible=false;continue;}q.g.visible=true;
+    q.a+=q.w*dt;const x=cx+Math.cos(q.a)*q.R,z=cz+Math.sin(q.a)*q.R,y=q.h+Math.sin(t*.4+q.ph)*4;q.g.position.set(x,y,z);q.g.rotation.set(0,Math.atan2(Math.sin(q.a)*q.w,-Math.cos(q.a)*q.w),-q.w*1.1,'YXZ');
+    const flap=(Math.sin(t*.5+q.ph)>.3)?Math.sin(t*11+q.ph)*.65:.12;q.wl[0].rotation.z=-flap;q.wl[1].rotation.z=flap;}}
 function updateSeaLife(dt){
+  animPort(dt);animGulls(dt);
   // 船
   for(const s of ships){if(s.dead){s.sinkT+=dt;s.sp=Math.max(0,s.sp-dt*1.5);const L=s.m.userData.len,dp=Math.min(s.sinkT*(L>100?.35:.7),L*.45);
       s.x-=Math.sin(s.h)*s.sp*dt;s.z-=Math.cos(s.h)*s.sp*dt;s.m.position.set(s.x,-dp,s.z);s.m.rotation.set(Math.min(s.sinkT*.012,.25),s.h,Math.min(s.sinkT*.02,.35),'YXZ');
-      const w=s.m.userData.wake;w.material.uniforms.uAlpha.value=.8*sat(s.sp/4);s.m.userData.bow.visible=false;if(dp>=L*.45)s.m.visible=false;continue;}
+      const w=s.m.userData.wake;w.material.uniforms.uAlpha.value=.8*sat(s.sp/4);s.m.userData.bow.visible=false;{const fo=s.m.userData.foam;if(fo){fo.rb.uniforms.uAlpha.value=.3*sat(s.sp/4);fo.sw.uniforms.uAlpha.value=0;}}if(dp>=L*.45)s.m.visible=false;continue;}
     s.x-=Math.sin(s.h)*s.sp*dt;s.z-=Math.cos(s.h)*s.sp*dt;const L=s.m.userData.len;
     if(s.m.userData.radar)s.m.userData.radar.rotation.y+=dt*2;const bw=s.m.userData.bow;bw.position.set(s.x,.8,s.z);bw.rotation.y=s.h;bw.children.forEach(c=>c.material.uniforms.uAlpha.value=.7);
     s.horn=(s.horn||0)-dt;if(L>60&&s.horn<=0&&G.mode==='play'&&Math.hypot(P.pos.x-s.x,P.pos.z-s.z)<700&&P.pos.y<500){s.horn=40;SFX.horn();}
     s.m.position.set(s.x,Math.sin(G.t*.5+s.ph)*.4,s.z);s.m.rotation.set(Math.sin(G.t*.4+s.ph)*.012,s.h,Math.sin(G.t*.6+s.ph)*.02,'YXZ');
-    const w=s.m.userData.wake;w.position.set(s.x+Math.sin(s.h)*L*2.0,.7,s.z+Math.cos(s.h)*L*2.0);w.rotation.set(-Math.PI/2,s.h,0,'YXZ');w.material.uniforms.uAlpha.value=.8;}
+    const w=s.m.userData.wake;w.position.set(s.x+Math.sin(s.h)*L*2.0,.7,s.z+Math.cos(s.h)*L*2.0);w.rotation.set(-Math.PI/2,s.h,0,'YXZ');w.material.uniforms.uAlpha.value=.6;w.material.uniforms.uSp.value=-s.sp;
+    bw.children.forEach(c=>c.material.uniforms.uSp.value=-s.sp);
+    {const fo=s.m.userData.foam;if(fo){const k=sat(s.sp/7);fo.rb.uniforms.uAlpha.value=.35+.6*k;fo.rb.uniforms.uSp.value=s.sp;fo.sw.uniforms.uAlpha.value=.8*k;fo.sw.uniforms.uSp.value=s.sp*.8;}}
+    // 煙突の排気（近くにいるときだけ）
+    if(s.m.userData.funnel&&camera.position.distanceTo(s.m.position)<2600){s.smk=(s.smk||0)-dt;if(s.smk<=0){s.smk=.3;_fv.copy(s.m.userData.funnel).applyMatrix4(s.m.matrixWorld);exhaust(_fv.x,_fv.y,_fv.z,s);}}}
   // イルカの群れ
   for(const pod of dpods){pod.z-=6*dt;if(pod.z<pod.z0-900)pod.z=pod.z0;const near=Math.hypot(P.pos.x-pod.x,P.pos.z-pod.z)<3000||Math.hypot(camera.position.x-pod.x,camera.position.z-pod.z)<3000;
     for(const d of pod.d){const T=3.6,ph=((G.t+d.ph*T)%T)/T,air=near&&ph<.34,u=ph/.34,x=pod.x+d.ox,z=pod.z+d.oz-(air?u*9:0);

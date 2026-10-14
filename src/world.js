@@ -747,7 +747,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   for(const[kind,x,z,c,ry]of[['tug',225,150,0xd9a21b,.5],['gpu',243,146,0xd9a21b,-.4],['fuel',253,176,0xc9ced2,1.2],['fire',235,112,0xb3261c,-1.3],['follow',215,70,0xd9a21b,3.0],['tug',262,128,0xe8e8e0,2.2]]){const v=buildVehicle(kind,c);v.position.set(x,RWY_Y+.02,z);v.rotation.y=ry;LOD.add(v);}
   // 進入灯の柱と PAPI
   for(let k=0;k<4;k++)box(B,1.2,.8,1.2,new THREE.MeshBasicMaterial({color:k<2?new THREE.Color(4,.3,.2):new THREE.Color(4,4,4)}),-48-k*4,RWY_Y+.8,-820);
-  buildPort(LOD,{darkM,paleM,box,conc,glassM});Object.assign(B.userData,{socks:LOD.userData.socks});
+  buildPort(LOD,{darkM,paleM,box,conc,glassM});Object.assign(B.userData,{socks:LOD.userData.socks,lodPort:LOD});
   // 灯火
   const lp=[],lc=[];const add=(x,y,z,r,g,b)=>{lp.push(x,y,z);lc.push(r,g,b);};
   for(let z=-940;z<=940;z+=60){add(-34,RWY_Y+.8,z,3,2.8,2.2);add(34,RWY_Y+.8,z,3,2.8,2.2);}
@@ -1139,7 +1139,7 @@ function hullGeo(o){
     if(keel+ry<-.05)pts.push([wW,0]);for(let k=1;k<=4;k++){const q=k/4,y=dk*q;pts.push([wW+(dW-wW)*Math.pow(q,1.4),y]);}
     while(pts.length<12)pts.splice(pts.length-4,0,[wW,(keel+ry)*.5]);   // 断面ごとの点の数をそろえる
     pts.sort((a,b)=>a[1]-b[1]);pts[0][0]=0;
-    return{u,pts,dk,dW,keel};});
+    return{u,pts,dk,dW,keel,wW};});
   const zOf=(u,y,s)=>{const h=(y-s.keel)/(s.dk-s.keel+1e-6);let z=-L/2+u*L;if(u<.14)z-=rake*h*Math.pow(1-u/.14,1.5);if(u>.88)z+=(o.sRake||0)*h*Math.pow((u-.88)/.12,1.5);return z;};
   const mk=(sd)=>{const P=[],UV=[],I=[],n=S[0].pts.length;
     S.forEach(s=>s.pts.forEach(([x,y])=>{P.push(sd*x,y,zOf(s.u,y,s));UV.push(sd>0?1-s.u:s.u,(y+T)/(Dm+T));}));
@@ -1153,6 +1153,12 @@ function hullGeo(o){
   const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(DP,3));dg.setAttribute('uv',new THREE.Float32BufferAttribute(DU,2));dg.setIndex(DI);dg.computeVertexNormals();
   return{port:mk(-1),stbd:mk(1),deck:dg,Dm,S,zOf,deckAt:u=>{const i=Math.min(S.length-1,Math.round(u*NU));return S.reduce((b,s)=>Math.abs(s.u-u)<Math.abs(b.u-u)?s:b,S[0]);}};
 }
+// 船体沿いの白波の帯：喫水線に沿って外へ広がる。船首と船尾では幅が広い（uv x=0 が船体側、y=船首からの距離）
+function hullFoamGeo(h,B,L){const P=[],U=[],I=[];let n=0;
+  for(const sd of[-1,1]){const base=n;h.S.forEach(s=>{const u=s.u,w=B*(.32+.7*Math.pow(Math.max(0,1-u/.2),1.4)+.35*Math.pow(Math.max(0,(u-.78)/.22),1.4)),z=h.zOf(u,0,s),xi=Math.max(s.wW,.05);
+      P.push(sd*xi,.7,z,sd*(xi+w),.7,z+w*.25*(u<.2?1-u/.2:0));U.push(0,u,1,u);n+=2;});
+    for(let i=0;i<h.S.length-1;i++){const a=base+i*2;I.push(a,a+1,a+2,a+1,a+3,a+2);}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);return g;}
 // 外板の絵柄：船底塗装・喫水線の帯・外板の継ぎ目・錆の筋・喫水標・船名・帯（巡視船）
 function hullTex(o){
   const W=2048,H=512,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d'),r=mulberry(o.seed||7);
@@ -1188,13 +1194,30 @@ function boxM(w,h,d,unit){const g=new THREE.BoxGeometry(w,h,d),uv=g.attributes.u
   for(let f=0;f<6;f++)for(let k=0;k<4;k++){const i=f*4+k;uv.setXY(i,uv.getX(i)*dims[f][0]/unit[0],uv.getY(i)*dims[f][1]/unit[1]);}return g;}
 // 居住区の壁：1 区画 4m×3m に窓 1 枚。白い外壁の雨だれ・継ぎ目つき
 const SHIPTEX={};
-function winTex(kind){if(SHIPTEX[kind])return SHIPTEX[kind];const c=document.createElement('canvas');c.width=256;c.height=192;const x=c.getContext('2d'),r=mulberry(kind.length*31);
+function winTex(kind){if(SHIPTEX[kind])return SHIPTEX[kind];if(kind==='white'||kind==='grey')return SHIPTEX[kind]=winTex2(kind);const c=document.createElement('canvas');c.width=256;c.height=192;const x=c.getContext('2d'),r=mulberry(kind.length*31);
   const wall=kind==='bridge'?'#d8dad6':kind==='grey'?'#a9b0b4':'#dcdcd6';x.fillStyle=wall;x.fillRect(0,0,256,192);
   for(let i=0;i<40;i++){const X=r()*256,g=x.createLinearGradient(0,0,0,192);g.addColorStop(0,'rgba(90,70,50,'+(r()*.12)+')');g.addColorStop(1,'rgba(90,70,50,0)');x.fillStyle=g;x.fillRect(X,r()*40,1+r()*3,150);}
   x.fillStyle='rgba(0,0,0,.18)';x.fillRect(0,186,256,6);x.fillStyle='rgba(255,255,255,.25)';x.fillRect(0,180,256,3);
   const glass=(X,Y,w,h)=>{const g=x.createLinearGradient(X,Y,X+w*.4,Y+h);g.addColorStop(0,'#3c4f5c');g.addColorStop(.45,'#18232b');g.addColorStop(1,'#0b1116');x.fillStyle='#5d6266';x.fillRect(X-3,Y-3,w+6,h+6);x.fillStyle=g;x.fillRect(X,Y,w,h);x.fillStyle='rgba(255,255,255,.08)';x.fillRect(X,Y,w,h*.18);};
-  if(kind==='bridge'){for(let i=0;i<4;i++)glass(6+i*63,30,56,110);}else glass(78,58,100,72);
+  if(kind==='bridge'){for(let i=0;i<4;i++)glass(6+i*63,30,56,110);x.fillStyle='rgba(60,64,66,.9)';x.fillRect(0,24,256,6);x.fillRect(0,140,256,8);}else glass(70,40,116,92);
   const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return SHIPTEX[kind]=t;}
+// 16m×6m（1 区画 4m、1 層 3m）。emissive 用に明かりの付いた窓だけを描いた絵柄も作る
+function winTex2(kind){const W=1024,H=384,ppm=64,c=document.createElement('canvas'),e=document.createElement('canvas');c.width=e.width=W;c.height=e.height=H;const x=c.getContext('2d'),y=e.getContext('2d'),r=mulberry(kind.length*97+5);
+  x.fillStyle=kind==='grey'?'#a7aeb2':'#d9d9d3';x.fillRect(0,0,W,H);y.fillStyle='#000';y.fillRect(0,0,W,H);
+  for(let i=0;i<90;i++){const X=r()*W,g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(80,66,50,'+(r()*.1)+')');g.addColorStop(1,'rgba(80,66,50,0)');x.fillStyle=g;x.fillRect(X,r()*H*.5,1+r()*2.5,H*.6);}
+  for(const dy of[0,192]){x.fillStyle='rgba(0,0,0,.2)';x.fillRect(0,dy+186,W,6);x.fillStyle='rgba(255,255,255,.3)';x.fillRect(0,dy+181,W,3);}
+  const rr=(X,Y,w,h,q)=>{x.beginPath();x.moveTo(X+q,Y);x.lineTo(X+w-q,Y);x.quadraticCurveTo(X+w,Y,X+w,Y+q);x.lineTo(X+w,Y+h-q);x.quadraticCurveTo(X+w,Y+h,X+w-q,Y+h);x.lineTo(X+q,Y+h);x.quadraticCurveTo(X,Y+h,X,Y+h-q);x.lineTo(X,Y+q);x.quadraticCurveTo(X,Y,X+q,Y);x.closePath();};
+  for(let dk=0;dk<2;dk++)for(let b=0;b<4;b++){const X0=b*256,Y0=dk*192,q=r();
+    if(q<.1)continue;                                                 // 窓のない区画
+    if(dk===1&&q<.17){x.fillStyle='#8d9396';x.fillRect(X0+90,Y0+60,58,128);x.fillStyle='rgba(0,0,0,.35)';x.fillRect(X0+90,Y0+60,58,4);continue;}  // 扉
+    const w=96,h=72,X=X0+80+r()*20,Y=Y0+46;
+    x.fillStyle='#6d7276';rr(X-5,Y-5,w+10,h+10,12);x.fill();
+    const a=r()*.6,g=x.createLinearGradient(X,Y,X+w*a,Y+h);g.addColorStop(0,'#8ea3b2');g.addColorStop(.35+r()*.2,'#33454f');g.addColorStop(1,'#10171c');x.fillStyle=g;rr(X,Y,w,h,9);x.fill();
+    const lit=r()<.22;if(r()<.3){x.fillStyle=lit?'rgba(236,214,170,.85)':'rgba(196,182,150,.8)';const half=r()<.5;x.fillRect(half?X+4:X+w*.45,Y+4,w*.5,h-8);}
+    if(lit){y.fillStyle='rgba(255,214,150,1)';rr(X+2,Y+2,w-4,h-4,8);y.fill();}
+    x.fillStyle='rgba(255,255,255,.12)';x.fillRect(X+6,Y+5,w*.35,4);
+    const sg=x.createLinearGradient(0,Y+h+5,0,Y+h+70);sg.addColorStop(0,'rgba(110,60,30,.22)');sg.addColorStop(1,'rgba(110,60,30,0)');x.fillStyle=sg;x.fillRect(X+4,Y+h+5,2,65);x.fillRect(X+w-6,Y+h+5,2,55);}
+  const T=cv=>{const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;return t;};const t=T(c);t.userData={em:T(e)};return t;}
 // コンテナ：波板・扉・隅金具・汚れの白っぽい絵柄（色はインスタンスごとに掛ける）。港と船で共用
 function containerMat(){if(SHIPTEX.cont)return SHIPTEX.cont;const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d'),r=mulberry(404);
   x.fillStyle='#e6e6e2';x.fillRect(0,0,512,128);
@@ -1235,15 +1258,15 @@ function buildShip(kind){
       if(bi>0){const lb=new THREE.Group();lb.position.set(0,o.D+.8,bz-6.6);g.add(lb);M(new THREE.BoxGeometry(28,.35,.35),stl,0,5.4,0,lb);M(new THREE.BoxGeometry(28,.35,.35),stl,0,2.7,0,lb);for(let k=0;k<8;k++)M(new THREE.BoxGeometry(.3,5.4,.3),stl,-13.5+k*3.85,2.7,0,lb);}});
     im.count=n;im.instanceColor.needsUpdate=true;g.add(im);
     // 居住区（7 層・後ろへ段々）、船橋とウイング、煙突、マストとレーダー、救命艇
-    const wt=winTex('white'),wm=C(0xffffff,.6,.1,{map:wt}),bt=winTex('bridge'),bm=C(0xffffff,.5,.15,{map:bt}),yA=o.D;
-    const acc=(w,hh,dd,y,z,m)=>M(boxM(w,hh,dd,[4,3]),m||wm,0,y+hh/2,z);
+    const wt=winTex('white'),wm=C(0xffffff,.6,.1,{map:wt,emissive:new THREE.Color(1,.92,.8),emissiveMap:wt.userData.em,emissiveIntensity:.55}),bt=winTex('bridge'),bm=C(0xffffff,.5,.15,{map:bt}),yA=o.D;
+    const acc=(w,hh,dd,y,z,m)=>M(boxM(w,hh,dd,m?[4,3]:[16,6]),m||wm,0,y+hh/2,z);
     acc(24,15,13,yA,64);acc(22,6,11,yA+15,63);acc(30,3,9,yA+21,62,bm);M(new THREE.BoxGeometry(31,.5,10),wht,0,yA+24.2,62);
     for(const s of[-1,1]){M(new THREE.BoxGeometry(2.4,1.2,7),wht,s*15.6,yA+21.6,62);light(s*15.8,yA+22.6,60,s<0?new THREE.Color(2.6,.2,.15):new THREE.Color(.2,2.4,.5),2.4);}
     for(let k=0;k<6;k++)M(new THREE.BoxGeometry(24.4,.25,.6),wht,0,yA+3*k+3,57.2);   // 各層の張り出し通路
     const fun=M(new THREE.CylinderGeometry(3.2,4.2,12,4,1),C(0x1d2c44,.55,.35),0,yA+30,72);fun.rotation.y=Math.PI/4;fun.scale.set(1,1,1.5);
     const band=M(new THREE.CylinderGeometry(3.45,3.62,2.2,4,1,true),C(0xdedfd8,.6,.1),0,yA+31.5,72);band.rotation.y=Math.PI/4;band.scale.set(1,1,1.5);
     const band2=M(new THREE.CylinderGeometry(3.38,3.45,.7,4,1,true),C(0xa4302a,.6,.1),0,yA+31.5,72);band2.rotation.y=Math.PI/4;band2.scale.set(1.01,1,1.51);
-    const top=M(new THREE.CylinderGeometry(3.1,3.2,1.2,4,1),C(0x111214,.8,.2),0,yA+36.4,72);top.rotation.y=Math.PI/4;top.scale.set(1,1,1.5);
+    g.userData.funnel=new V3(0,yA+37.2,72);const top=M(new THREE.CylinderGeometry(3.1,3.2,1.2,4,1),C(0x111214,.8,.2),0,yA+36.4,72);top.rotation.y=Math.PI/4;top.scale.set(1,1,1.5);
     M(new THREE.CylinderGeometry(.25,.35,9,8),wht,0,yA+29,60);M(new THREE.BoxGeometry(6,.25,.25),wht,0,yA+31,60);
     const rdr=M(new THREE.BoxGeometry(5.2,.35,.5),dark,0,yA+33.8,60);g.userData.radar=rdr;M(new THREE.CylinderGeometry(.5,.5,.6,10),wht,0,yA+33.3,60);
     M(new THREE.BoxGeometry(3.6,.3,.4),dark,2.6,yA+26,63.5);
@@ -1284,7 +1307,7 @@ function buildShip(kind){
     const wht=C(0xeceae4,.55,.1),blue=C(0x1f4a78,.6,.2),dk=C(0x6a6e6a,.8,.1),stl=C(0x9aa0a4,.45,.6);
     M(h.deck,C(0x8a8a82,.85,.05));
     // 操舵室（窓つき）、屋根のライト、マスト、集魚灯、網の巻き取り機、ブイ、ガントリー
-    const wm=C(0xffffff,.55,.1,{map:winTex('white')});const wh=M(boxM(4.4,2.6,5,[2.2,2.6]),wm,0,o.D+1.3,1.2);
+    const wm=C(0xffffff,.55,.1,{map:winTex('cabin')});const wh=M(boxM(4.4,2.6,5,[2.2,2.6]),wm,0,o.D+1.3,1.2);
     M(new THREE.BoxGeometry(4.9,.25,5.8),blue,0,o.D+2.75,1.2);M(new THREE.BoxGeometry(3.2,1.1,2.4),wht,0,o.D+3.4,1.8);
     const ms=M(new THREE.CylinderGeometry(.08,.13,7.5,8),wht,0,o.D+6.5,-1.4);M(new THREE.BoxGeometry(3.4,.1,.1),wht,0,o.D+8.3,-1.4);
     {const bulbG=new THREE.SphereGeometry(.16,8,6),bulbM=C(0xf4f0e0,.3,0,{emissive:new THREE.Color(.5,.48,.38)});for(let k=0;k<9;k++){M(bulbG,bulbM,0,o.D+5.4,-9+k*1.8);}M(new THREE.CylinderGeometry(.02,.02,16,4),dk,0,o.D+5.6,-2).rotation.x=Math.PI/2;}
@@ -1296,10 +1319,15 @@ function buildShip(kind){
     light(0,o.D+10.4,-1.4,new THREE.Color(2.4,2.1,1.5),2.4);light(-2.4,o.D+3,-.5,new THREE.Color(2.6,.2,.15),1.4);light(2.4,o.D+3,-.5,new THREE.Color(.2,2.4,.5),1.4);
     g.userData.len=28;g.userData.beam=7;
   }
+  // 白波：船体沿いの帯（形は種類ごとに共用、材質は船ごと）と船尾の泡立ち。動く船は game.js で濃さと流れを変える
+  {const c=SHIPTEX['hull_'+kind],B=g.userData.beam,L=g.userData.len;if(!c.foam)c.foam=hullFoamGeo(c.h,B,L);
+    const fm=foamMat(1,{alpha:.3,sx:B*.7,sy:L,speed:.3,inScene:1}),rb=new THREE.Mesh(c.foam,fm);rb.frustumCulled=false;g.add(rb);
+    const sw=new THREE.Mesh(new THREE.PlaneGeometry(B*1.15,L*.55),foamMat(2,{alpha:0,sx:B*1.15,sy:L*.55,speed:.5,inScene:1}));sw.rotation.x=-Math.PI/2;sw.position.set(0,.75,L*.5+L*.27);sw.frustumCulled=false;g.add(sw);
+    g.userData.foam={rb:fm,sw:sw.material};}
   // 航跡（白い泡の帯）
-  const L=g.userData.len,wk=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.4,.43,.45),5));wk.rotation.x=-Math.PI/2;wk.scale.set(g.userData.beam*1.5,L*3.4,1);wk.position.set(0,.6,L*2.0);wk.frustumCulled=false;
+  const L=g.userData.len,wk=new THREE.Mesh(new THREE.PlaneGeometry(1,1),foamMat(4,{sx:g.userData.beam*1.5,sy:L*3.4}));wk.rotation.x=-Math.PI/2;wk.scale.set(g.userData.beam*1.5,L*3.4,1);wk.position.set(0,.6,L*2.0);wk.frustumCulled=false;
   g.userData.wake=wk;
-  {const bw=new THREE.Group(),a=.3,len=L*1.15;for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(new V3(.34,.37,.39),5));p.frustumCulled=false;p.rotation.set(-Math.PI/2,s*a,0,'YXZ');p.scale.set(g.userData.beam*.42,len,1);p.position.set(s*Math.sin(a)*len*.5,0,-L/2+Math.cos(a)*len*.5);bw.add(p);}g.userData.bow=bw;}g.traverse(o=>{if(o.isMesh)o.castShadow=false;});
+  {const bw=new THREE.Group(),a=.3,len=L*1.15;for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(1,1),foamMat(4,{sx:g.userData.beam*.42,sy:len}));p.frustumCulled=false;p.rotation.set(-Math.PI/2,s*a,0,'YXZ');p.scale.set(g.userData.beam*.42,len,1);p.position.set(s*Math.sin(a)*len*.5,0,-L/2+Math.cos(a)*len*.5);bw.add(p);}g.userData.bow=bw;}g.traverse(o=>{if(o.isMesh)o.castShadow=false;});
   return g;
 }
 
@@ -1621,9 +1649,12 @@ function buildPort(B,M){
     for(const sx of[-9,9])A(1.4,1.4,22,pm,sx,34,0);
     A(78,2.2,2.4,pm,22,36.5,-4.5);A(78,2.2,2.4,pm,22,36.5,4.5);for(let k=0;k<9;k++)A(1,1,9,pm,-14+k*9,36.5,0);
     A(1.2,16,1.2,pm,0,45,0);for(const[x0,a]of[[30,-.42],[-14,.9]]){const L=x0>0?34:22,t=A(L,.7,.7,pm,x0/2,45,0);t.rotation.z=x0>0?-.27:.62;t.position.set(x0>0?16:-7,48.6,0);}
-    A(6,4,6,pm,-11,39.6,0);A(4.4,3,4.4,wht,28,33.6,0);A(4.5,1.4,.1,glassM,28,33.4,-2.26);
-    A(.14,18,.14,steel,36,26,-1.6);A(.14,18,.14,steel,36,26,1.6);A(6.4,.7,2.6,yel,36,16.8,0);return g;};
-  crane(60,0xa8442e);crane(230,0x2f7891);
+    A(6,4,6,pm,-11,39.6,0);const tro=new THREE.Group();tro.userData.dyn=1;g.add(tro);const T2=(m)=>{g.remove(m);tro.add(m);return m;};
+    T2(A(5,1.6,7,darkM,36,35.2,0));T2(A(4.4,3,4.4,wht,30,33.6,0));T2(A(4.5,1.4,.1,glassM,30,33.4,-2.26));
+    const r1=T2(A(.14,1,.14,steel,36,26,-1.6)),r2=T2(A(.14,1,.14,steel,36,26,1.6)),sp=T2(A(6.4,.7,12.6,yel,36,16.8,0));
+    const bx=new THREE.Mesh(new THREE.BoxGeometry(2.44,2.59,12.19),containerMat());bx.position.set(0,-1.65,0);sp.add(bx);
+    g.userData.anim={tro,sp,r:[r1,r2],bx,ph:cz*.013};return g;};
+  const cranes=[crane(60,0xa8442e),crane(230,0x2f7891)];
   // クレーンの走行レール
   for(const rx of[X1-25,X1-7])box(B,.25,.14,Z1-Z0-30,steel,rx,QY+.1,(Z0+Z1)/2);
   // コンテナの山（色つきの一括描画）
@@ -1634,7 +1665,7 @@ function buildPort(B,M){
     for(const[bx,bz,nx,nz]of blocks)for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const edge=j===0||j===nz-1;const hh=r()<.08?0:Math.min(4,1+Math.floor(r()*3.2)+(edge?-1:0)+(r()<.25?1:0));for(let k=0;k<hh&&n<2600;k++){d.position.set(bx+i*2.75,QY+1.3+k*2.62,bz+j*6.5);d.rotation.set(0,0,0);d.scale.set(1,1,1);d.updateMatrix();im.setMatrixAt(n,d.matrix);cc.copy(CONT_PAL[Math.floor(r()*CONT_PAL.length)]);im.setColorAt(n,cc);n++;}}
     im.count=n;im.castShadow=true;im.receiveShadow=true;B.add(im);}
   {const ym=std({color:lin(0xd2a52a),roughness:.55,metalness:.4}),dm=darkM;
-    for(const[bx,bz]of[[1166,-112],[1188,128],[1166,308]]){const g=new THREE.Group();g.position.set(bx+6.9,QY,bz+20);B.add(g);const A=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;g.add(o);return o;};
+    for(const[bx,bz]of[[1166,-112],[1188,128],[1166,308]]){const g=new THREE.Group();g.position.set(bx+6.9,QY,bz+20);g.userData.z0=bz+20;g.userData.dyn=1;(B.userData.rtgs=B.userData.rtgs||[]).push(g);B.add(g);const A=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;g.add(o);return o;};
       for(const sx of[-11,11])for(const sz of[-6,6]){A(.9,18,.9,ym,sx,9,sz);A(1.6,1.4,2.4,dm,sx,.9,sz);}for(const sx of[-11,11])A(.9,1.2,13,ym,sx,1.8,0);for(const sz of[-6,6])A(23,1.6,1.2,ym,0,18.6,sz);
       A(4,2.4,13,ym,3,19.8,0);A(2.6,2.2,2.6,std({color:lin(0xe8e8e2),roughness:.6}),-9,16.4,6.4);A(.12,10,.12,dm,3,13,-1);A(.12,10,.12,dm,3,13,1);A(2.6,.5,12.4,ym,3,8.2,0);}}
   // 上屋 2 棟（切妻屋根、海側に大きな引き戸）と港務所
@@ -1657,8 +1688,8 @@ function buildPort(B,M){
     // はしごと踊り場
     box(B,.9,34,.12,steel,X1-25.8,QY+17,cz-11);for(let k=0;k<3;k++)box(B,2.4,.15,2.4,steel,X1-26.4,QY+9+k*9,cz-11);}
   // 構内の車両と荷
-  for(const[k,x,z,c,ry]of[['tug',1215,-40,0xd9a21b,.4],['tug',1240,280,0xd9a21b,2.2],['follow',1245,205,0xe8e8e0,1.6],['fuel',1150,-20,0xc9ced2,0],['car',1140,-150,0x2c4f7a,1.57],['car',1146,-150,0xc9ced2,1.57],['cart',1262,120,0xa3261c,0],['gpu',1255,200,0xd9a21b,.3]]){const v=buildVehicle(k,c);v.position.set(x,QY+.05,z);v.rotation.y=ry;B.add(v);}
-  {const pg=new THREE.BoxGeometry(1.2,1.0,1.2),im=new THREE.InstancedMesh(pg,col(0x8a6d45,.9,0),160),d=new THREE.Object3D();let n=0;for(const[bx,bz]of[[1250,-100],[1232,60],[1258,300],[1225,430],[1240,250]])for(let i=0;i<5;i++)for(let j=0;j<4;j++){const hh=1+Math.floor(r()*3);for(let k=0;k<hh&&n<160;k++){d.position.set(bx+i*1.35,QY+.5+k*1.02,bz+j*1.35);d.rotation.y=(r()-.5)*.1;d.updateMatrix();im.setMatrixAt(n++,d.matrix);}}im.count=n;im.castShadow=true;B.add(im);}
+  for(const[k,x,z,c,ry]of[['tug',1215,-40,0xd9a21b,.4],['fuel',1150,-20,0xc9ced2,0],['car',1140,-150,0x2c4f7a,1.57],['car',1146,-150,0xc9ced2,1.57],['gpu',1212,330,0xd9a21b,.3]]){const v=buildVehicle(k,c);v.position.set(x,QY+.05,z);v.rotation.y=ry;B.add(v);}
+  {const pg=new THREE.BoxGeometry(1.2,1.0,1.2),im=new THREE.InstancedMesh(pg,col(0x8a6d45,.9,0),160),d=new THREE.Object3D();let n=0;for(const[bx,bz]of[[1214,-100],[1219,60],[1214,300],[1214,430],[1219,250]])for(let i=0;i<5;i++)for(let j=0;j<4;j++){const hh=1+Math.floor(r()*3);for(let k=0;k<hh&&n<160;k++){d.position.set(bx+i*1.35,QY+.5+k*1.02,bz+j*1.35);d.rotation.y=(r()-.5)*.1;d.updateMatrix();im.setMatrixAt(n++,d.matrix);}}im.count=n;im.castShadow=true;B.add(im);}
   // 係留索（船首・船尾から係船柱へ）と、岸壁の古タイヤの防舷材
   {const rope=new THREE.LineBasicMaterial({color:0x1a1a18}),pts=[];const ln=(a,b)=>{pts.push(a[0],a[1],a[2],b[0],(a[1]+b[1])/2-1.2,(a[2]+b[2])/2,b[0],(a[1]+b[1])/2-1.2,(a[2]+b[2])/2,b[0],b[1],b[2]);};
     for(const dz of[-62,-40,40,62])ln([X1+9,7.5,150+dz],[X1-3,QY+.9,150+dz+(dz>0?10:-10)]);
@@ -1669,6 +1700,19 @@ function buildPort(B,M){
   for(let k=0;k<3;k++)for(const[z,c,m]of[[75,[3.2,.25,.15],red],[215,[.25,3,.6],grn]]){const x=1720+k*110,bz=z+(z<150?-k*14:k*14);const b=new THREE.Mesh(new THREE.CylinderGeometry(.5,1.5,2.6,10),m);b.position.set(x,1.1,bz);B.add(b);box(B,.12,2.6,.12,steel,x,3.6,bz);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(c[0],c[1],c[2]),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(x,5,bz);sp.scale.set(4,4,1);B.add(sp);}
   {const tb=buildShip('fish');tb.position.set(1480,0,190);tb.rotation.y=2.1;B.add(tb);}
+  // 防波堤の外側に寄せては返す白波（帯の x が外向き、0 が防波堤側）
+  {const cx=1450,cz=150;for(const[ax,az,bx2,bz2]of segs){const L=Math.hypot(bx2-ax,bz2-az),mx=(ax+bx2)/2,mz=(az+bz2)/2;let nx=-(bz2-az)/L,nz=(bx2-ax)/L;
+      if(Math.hypot(mx+nx*10-cx,mz+nz*10-cz)<Math.hypot(mx-cx,mz-cz)){nx=-nx;nz=-nz;}
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),foamMat(3,{alpha:.75,sx:16,sy:L,speed:.05,inScene:1}));m.rotation.order='YXZ';m.rotation.set(-Math.PI/2,Math.atan2(-nz,nx),0);m.scale.set(16,L+10,1);
+      m.position.set(mx+nx*16,.8,mz+nz*16);m.frustumCulled=false;B.add(m);}}
+  // コンテナを運ぶトレーラー（岸壁クレーンの下を往復する周回路）
+  {const tm=std({color:lin(0x2c3e5a),roughness:.55,metalness:.4}),blk=std({color:lin(0x15181b),roughness:.7,metalness:.3}),gl=std({color:lin(0x0e1a24),roughness:.08,metalness:.9}),cm=containerMat();B.userData.trucks=[];
+    for(let k=0;k<5;k++){const t=new THREE.Group();const A=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;t.add(o);return o;};
+      A(2.5,2.6,2.4,k%2?std({color:lin(0xb8382a),roughness:.5,metalness:.3}):tm,0,1.9,-6.6);A(2.52,1,.1,gl,0,2.5,-7.85);A(2.4,.4,12.6,blk,0,1.1,.6);
+      for(const z of[-6.8,-5,3.5,4.7,5.9])for(const sx of[-1.05,1.05]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.4,12),blk);w.rotation.z=Math.PI/2;w.position.set(sx,.5,z);t.add(w);}
+      if(k!==2){const c=new THREE.Mesh(new THREE.BoxGeometry(2.44,2.59,12.19),cm);c.position.set(0,2.6,.6);t.add(c);}
+      t.userData.s=k*240;t.userData.dyn=1;B.add(t);B.userData.trucks.push(t);}}
+  B.userData.cranes=cranes;
   // 基地から港への道（地形に沿わせる）
   {const pts=[[470,300],[620,330],[800,300],[960,240],[1060,200],[1112,190]],P=[],U=[],I=[];let acc=0;const N=90;
     const at=t=>{const f=t*(pts.length-1),i=Math.min(pts.length-2,Math.floor(f)),u=f-i;return[lerp(pts[i][0],pts[i+1][0],u),lerp(pts[i][1],pts[i+1][1],u)];};
