@@ -1,11 +1,11 @@
-// バレルロール：E で 1 回転し、元の進路へ戻る。ミサイルを振り切れることがある
+// バレルロール：D の 2 度押しで 1 回転し、元の進路へ戻る。ミサイルを振り切れることがある
 import puppeteer from 'puppeteer';
 const out=n=>new URL('./out/'+n,import.meta.url).pathname;
 const b=await puppeteer.launch({headless:'new',args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});
 const p=await b.newPage();await p.setViewport({width:1280,height:720});p.on('pageerror',e=>console.log('PAGEERR '+e.message));
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR');
 await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR;S.startRun('approach');if(S.G.mode==='cut')S.endCut();S.P.pos.set(0,400,9000);S.P.yaw=0;for(let i=0;i<20;i++)S.step(1/30);});
-await p.keyboard.down('KeyE');await p.keyboard.up('KeyE');
+await p.keyboard.down('KeyD');await p.keyboard.up('KeyD');await p.keyboard.down('KeyD');await p.keyboard.up('KeyD');
 const r=await p.evaluate(()=>{const S=__SR,P=S.P,x0=P.pos.x,y0=P.pos.y,log=[];for(let i=0;i<36;i++){S.step(1/30);if(i%6===0)log.push([(P.brA||0).toFixed(2),(P.pos.x-x0).toFixed(1),(P.pos.y-y0).toFixed(1),P.mesh.rotation.z.toFixed(2)].join('/'));if(i===12)window.__shot=1;}
   return{log:log.join(' '),dx:(P.pos.x-x0).toFixed(1),dy:(P.pos.y-y0).toFixed(1),br:!!P.br};});
 console.log('ロール (brA/横/上/機体z)',JSON.stringify(r));
@@ -16,6 +16,11 @@ await p.screenshot({path:out('roll.png')});
 await p.evaluate(()=>{for(let i=0;i<60;i++)__SR.step(1/30);});
 await p.keyboard.down('KeyA');await p.keyboard.up('KeyA');await p.keyboard.down('KeyA');await p.keyboard.up('KeyA');
 console.log('2度押し',await p.evaluate(()=>{__SR.step(1/30);return JSON.stringify(__SR.P.br);}));
+// 指を左へ 2 度倒す（スマートフォン）・Q では回らない
+console.log('Q',await p.evaluate(()=>{const S=__SR;S.P.br=null;S.P.brCD=0;return 1;}));await p.keyboard.down('KeyQ');await p.keyboard.up('KeyQ');
+console.log('Q で回る？',await p.evaluate(()=>{__SR.step(1/30);return !!__SR.P.br;}));
+console.log('指 2 度',await p.evaluate(async()=>{const S=__SR,I=S.input;for(let i=0;i<70;i++)S.step(1/30);const seq=[-1,-1,0,0,-1];for(const v of seq){I.tx=v;S.step(1/30);await new Promise(r=>setTimeout(r,40));}I.tx=0;return JSON.stringify(S.P.br);}));
+console.log('指 1 度',await p.evaluate(async()=>{const S=__SR,I=S.input;for(let i=0;i<70;i++)S.step(1/30);await new Promise(r=>setTimeout(r,500));I.tx=1;for(let i=0;i<20;i++)S.step(1/30);I.tx=0;S.step(1/30);return JSON.stringify(S.P.br);}));
 // ミサイル回避：外へ出て攻撃させ、ミサイルが 500m に来たらロール
 const m=await p.evaluate(()=>{const S=__SR,P=S.P,G=S.G,I=S.input,ICP=S.ICP;let tries=0,lost=0,hits=0;S.startRun('eye');P.pos.set(0,500,-16000);P.yaw=0;
   for(let i=0;i<30*200&&G.mode!=='over';i++){if(G.mode==='cut'){S.endCut();continue;}I.ty=Math.max(-1,Math.min(1,(500-P.pos.y)/200));I.tx=0;P.hull=100;

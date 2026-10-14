@@ -15,7 +15,7 @@ const box=async id=>p.evaluate(id=>{const r=document.getElementById(id).getBound
 const A=await box('tbA');await p.touchscreen.touchStart((A[0]+A[2])/2,(A[1]+A[3])/2);
 r=await p.evaluate(()=>{const S=__SR;for(let i=0;i<90;i++)S.step(1/30);return{tAct:S.input.tAct,engineOut:S.P.engineOut};});await p.touchscreen.touchEnd();console.log('発射を 3 秒長押し',JSON.stringify(r));
 // 2) 重なり：レーダー・発射・ブースト・一時停止・僚機表示・目標表示
-const ids=['radar','tbA','tbB','tbP','tbG','tbM','tbR','wing','obj','tl','prompt','radio'],bx={};for(const i of ids)bx[i]=await box(i);
+const ids=['radar','tbA','tbB','tbP','tbG','tbM','wing','obj','tl','prompt','radio'],bx={};for(const i of ids)bx[i]=await box(i);
 const hit=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];const ov=[];for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++)if(hit(bx[ids[i]],bx[ids[j]]))ov.push(ids[i]+'×'+ids[j]);
 console.log('画面',W+'×'+H,'重なり:',ov.join(' ')||'なし',JSON.stringify({radar:bx.radar,tbA:bx.tbA}));
 // 3) 海へ墜落 → ゲームオーバーの画面が出るか

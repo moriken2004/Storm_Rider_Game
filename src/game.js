@@ -769,10 +769,12 @@ function drawRadar(){
 function readInput(){
   const k=input.keys;let x=(k.KeyD||k.ArrowRight?1:0)-(k.KeyA||k.ArrowLeft?1:0),y=(k.KeyW||k.ArrowUp?1:0)-(k.KeyS||k.ArrowDown?1:0);
   let b=!!(k.ShiftLeft||k.ShiftRight),a=!!k.Space;
-  x+=input.tx;y+=input.ty;b=b||input.tBoost;a=a||input.tAct;
+  x+=input.tx;y+=input.ty;
+  // 指やスティックを左右へ 2 度すばやく倒すとバレルロール（キーの 2 度押しと同じ）
+  {const sx=input.tx+(navigator.getGamepads&&navigator.getGamepads()[0]?.axes[0]||0),d=sx>.75?1:sx<-.75?-1:0;
+    if(d&&!input.flk&&G.mode==='play'){const now=performance.now();if(input.flD===d&&now-input.flT<380){input.rollQ=d;input.flT=0;}else{input.flD=d;input.flT=now;}}if(d)input.flk=1;else if(Math.abs(sx)<.35)input.flk=0;}b=b||input.tBoost;a=a||input.tAct;
   const gp=navigator.getGamepads?navigator.getGamepads()[0]:null;
-  if(gp){const l=!!gp.buttons[4]?.pressed,r=!!gp.buttons[5]?.pressed;if(l&&!input.gpL)input.rollQ=-1;if(r&&!input.gpR)input.rollQ=1;input.gpL=l;input.gpR=r;
-    if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
+  if(gp){if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
   {const gn=!!k.KeyF||!!input.tGun,ms=!!k.KeyR||!!input.tMsl;input.gun=G.armed&&gn;input.mslHit=G.armed&&ms&&!input.msl;input.msl=ms;}
   input.x=damp(input.x,clamp(x,-1,1),9,.016);input.y=damp(input.y,clamp(y,-1,1),9,.016);input.boost=b;input.actHit=a&&!input.act;input.act=a;
 }
@@ -784,8 +786,8 @@ function bindInput(){
     if(e.code==='Enter'&&G.mode==='cut')skipCut();
     if(G.mode!=='play'&&G.mode!=='cut'&&!e.repeat){const K=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA'];CHEAT.push(e.code);if(CHEAT.length>K.length)CHEAT.shift();if(CHEAT.join()===K.join()){CHEAT.length=0;toggleArmed();}}
     if((e.code==='Escape'||e.code==='KeyP')&&!e.repeat)togglePause();
-    // バレルロール：Q／E、または A・D（←・→）の 2 度押し
-    if(!e.repeat&&G.mode==='play'){const q={KeyQ:-1,KeyE:1}[e.code];if(q)input.rollQ=q;const d={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1}[e.code];
+    // バレルロール：A・D（←・→）の 2 度押し
+    if(!e.repeat&&G.mode==='play'){const d={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1}[e.code];
       if(d){const now=performance.now();if(input.tapD===d&&now-input.tapT<280){input.rollQ=d;input.tapT=0;}else{input.tapD=d;input.tapT=now;}}}
   });
   addEventListener('keyup',e=>{input.keys[e.code]=false;});
@@ -833,7 +835,6 @@ function bindInput(){
     const hold=(id,key)=>{const b=$(id),on=e=>{initAudio();input[key]=true;b.classList.add('on');if(navigator.vibrate)navigator.vibrate(8);e.preventDefault();},off=()=>{input[key]=false;b.classList.remove('on');};
       b.addEventListener('touchstart',on,{passive:false});b.addEventListener('touchend',off);b.addEventListener('touchcancel',off);};
     hold('tbA','tAct');hold('tbB','tBoost');hold('tbG','tGun');hold('tbM','tMsl');
-    $('tbR').addEventListener('touchstart',e=>{e.preventDefault();initAudio();input.rollQ=input.tx<-.2?-1:1;if(navigator.vibrate)navigator.vibrate(8);},{passive:false});
     $('tbP').addEventListener('touchstart',e=>{e.preventDefault();togglePause();},{passive:false});$('tbP').addEventListener('click',()=>togglePause());
     $('skip').textContent='スキップ ▸';
     // 画面を消灯させない（対応する端末だけ）
@@ -968,7 +969,7 @@ function updateIntercept(dt){
     let boom=false;if(playing&&!m.tgt&&dist<15){boom=true;P.fling.addScaledVector(m.dir,30);damage(24,'迎撃機のミサイルが命中した');}
     if(m.life<=0||m.pos.y<4)boom=true;
     if(boom){m.life=0;m.m.visible=m.gl.visible=false;explode(m.pos,.3);SFX.hit();}}
-  if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけて急旋回か <kbd>Q</kbd><kbd>E</kbd> ロールでかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
+  if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけて急旋回か <kbd>A</kbd><kbd>D</kbd> 2 度押しロールでかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
   else if(ICP.st===4&&playing&&G.armed)G.prompt={t:'交戦中　<kbd>F</kbd> 機銃　<kbd>R</kbd> ミサイル　後ろを取って撃墜せよ',p:0};
   else if(ICP.st===4&&playing)G.prompt={t:back?'任務空域へ戻れ（あと '+Math.max(0,(d+500)/1000).toFixed(1)+' km）':'攻撃を受けている　反転して任務空域へ戻れ',p:back?sat(1-(d+500)/3000):0};
   // ── 曳光弾
@@ -1278,7 +1279,7 @@ let IS_TOUCH=false;
 // 画面の大きさに合わせて、表示の縮尺を決める（高さ 620px 未満なら縮める）
 function fitUI(){const h=innerHeight,w=innerWidth,ui=Math.max(.5,Math.min(1,h/620,w/860));document.documentElement.style.setProperty('--ui',ui.toFixed(3));document.body.classList.toggle('small',ui<.97);}
 // タッチ端末向けに、案内文のキー名を画面のボタン名に置き換える
-function tk(s){if(!IS_TOUCH)return s;return s.replace(/<kbd>Q<\/kbd><kbd>E<\/kbd> ロール/g,'<kbd>ロール</kbd>').replace(/<kbd>W<\/kbd><kbd>S<\/kbd> 機首の上げ下げ　<kbd>A<\/kbd><kbd>D<\/kbd> 旋回　<kbd>Shift<\/kbd> ブースト/,'画面の左側をなぞって操縦　<kbd>ブースト</kbd> で加速').replace(/<kbd>Space<\/kbd>/g,'<kbd>発射</kbd>').replace(/<kbd>Shift<\/kbd>/g,'<kbd>ブースト</kbd>').replace(/<kbd>F<\/kbd> 機銃/g,'<kbd>機銃</kbd>').replace(/<kbd>R<\/kbd> ミサイル/g,'<kbd>ミサイル</kbd>');}
+function tk(s){if(!IS_TOUCH)return s;return s.replace(/<kbd>A<\/kbd><kbd>D<\/kbd> 2 度押しロール/g,'左右へ 2 度すばやく倒してロール').replace(/<kbd>W<\/kbd><kbd>S<\/kbd> 機首の上げ下げ　<kbd>A<\/kbd><kbd>D<\/kbd> 旋回　<kbd>Shift<\/kbd> ブースト/,'画面の左側をなぞって操縦　<kbd>ブースト</kbd> で加速').replace(/<kbd>Space<\/kbd>/g,'<kbd>発射</kbd>').replace(/<kbd>Shift<\/kbd>/g,'<kbd>ブースト</kbd>').replace(/<kbd>F<\/kbd> 機銃/g,'<kbd>機銃</kbd>').replace(/<kbd>R<\/kbd> ミサイル/g,'<kbd>ミサイル</kbd>');}
 // ───────────────────────── 武装モード（隠しコマンド） ─────────────────────────
 const CHEAT=[];
 function toast(t,s){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),(s||2.4)*1000);}

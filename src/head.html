@@ -212,7 +212,6 @@ body.touch.inplay #touch{display:block}
 #tbB{right:calc(122px + var(--sr));bottom:calc(26px + var(--sb));width:82px;height:82px}
 #tbG{right:calc(218px + var(--sr));bottom:calc(30px + var(--sb));width:72px;height:72px;display:none;border-color:rgba(255,220,140,.8)}
 #tbM{right:calc(128px + var(--sr));bottom:calc(122px + var(--sb));width:64px;height:64px;display:none;border-color:rgba(255,120,100,.85);background:rgba(110,24,20,.45)}
-#tbR{right:calc(218px + var(--sr));bottom:calc(120px + var(--sb));width:58px;height:58px;font-size:12px}
 body.armed #tbG,body.armed #tbM{display:block}
 #wpn{display:none;font-size:11px;letter-spacing:.16em;color:#ffd48a;margin-top:2px}body.armed #wpn{display:block}
 #lockBox{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border:2px solid #ff5a4a;display:none;box-shadow:0 0 10px rgba(255,90,74,.7)}#lockBox.ok{border-width:3px;animation:pl .25s infinite alternate}
@@ -315,7 +314,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
   <div class="keys touchOnly">
     <span><kbd>画面の左側</kbd></span><span>指を置いて動かすと操縦（上下で機首、左右で旋回）</span>
     <span><kbd>ブースト</kbd></span><span>押している間だけ加速（ゲージを消費）</span>
-    <span><kbd>ロール</kbd></span><span>バレルロール（指を倒している側へ。近いミサイルを振り切れることがある）</span>
+    <span><kbd>左右へ 2 度</kbd></span><span>指を左右へすばやく 2 度倒すとバレルロール（近いミサイルを振り切れることがある）</span>
     <span><kbd>発射</kbd></span><span>ディフューザー発射・各種操作（消火、再始動など）</span>
     <span><kbd>Ⅱ</kbd></span><span>一時停止</span>
   </div>
@@ -323,7 +322,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
     <span><kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd></span><span>機首の上げ下げ</span>
     <span><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></span><span>旋回</span>
     <span><kbd>Shift</kbd></span><span>ブースト（ゲージを消費）</span>
-    <span><kbd>Q</kbd><kbd>E</kbd> / <kbd>A</kbd><kbd>D</kbd> 2 度押し</span><span>バレルロール（近いミサイルを振り切れることがある）</span>
+    <span><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> 2 度押し</span><span>バレルロール（近いミサイルを振り切れることがある）</span>
     <span><kbd>Space</kbd></span><span>ディフューザー発射・各種操作</span>
     <span><kbd>Esc</kbd> / <kbd>P</kbd></span><span>一時停止</span>
     <span class="armedOnly"><kbd>F</kbd></span><span class="armedOnly">機銃（押している間）</span>
@@ -380,7 +379,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
  </div>
 </div>
 
-<div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbR">ロール</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button><button class="tb" id="tbG">機銃</button><button class="tb" id="tbM">ミサイル</button></div>
+<div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button><button class="tb" id="tbG">機銃</button><button class="tb" id="tbM">ミサイル</button></div>
 <div id="rot"><svg viewBox="0 0 64 64" fill="none" stroke="#e6bd74" stroke-width="3" stroke-linecap="round"><rect x="20" y="8" width="24" height="48" rx="5"/><line x1="29" y1="50" x2="35" y2="50"/></svg><div>端末を横向きにしてください</div></div>
 <div id="sleep" hidden>休止中　―　クリックまたはキー操作で再開</div>
 <div id="toast"></div>
