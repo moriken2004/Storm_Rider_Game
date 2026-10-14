@@ -2,6 +2,10 @@
 // ───────────────────────── 基本ユーティリティ ─────────────────────────
 const $=id=>document.getElementById(id);
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)), lerp=(a,b,t)=>a+(b-a)*t, sat=x=>clamp(x,0,1);
+// 機体の灯火やエンジンの光の玉は、カメラが D0 より近いと小さくする（寄りの画で胴体を覆う大きな丸にならないように）
+const _glP=new THREE.Vector3();
+function glowLOD(sp,D0,kmin){sp.onBeforeRender=function(r,s,cam){if(!this.parent)return;this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix);_glP.setFromMatrixPosition(this.matrixWorld);
+  const k=clamp(_glP.distanceTo(cam.position)/D0,kmin,1);if(k<1){const e=this.matrixWorld.elements;for(let i=0;i<3;i++){e[i]*=k;e[4+i]*=k;}}};return sp;}
 const smooth=(a,b,x)=>{const t=sat((x-a)/(b-a));return t*t*(3-2*t);};
 const damp=(a,b,k,dt)=>lerp(a,b,1-Math.exp(-k*dt));
 const ease=t=>t*t*(3-2*t);
