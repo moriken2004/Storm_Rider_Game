@@ -44,7 +44,7 @@ function warn(text,t){$('warn').textContent=text;$('warn').hidden=false;G.warnT=
 
 // ───────────────────────── 機体の配置 ─────────────────────────
 function fwdOf(yaw,pitch,out){const c=Math.cos(pitch);return out.set(-Math.sin(yaw)*c,Math.sin(pitch),-Math.cos(yaw)*c);}
-function syncAC(o){o.mesh.position.copy(o.pos);o.mesh.rotation.set(o.pitch,o.yaw,o.roll,'YXZ');}
+function syncAC(o){o.mesh.position.copy(o.pos);o.mesh.rotation.set(o.pitch,o.yaw,o.roll+(o.brA||0),'YXZ');}
 function slotOf(w,out){
   const fx=-Math.sin(P.yaw),fz=-Math.cos(P.yaw),rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
   return out.set(P.pos.x+rx*w.side+fx*w.fw,P.pos.y+w.up,P.pos.z+rz*w.side+fz*w.fw);
@@ -164,6 +164,8 @@ function fallNoWing(dt){
   if(hit&&!hit.wing){crashExplode('主翼を失い、'+hit.why);return;}
   if(P.pos.y<gy){P.pos.y=gy;crashExplode(P.wlWhat+'に主翼をぶつけて失い、'+(land?'地面に激突した':'海面に突っ込んだ'));}
 }
+function brEvade(){let ok=false;for(const m of ICP.mis){if(m.life<=0||m.tgt||m.lost)continue;const d=m.pos.distanceTo(P.pos);if(d<750&&Math.random()<(d>150?.65:.3)){m.lost=true;ok=true;}}
+  if(ok)say(W[0].state!=='gone'?'G':'C',W[0].state!=='gone'?'振り切った！　いいロールだ':'ミサイル、外れました',1.6);}
 function updatePlayer(dt){
   if(P.wingLost){fallNoWing(dt);return;}
   const ix=input.x,iy=input.y*(opts.inv?-1:1);
@@ -184,6 +186,10 @@ function updatePlayer(dt){
   P.yaw+=(-ix*(boosting?.6:.82)*ctl+(P.engineOut?-.11:0)+n3*tau*.02)*dt;
   P.roll=damp(P.roll,-ix*.95+n1*tau*.11+P.spin,4.5,dt);
   P.spin=damp(P.spin,0,1.2,dt);
+  // バレルロール：機体を 1 回転させながら小さならせんを描く（近づいたミサイルを振り切れることがある）
+  P.brCD=Math.max(0,(P.brCD||0)-dt);
+  if(input.rollQ){if(!P.br&&P.brCD<=0&&!P.engineOut&&P.pos.y>40){P.br={t:0,d:input.rollQ};P.brCD=1.7;SFX.boost();brEvade();}input.rollQ=0;}
+  if(P.br){const D=1.0;P.br.t+=dt;const u=Math.min(1,P.br.t/D),e=u*u*(3-2*u);P.brA=-P.br.d*6.2832*e;P.brPh=6.2832*e;P.brW=6.2832*6*u*(1-u)/D;if(u>=1){P.br=null;P.brA=0;}}
   let pT=iy*.56*(P.ice?.6:1)+n2*tau*.035;
   const ceil=CEIL[G.phase]||3000;
   if(P.pos.y>ceil-200){pT=Math.min(pT,-(P.pos.y-(ceil-200))/200*.4);if(!G.flags.ceilWarn&&P.pos.y>ceil-60){G.flags.ceilWarn=1;say('S',G.phase==='eye'||G.phase==='spare'?'これ以上は上昇できない':'雲中は着氷の危険。高度を下げろ');}}
@@ -194,6 +200,7 @@ function updatePlayer(dt){
   P.vel.copy(tA).multiplyScalar(P.speed).addScaledVector(tB,.8*DF().wind);
   P.vel.y+=n2*tau*9-G.down*62;P.vel.x+=n1*tau*7;P.vel.z+=n3*tau*7;
   P.vel.add(P.fling);P.fling.multiplyScalar(Math.exp(-dt*2.2));
+  if(P.br){const R=15,c=Math.cos(P.brPh)*R*P.brW,s=Math.sin(P.brPh)*R*P.brW*P.br.d;P.vel.y+=c;P.vel.x+=Math.cos(P.yaw)*s;P.vel.z-=Math.sin(P.yaw)*s;}
   P.pos.addScaledVector(P.vel,dt);
   // 海面と島の地表への接触
   {const lx=P.pos.x-BASE.x,lz=P.pos.z-BASE.z;let gy=11,why='海面に突っ込んだ',land=false;
@@ -468,7 +475,7 @@ function fail(cause){G.cause=cause;G.mode='dying';G.dieT=1.2;setAlarm(false);}
 
 // ───────────────────────── カットシーン ─────────────────────────
 let CUT=null;
-function startCut(def){
+function startCut(def){P.br=null;P.brA=0;
   resetHaz();clearRadio();CUT={def,i:-1,t:0,tot:0,si:0,skip:false,fp:camera.position.clone(),fq:camera.quaternion.clone(),ff:camera.fov};G.mode='cut';
   document.body.classList.add('cine');$('hud').hidden=true;$('skip').hidden=false;$('banner').classList.remove('on');
   if(def.begin)def.begin();nextShot();
@@ -616,7 +623,7 @@ function showTitle(){
   G.mode='title';ICP.seen=0;strReset();P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
   ['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');
   U.uStorm.value=1;U.uEye.value=1;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
-  P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
+  P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.br=null;P.brA=0;P.brCD=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);gateRings.forEach(g=>g.visible=false);P.hasPod=true;G.spareGiven=false;syncPods();
 }
 function showResult(){
@@ -764,7 +771,8 @@ function readInput(){
   let b=!!(k.ShiftLeft||k.ShiftRight),a=!!k.Space;
   x+=input.tx;y+=input.ty;b=b||input.tBoost;a=a||input.tAct;
   const gp=navigator.getGamepads?navigator.getGamepads()[0]:null;
-  if(gp){if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
+  if(gp){const l=!!gp.buttons[4]?.pressed,r=!!gp.buttons[5]?.pressed;if(l&&!input.gpL)input.rollQ=-1;if(r&&!input.gpR)input.rollQ=1;input.gpL=l;input.gpR=r;
+    if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
   {const gn=!!k.KeyF||!!input.tGun,ms=!!k.KeyR||!!input.tMsl;input.gun=G.armed&&gn;input.mslHit=G.armed&&ms&&!input.msl;input.msl=ms;}
   input.x=damp(input.x,clamp(x,-1,1),9,.016);input.y=damp(input.y,clamp(y,-1,1),9,.016);input.boost=b;input.actHit=a&&!input.act;input.act=a;
 }
@@ -776,6 +784,9 @@ function bindInput(){
     if(e.code==='Enter'&&G.mode==='cut')skipCut();
     if(G.mode!=='play'&&G.mode!=='cut'&&!e.repeat){const K=['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','KeyB','KeyA'];CHEAT.push(e.code);if(CHEAT.length>K.length)CHEAT.shift();if(CHEAT.join()===K.join()){CHEAT.length=0;toggleArmed();}}
     if((e.code==='Escape'||e.code==='KeyP')&&!e.repeat)togglePause();
+    // バレルロール：Q／E、または A・D（←・→）の 2 度押し
+    if(!e.repeat&&G.mode==='play'){const q={KeyQ:-1,KeyE:1}[e.code];if(q)input.rollQ=q;const d={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1}[e.code];
+      if(d){const now=performance.now();if(input.tapD===d&&now-input.tapT<280){input.rollQ=d;input.tapT=0;}else{input.tapD=d;input.tapT=now;}}}
   });
   addEventListener('keyup',e=>{input.keys[e.code]=false;});
   addEventListener('blur',()=>{input.keys={};});
@@ -822,6 +833,7 @@ function bindInput(){
     const hold=(id,key)=>{const b=$(id),on=e=>{initAudio();input[key]=true;b.classList.add('on');if(navigator.vibrate)navigator.vibrate(8);e.preventDefault();},off=()=>{input[key]=false;b.classList.remove('on');};
       b.addEventListener('touchstart',on,{passive:false});b.addEventListener('touchend',off);b.addEventListener('touchcancel',off);};
     hold('tbA','tAct');hold('tbB','tBoost');hold('tbG','tGun');hold('tbM','tMsl');
+    $('tbR').addEventListener('touchstart',e=>{e.preventDefault();initAudio();input.rollQ=input.tx<-.2?-1:1;if(navigator.vibrate)navigator.vibrate(8);},{passive:false});
     $('tbP').addEventListener('touchstart',e=>{e.preventDefault();togglePause();},{passive:false});$('tbP').addEventListener('click',()=>togglePause());
     $('skip').textContent='スキップ ▸';
     // 画面を消灯させない（対応する端末だけ）
@@ -956,13 +968,13 @@ function updateIntercept(dt){
     let boom=false;if(playing&&!m.tgt&&dist<15){boom=true;P.fling.addScaledVector(m.dir,30);damage(24,'迎撃機のミサイルが命中した');}
     if(m.life<=0||m.pos.y<4)boom=true;
     if(boom){m.life=0;m.m.visible=m.gl.visible=false;explode(m.pos,.3);SFX.hit();}}
-  if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけてから急旋回でかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
+  if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけて急旋回か <kbd>Q</kbd><kbd>E</kbd> ロールでかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
   else if(ICP.st===4&&playing&&G.armed)G.prompt={t:'交戦中　<kbd>F</kbd> 機銃　<kbd>R</kbd> ミサイル　後ろを取って撃墜せよ',p:0};
   else if(ICP.st===4&&playing)G.prompt={t:back?'任務空域へ戻れ（あと '+Math.max(0,(d+500)/1000).toFixed(1)+' km）':'攻撃を受けている　反転して任務空域へ戻れ',p:back?sat(1-(d+500)/3000):0};
   // ── 曳光弾
   for(const t of ICP.trc){if(t.life<=0)continue;t.life-=dt;const st=720*dt;t.pos.addScaledVector(t.dir,st);tB.copy(t.pos).addScaledVector(t.dir,-st);t.m.position.copy(t.pos);tD.copy(t.pos).add(t.dir);t.m.lookAt(tD);
     if(t.live==='P'){for(const f of ICP.f)if(!f.dead&&f.mesh.visible&&segDist(tB,t.dir,st,f.pos)<9){t.life=0;fighterHit(f,1);break;}if(t.life>0&&strHit(t,tB,st))t.life=0;}
-    else if(t.live&&playing&&segDist(tB,t.dir,st,P.pos)<7){t.life=0;damage(6,'迎撃機の機関砲に撃たれた');}
+    else if(t.live&&playing&&segDist(tB,t.dir,st,P.pos)<(P.br?3.5:7)){t.life=0;damage(6,'迎撃機の機関砲に撃たれた');}
     if(t.life<=0)t.m.visible=false;}
 }
 // 迎撃機を隊長機からの相対位置に置く（カットシーン用）
@@ -1266,7 +1278,7 @@ let IS_TOUCH=false;
 // 画面の大きさに合わせて、表示の縮尺を決める（高さ 620px 未満なら縮める）
 function fitUI(){const h=innerHeight,w=innerWidth,ui=Math.max(.5,Math.min(1,h/620,w/860));document.documentElement.style.setProperty('--ui',ui.toFixed(3));document.body.classList.toggle('small',ui<.97);}
 // タッチ端末向けに、案内文のキー名を画面のボタン名に置き換える
-function tk(s){if(!IS_TOUCH)return s;return s.replace(/<kbd>W<\/kbd><kbd>S<\/kbd> 機首の上げ下げ　<kbd>A<\/kbd><kbd>D<\/kbd> 旋回　<kbd>Shift<\/kbd> ブースト/,'画面の左側をなぞって操縦　<kbd>ブースト</kbd> で加速').replace(/<kbd>Space<\/kbd>/g,'<kbd>発射</kbd>').replace(/<kbd>Shift<\/kbd>/g,'<kbd>ブースト</kbd>').replace(/<kbd>F<\/kbd> 機銃/g,'<kbd>機銃</kbd>').replace(/<kbd>R<\/kbd> ミサイル/g,'<kbd>ミサイル</kbd>');}
+function tk(s){if(!IS_TOUCH)return s;return s.replace(/<kbd>Q<\/kbd><kbd>E<\/kbd> ロール/g,'<kbd>ロール</kbd>').replace(/<kbd>W<\/kbd><kbd>S<\/kbd> 機首の上げ下げ　<kbd>A<\/kbd><kbd>D<\/kbd> 旋回　<kbd>Shift<\/kbd> ブースト/,'画面の左側をなぞって操縦　<kbd>ブースト</kbd> で加速').replace(/<kbd>Space<\/kbd>/g,'<kbd>発射</kbd>').replace(/<kbd>Shift<\/kbd>/g,'<kbd>ブースト</kbd>').replace(/<kbd>F<\/kbd> 機銃/g,'<kbd>機銃</kbd>').replace(/<kbd>R<\/kbd> ミサイル/g,'<kbd>ミサイル</kbd>');}
 // ───────────────────────── 武装モード（隠しコマンド） ─────────────────────────
 const CHEAT=[];
 function toast(t,s){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),(s||2.4)*1000);}
