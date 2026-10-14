@@ -164,6 +164,8 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #oShape{max-width:250px}
 #opts .panel{max-width:440px;margin-right:min(4vw,48px)}
 #opts .row input[type=range]{width:150px}
+#opts{cursor:grab;touch-action:none}#opts.grabbing{cursor:grabbing}#opts .panel{cursor:auto;touch-action:auto}
+.orbHint{font-size:11px;letter-spacing:.12em;opacity:.7;margin:-4px 0 10px}body.small .orbHint,body.touch .orbHint{display:none}
 @media (max-width:760px){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}
 #res{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.10),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}
 .plate{position:relative;width:min(600px,92vw);margin-top:min(9vh,64px);padding:74px 34px 24px;border-radius:44px 44px 30px 30px;
@@ -339,6 +341,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
 
 <div id="opts" class="screen dim" hidden><div class="panel">
   <h2>設定</h2>
+  <div class="orbHint">画面の左側をドラッグすると機体を回せます（ホイールで寄り引き）</div>
   <div class="row"><span>音楽の音量</span><input type="range" id="oMus" min="0" max="100"></div>
   <div class="row"><span>音楽の音源</span><span id="oSrc">内蔵シンセ</span></div>
   <div class="row"><span>音が出ないとき</span><span class="sel"><button type="button" id="oFix">音声を再起動</button></span></div>

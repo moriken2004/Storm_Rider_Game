@@ -1638,13 +1638,26 @@ function hangarDetail(HG,M){
   // 安全コーンと車止め
   for(const[x,z]of[[37.5,-62],[37.5,-44],[-37.5,-50],[-37.5,-66],[37.5,30],[37.5,46],[-37.5,34],[-37.5,50]]){const c=add(new THREE.ConeGeometry(.3,.85,10),orange,x,.43,z);add(new THREE.CylinderGeometry(.22,.22,.1,10),new THREE.MeshBasicMaterial({color:0xf2f2f2}),x,.52,z);box(HG,.7,.06,.7,rubber,x,.03,z);}
   // ── 整備員（安全ベストと耳当て）
-  const crew=(x,z,ry,pose)=>{const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=ry;HG.add(g);const suit=col([0x2b3a4a,0x3b4b3a,0x4a4038][Math.floor(r()*3)],.9,0),vest=new THREE.MeshStandardMaterial({color:lin(0xd8e02a),roughness:.8,emissive:new THREE.Color(.05,.06,.0)});ENVMATS.push(vest);
-    const P2=(geo,m,px,py,pz)=>{const o=new THREE.Mesh(geo,m);o.position.set(px,py,pz);o.castShadow=true;g.add(o);return o;};
-    for(const sx of[-.12,.12])P2(new THREE.CylinderGeometry(.09,.08,.86,8),suit,sx,.43,0);P2(new THREE.BoxGeometry(.42,.6,.24),suit,0,1.16,0);P2(new THREE.BoxGeometry(.44,.42,.26),vest,0,1.2,0);
-    P2(new THREE.SphereGeometry(.12,12,10),skin,0,1.62,0);P2(new THREE.SphereGeometry(.135,12,8,0,6.3,0,1.5),yel,0,1.65,0);for(const sx of[-.14,.14])P2(new THREE.SphereGeometry(.06,8,6),rubber,sx,1.62,0);
-    for(const sx of[-1,1]){const up=pose===1,a=P2(new THREE.CylinderGeometry(.055,.05,.62,8),suit,sx*.27,up?1.62:1.12,up?0:.04);a.rotation.z=up?sx*-.5:sx*.12;
-      if(up){const wd=P2(new THREE.CylinderGeometry(.03,.03,.5,6),new THREE.MeshBasicMaterial({color:new THREE.Color(3,1.2,.15)}),sx*.44,2.1,0);wd.rotation.z=sx*-.5;}}};
-  crew(-37,-76,-2.3,1);crew(37,-76,2.3,1);crew(-39,-36,1.6,0);crew(39.4,-49,.4,0);crew(-39.2,-55,-1.2,0);crew(39,36,-1.5,0);crew(38.6,10,1.2,0);crew(-38.8,44,1.9,0);crew(-41.5,70,.3,0);crew(41,71,-.5,0);
+  // 関節のある人形にして、game.js の animCrew で動かす（mergeStatic で固めないよう dyn）
+  const CREW=[];
+  const crew=(x,z,ry,role,path)=>{const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=ry;g.userData.dyn=1;HG.add(g);const suit=col([0x2b3a4a,0x3b4b3a,0x4a4038][Math.floor(r()*3)],.9,0),vest=new THREE.MeshStandardMaterial({color:lin(0xd8e02a),roughness:.8,emissive:new THREE.Color(.05,.06,.0)});ENVMATS.push(vest);
+    const M=(par,geo,m,px,py,pz)=>{const o=new THREE.Mesh(geo,m);o.position.set(px,py,pz);o.castShadow=true;par.add(o);return o;},J=(par,px,py,pz)=>{const j=new THREE.Group();j.position.set(px,py,pz);par.add(j);return j;};
+    const body=J(g,0,.86,0),c={g,body,role,path,x,z,ry,home:{x,z,ry},ph:r()*6.3,wp:0,dir:1,legs:[],arms:[]};
+    for(const sx of[-1,1]){const hip=J(body,sx*.12,0,0);M(hip,new THREE.CylinderGeometry(.095,.085,.44,8),suit,0,-.22,0);const kn=J(hip,0,-.44,0);M(kn,new THREE.CylinderGeometry(.08,.07,.4,8),suit,0,-.2,0);M(kn,new THREE.BoxGeometry(.13,.08,.26),rubber,0,-.4,.05);c.legs.push({hip,kn});}
+    const torso=J(body,0,0,0);M(torso,new THREE.BoxGeometry(.42,.6,.24),suit,0,.3,0);M(torso,new THREE.BoxGeometry(.44,.42,.26),vest,0,.34,0);
+    const head=J(torso,0,.66,0);M(head,new THREE.SphereGeometry(.12,12,10),skin,0,.1,0);M(head,new THREE.SphereGeometry(.135,12,8,0,6.3,0,1.5),yel,0,.13,0);for(const sx of[-.14,.14])M(head,new THREE.SphereGeometry(.06,8,6),rubber,sx,.1,0);
+    for(const sx of[-1,1]){const sh=J(torso,sx*.27,.56,0);M(sh,new THREE.CylinderGeometry(.055,.05,.32,8),suit,0,-.16,0);const el=J(sh,0,-.32,0);M(el,new THREE.CylinderGeometry(.05,.045,.28,8),suit,0,-.14,0);M(el,new THREE.SphereGeometry(.05,8,6),skin,0,-.3,0);
+      if(role==='marshal'){M(el,new THREE.CylinderGeometry(.03,.03,.5,6),new THREE.MeshBasicMaterial({color:new THREE.Color(3,1.2,.15)}),0,-.55,0);}
+      c.arms.push({sh,el});}
+    if(role==='clip')M(c.arms[0].el,new THREE.BoxGeometry(.22,.3,.02),paleClip,0,-.33,.08);
+    c.torso=torso;c.head=head;CREW.push(c);};
+  const paleClip=new THREE.MeshStandardMaterial({color:0xd8d4c8,roughness:.8});
+  // 誘導員 2 人（扉の手前で機体と向き合う）、歩く人、作業する人、書類を持つ人
+  crew(-37,-76,0,'marshal');crew(37,-76,0,'marshal');
+  crew(-39,-36,1.6,'walk',[-36,12]);crew(39,36,-1.5,'walk',[36,-22]);crew(-38.8,44,1.9,'walk',[44,72]);
+  crew(39.4,-49,.4,'work');crew(38.6,10,1.2,'work');crew(-41.5,70,.3,'work');
+  crew(-39.2,-55,-1.2,'clip');crew(41,71,-.5,'clip');
+  HG.userData.crew=CREW;
   // ── 扉の内側：補強の枠、区画番号、危険帯
   const doorT=cv(512,512,(x,w,h)=>{x.fillStyle='#6a746f';x.fillRect(0,0,w,h);for(let i=0;i<70;i++){const X=r()*w,Y=r()*h*.5,L=40+r()*220,g=x.createLinearGradient(0,Y,0,Y+L);g.addColorStop(0,'rgba(92,52,24,'+(.12+r()*.28)+')');g.addColorStop(1,'rgba(92,52,24,0)');x.fillStyle=g;x.fillRect(X,Y,1.5+r()*4,L);}for(let i=0;i<8;i++){const g=x.createLinearGradient(i*64,0,i*64+64,0);g.addColorStop(0,'rgba(0,0,0,.35)');g.addColorStop(.1,'rgba(255,255,255,.08)');g.addColorStop(1,'rgba(0,0,0,.12)');x.fillStyle=g;x.fillRect(i*64,0,64,h);}
     for(let i=0;i<24;i++){x.fillStyle=i%2?'#d9a21b':'#17191a';x.beginPath();const a=i*w/24;x.moveTo(a,h);x.lineTo(a+w/24,h);x.lineTo(a+w/24+30,h-54);x.lineTo(a+30,h-54);x.fill();}
