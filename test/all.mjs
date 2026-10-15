@@ -5,7 +5,7 @@ const quick=process.argv.includes('quick');
 const T=[
   ['通しプレイ（訓練）','play.mjs',['d0'],o=>/RESULT [SABC]/.test(o)],
   ['入念な検査','soak.mjs',quick?['quick']:[],o=>/見つかった問題 0 件/.test(o)],
-  ['でたらめ操作','chaos.mjs',[],o=>/問題 0 件/.test(o),true],
+  ['でたらめ操作','chaos.mjs',[],o=>/^=== 問題 0 件/m.test(o),true],
   ['目標の印','mark.mjs',[],o=>(o.match(/おかしいもの 0/g)||[]).length===3],
   ['スマートフォン表示','mtest.mjs',[],o=>/重なり: なし/.test(o)&&!/PAGEERR/.test(o)],
   ['機銃で船・施設','strafe.mjs',[],o=>/沈没/.test(o)&&/"dead":true/.test(o)],
@@ -14,6 +14,8 @@ const T=[
   ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=16;}],
   ['設定画面の機体プレビュー','preview.mjs',[],o=>!/✗/.test(o)&&/✓/.test(o)],
+  ['画面遷移とキー操作','ui.mjs',[],o=>/問題 0 件/.test(o)],
+  ['画面遷移（スマートフォン）','ui.mjs',['mobile'],o=>/問題 0 件/.test(o)],
   ['自動の画質調整','adapt.mjs',[],o=>/その後3 \{"scale":1,"tier":0/.test(o)],
 ];
 const run=(f,a)=>new Promise(res=>{const p=spawn(process.execPath,[new URL('./'+f,import.meta.url).pathname,...a]);let o='';p.stdout.on('data',d=>o+=d);p.stderr.on('data',d=>o+=d);p.on('close',c=>res({o,c}));});
