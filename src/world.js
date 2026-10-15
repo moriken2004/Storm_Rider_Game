@@ -652,7 +652,8 @@ grass=mix(grass,grass*vec3(1.55,1.22,0.9)+vec3(0.02,0.015,0.0),smoothstep(0.58,0
 grass=mix(grass,grass*vec3(0.62,0.78,0.6),smoothstep(0.62,0.8,gq1*0.4+n2*0.6)*0.45);                         // 湿った濃い草
 vec3 an=abs(normalize(vNw));vec2 uR=(an.x>an.z?vWP.zy:vWP.xy)/19.0;uR=mix(vWP.xz/19.0,uR,smoothstep(0.25,0.5,slope));
 vec4 rA=texture2D(tRk,uR),rB=texture2D(tRk,uR*0.23+0.37);
-vec4 sA=texture2D(tSd,vWP.xz/9.0);
+vec2 sU2=vec2(vWP.x*0.6-vWP.z*0.8,vWP.x*0.8+vWP.z*0.6)/13.0+0.4;float sw2=smoothstep(0.3,0.7,texture2D(tN2,vWP.xz/47.0).b);
+vec4 sA=mix(texture2D(tSd,vWP.xz/9.0),texture2D(tSd,sU2),sw2);
 vec3 forest=vec3(0.016,0.040,0.013)*(0.6+0.9*n3);
 vec3 rock=rA.rgb*rA.rgb*vec3(0.80,0.70,0.58)*(0.42+1.0*rB.a)*(0.80+0.36*sin(hgt*0.33+n2*7.0))*(0.75+0.5*n3);
 vec3 sand=sA.rgb*sA.rgb*(0.8+0.4*n1);
@@ -683,7 +684,7 @@ tc=mix(tc,rock,mRock);tc=mix(tc,sand,mSand);
 // 凹凸（勾配テクスチャ）
 float bf=1.0/(1.0+length(vViewPosition)/260.0);
 vec2 gN=(texture2D(tGrN,uA).rg*w1+texture2D(tGrN,uA2).rg*w2+texture2D(tGrN,uA3).rg*w3)/(w1+w2+w3);
-vec2 bmp=(gN-0.5)*1.1*(1.0-gd*0.8)*(1.0-mRock)*(1.0-mSand)*(1.0-vColor.r)+(texture2D(tRkN,uR).rg-0.5)*3.2*mRock+(texture2D(tSdN,vWP.xz/9.0).rg-0.5)*1.0*mSand;bmp*=bf;
+vec2 bmp=(gN-0.5)*1.1*(1.0-gd*0.8)*(1.0-mRock)*(1.0-mSand)*(1.0-vColor.r)+(texture2D(tRkN,uR).rg-0.5)*3.2*mRock+(mix(texture2D(tSdN,vWP.xz/9.0).rg,texture2D(tSdN,sU2).rg,sw2)-0.5)*0.45*(0.4+0.8*texture2D(tN2,vWP.xz/31.0).b)*mSand;bmp*=bf;
 tc=mix(tc,tc*0.42,1.0-smoothstep(0.1,1.7,hgt));
 {vec2 sl=vWP.xz/7.5,fi=floor(sl),fr=fract(sl);float hs=fract(sin(dot(fi,vec2(12.9898,78.233)))*43758.5453);
   vec3 pv=vec3(0.30,0.305,0.30)*(0.82+0.2*hs)*(0.8+0.4*n3);float jt=max(smoothstep(0.035,0.0,min(fr.x,1.0-fr.x)),smoothstep(0.035,0.0,min(fr.y,1.0-fr.y)));pv*=1.0-0.45*jt;
@@ -732,6 +733,25 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
       const H=5.5+rd()*4.5,lx=(rd()-.5)*.28,lz=(rd()-.5)*.28;d.position.set(x,h-.3,z);d.rotation.set(lz,rd()*6,-lx);d.scale.set(1,H,1);d.updateMatrix();trunk.setMatrixAt(n,d.matrix);
       d.position.set(x+lx*H,h-.3+H*.98,z+lz*H);d.rotation.set(0,rd()*6,0);const s=.8+rd()*.5;d.scale.set(s,s,s);d.updateMatrix();crown.setMatrixAt(n,d.matrix);n++;}
     crown.count=trunk.count=n;crown.frustumCulled=trunk.frustumCulled=false;B.add(crown);B.add(trunk);B.userData.palms=[crown,trunk];}
+  // 岸辺の小物：砂浜と草地の境目の草むら、波打ち際の上の流木と小石（崖・港・道・滑走路は避ける）
+  {const okAt=(x,z)=>!inPort(x,z)&&!nearRoad(x,z,12)&&cliffAt(x,z)<.2&&!(Math.abs(x-30)<120&&Math.abs(z-130)<1500);
+    // 草むら：細い葉を十字に重ねた板（切り抜き）
+    const gc=document.createElement('canvas');gc.width=128;gc.height=128;const gx=gc.getContext('2d'),gr=mulberry(5150);
+    for(let i=0;i<70;i++){const x0=10+gr()*108,h=40+gr()*84,lean=(gr()-.5)*40;gx.strokeStyle=['#5f6f35','#74813f','#8a8a4a','#4f5f2c','#9a9258'][Math.floor(gr()*5)];gx.lineWidth=1.2+gr()*1.6;gx.beginPath();gx.moveTo(x0,128);gx.quadraticCurveTo(x0+lean*.3,128-h*.6,x0+lean,128-h);gx.stroke();}
+    const gt=new THREE.CanvasTexture(gc);gt.encoding=THREE.sRGBEncoding;
+    const gg=new THREE.BufferGeometry(),P=[],U=[],I=[];for(let k=0;k<3;k++){const a=k*Math.PI/3,c=Math.cos(a),s=Math.sin(a),b=P.length/3;P.push(-c,0,-s,c,0,s,c,1,s,-c,1,-s);U.push(0,0,1,0,1,1,0,1);I.push(b,b+1,b+2,b,b+2,b+3);}
+    gg.setAttribute('position',new THREE.Float32BufferAttribute(P,3));gg.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));gg.setIndex(I);gg.computeVertexNormals();
+    const gm=std({map:gt,alphaTest:.4,side:THREE.DoubleSide,roughness:.9,metalness:0});const N=6000,im=new THREE.InstancedMesh(gg,gm,N),d=new THREE.Object3D(),r=mulberry(811),tc=new THREE.Color();let n=0,g=0;
+    while(n<N&&g++<200000){const x=(r()-.5)*3600,z=(r()-.5)*4000,h=islandH(x,z);if(h<3.0||h>8||!okAt(x,z))continue;const sc=1.4+r()*1.8;d.position.set(x,h-.1,z);d.rotation.set(0,r()*6,0);d.scale.set(sc*1.3,sc*(.8+r()*.5),sc*1.3);d.updateMatrix();im.setMatrixAt(n,d.matrix);tc.setRGB(.75+r()*.3,.75+r()*.3,.7+r()*.25);im.setColorAt(n,tc);n++;}
+    im.count=n;im.instanceColor.needsUpdate=true;im.frustumCulled=false;B.add(im);
+    // 流木：白っぽく乾いた丸太
+    const wg=new THREE.CylinderGeometry(.18,.26,1,7);wg.rotateZ(Math.PI/2);const wc=document.createElement('canvas');wc.width=256;wc.height=64;{const x=wc.getContext('2d'),q=mulberry(77);x.fillStyle='#8f8576';x.fillRect(0,0,256,64);
+      for(let i=0;i<90;i++){const y=q()*64;x.strokeStyle='rgba('+(q()<.5?'60,52,44':'190,182,168')+','+(.15+q()*.3)+')';x.lineWidth=.6+q()*1.6;x.beginPath();x.moveTo(0,y);for(let X=0;X<=256;X+=16)x.lineTo(X,y+Math.sin(X*.05+i)*2);x.stroke();}
+      for(let i=0;i<12;i++){x.fillStyle='rgba(40,34,28,.6)';x.fillRect(q()*256,q()*64,8+q()*30,1.5);}for(let i=0;i<6;i++){x.fillStyle='rgba(60,50,40,.5)';x.beginPath();x.ellipse(q()*256,q()*64,4,3,0,0,7);x.fill();}}
+    const wtex=new THREE.CanvasTexture(wc);wtex.encoding=THREE.sRGBEncoding;wtex.wrapS=wtex.wrapT=THREE.RepeatWrapping;
+    const wm=std({map:wtex,roughness:.95,metalness:0}),wd=new THREE.InstancedMesh(wg,wm,420);let nw=0;g=0;
+    while(nw<420&&g++<200000){const x=(r()-.5)*3600,z=(r()-.5)*4000,h=islandH(x,z);if(h<1.1||h>2.6||!okAt(x,z))continue;const L=2.5+r()*6,t=1+r()*1.2;d.position.set(x,h+.15*t,z);d.rotation.set(0,r()*6,(r()-.5)*.15);d.scale.set(L,t,t);d.updateMatrix();wd.setMatrixAt(nw++,d.matrix);}
+    wd.count=nw;wd.castShadow=true;B.add(wd);}
   // 沖の岩礁と北岬の灯台
   {const rm=std({color:lin(0x4a443c),roughness:.92,metalness:0});rm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;
       sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nattribute float aCav;varying float vCav;varying vec3 vRP;varying vec3 vRN;").replace("#include <begin_vertex>","#include <begin_vertex>\nvCav=aCav;vRP=(modelMatrix*vec4(position,1.0)).xyz;vRN=normalize(mat3(modelMatrix)*normal);");
@@ -1927,6 +1947,8 @@ function buildPort(B,M){
   for(let k=0;k<3;k++){const t=new THREE.Mesh(new THREE.CylinderGeometry(7,7,11,24),wht);t.position.set(1128,QY+5.5,-60+k*19);t.castShadow=true;B.add(t);const top=new THREE.Mesh(new THREE.SphereGeometry(7,24,8,0,6.3,0,1.2),wht);top.scale.y=.3;top.position.set(1128,QY+11-7*Math.cos(1.2)*.3,-60+k*19);B.add(top);
     const st=new THREE.Mesh(new THREE.TorusGeometry(7.05,.12,6,28),yel);st.rotation.x=Math.PI/2;st.position.set(1128,QY+8,-60+k*19);B.add(st);}
   {const p=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,150,8),steel);p.rotation.z=Math.PI/2;p.position.set(1210,QY+.8,-70);B.add(p);for(let x=1140;x<=1280;x+=10){box(B,.25,.55,.9,darkM,x,QY+.27,-70);box(B,.25,.12,.9,darkM,x,QY+.5,-70);}}
+  // 水面に映す灯り：[x,z,高さ,色]（game.js が夕方に水面の縦の光の帯を出す）
+  B.userData.refl=[[1668,44,15.4,[3.5,.25,.15]],[1668,246,15.4,[.25,3.2,.6]],[X1+2,60,QY+35,[2.4,2.2,1.7]],[X1+2,230,QY+35,[2.4,2.2,1.7]],[X1-1,-150,QY+30,[2.6,2.4,1.9]],[X1-1,120,QY+30,[2.6,2.4,1.9]],[X1-1,300,QY+30,[2.6,2.4,1.9]],[X1-1,455,QY+30,[2.6,2.4,1.9]],[X1+44,60,QY+38,[3.4,.25,.15]],[X1+44,230,QY+38,[3.4,.25,.15]]];
   // 照明塔 4 基
   for(const[lx,lz]of[[1160,-150],[1160,120],[1160,300],[1160,455]]){box(B,.5,30,.5,steel,lx,QY+15,lz);box(B,5,1.2,.6,darkM,lx,QY+30.4,lz);
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.6,2.4,1.9),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(lx,QY+30.4,lz);sp.scale.set(7,7,1);B.add(sp);}

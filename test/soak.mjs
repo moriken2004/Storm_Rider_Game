@@ -23,7 +23,7 @@ const AUTOPILOT=`(maxChunks)=>{const S=__SR,G=S.G,P=S.P,I=S.input;let bad=[];
     I.tAct=G.prompt?(k%2===0||P.engineOut||P.fire):false;I.tBoost=G.phase==='ret'||!!P.ice;if(G.flags.hailT>0)I.ty=Math.max(-1,Math.min(1,(140-P.pos.y)/120));
     S.step(1/30);if(k%30===0){const r=__bad();if(r.length&&bad.length<5)bad.push(G.phase+':'+r.join(','));}
   }return{done:false,bad,ph:G.phase,mode:G.mode};}`;
-const runMission=async(label)=>{await p.evaluate(()=>{window.__LOG=[];});for(let c=0;c<200;c++){const r=await p.evaluate(`(${AUTOPILOT})(150)`);if(r.bad.length)note(label+' 数値の異常',r.bad.join(' / '));if(r.done){const res=await p.evaluate(()=>({rank:document.getElementById('rank').textContent,log:__LOG}));console.log('  '+label+' 完了 ランク '+res.rank+(res.log.length?' '+res.log.join('; '):''));return true;}}
+const runMission=async(label)=>{await p.evaluate(()=>{window.__LOG=[];});for(let c=0;c<400;c++){const r=await p.evaluate(`(${AUTOPILOT})(150)`);if(r.bad.length)note(label+' 数値の異常',r.bad.join(' / '));if(r.done){const res=await p.evaluate(()=>({rank:document.getElementById('rank').textContent,log:__LOG}));console.log('  '+label+' 完了 ランク '+res.rank+(res.log.length?' '+res.log.join('; '):''));return true;}}
   note(label,'時間内に終わらない');return false;};
 const SKIP1=process.argv.includes('quick'),ONLY5=process.argv.includes('armed');
 // 1) 難易度ごとに通しプレイ → もう一度（2 周目）でメモリの増え方

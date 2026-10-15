@@ -1,0 +1,23 @@
+// 主な検査をまとめて流し、結果を一覧にする。node test/all.mjs [quick]
+// quick: 通しプレイを訓練 1 回だけにし、時間のかかる長時間検査を省く
+import {spawn} from 'child_process';import fs from 'fs';
+const quick=process.argv.includes('quick');
+const T=[
+  ['通しプレイ（訓練）','play.mjs',['d0'],o=>/RESULT [SABC]/.test(o)],
+  ['入念な検査','soak.mjs',quick?['quick']:[],o=>/見つかった問題 0 件/.test(o)],
+  ['でたらめ操作','chaos.mjs',[],o=>/問題 0 件/.test(o),true],
+  ['目標の印','mark.mjs',[],o=>(o.match(/おかしいもの 0/g)||[]).length===3],
+  ['スマートフォン表示','mtest.mjs',[],o=>/重なり: なし/.test(o)&&!/PAGEERR/.test(o)],
+  ['機銃で船・施設','strafe.mjs',[],o=>/沈没/.test(o)&&/"dead":true/.test(o)],
+  ['カットの割り込み','midcut.mjs',[],o=>/"gates":3/.test(o)&&!/PAGEERR/.test(o)],
+  ['武装モード','armed.mjs',[],o=>/読み込み直し後 false/.test(o)&&!/PAGEERR/.test(o)],
+  ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
+  ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=16;}],
+  ['自動の画質調整','adapt.mjs',[],o=>/その後2 \{"scale":1,"tier":0/.test(o)],
+];
+const run=(f,a)=>new Promise(res=>{const p=spawn(process.execPath,[new URL('./'+f,import.meta.url).pathname,...a]);let o='';p.stdout.on('data',d=>o+=d);p.stderr.on('data',d=>o+=d);p.on('close',c=>res({o,c}));});
+const rows=[];const t0=Date.now();
+for(const[name,f,a,ok,long]of T){if(quick&&long){rows.push([name,'省略']);continue;}const s=Date.now();const r=await run(f,a);const pass=r.c===0&&ok(r.o);rows.push([name,pass?'合格':'不合格',((Date.now()-s)/1000).toFixed(0)+'s']);
+  console.log((pass?'✓ ':'✗ ')+name+'  '+((Date.now()-s)/1000).toFixed(0)+'s');if(!pass){const fn=new URL('./out/fail_'+f.replace('.mjs','')+'.txt',import.meta.url).pathname;fs.writeFileSync(fn,r.o);console.log(r.o.split('\n').slice(-12).join('\n')+'\n（全文 '+fn+'）');}}
+console.log('\n'+rows.map(r=>r.join('  ')).join('\n')+'\n合計 '+((Date.now()-t0)/60000).toFixed(1)+' 分');
+process.exit(rows.some(r=>r[1]==='不合格')?1:0);

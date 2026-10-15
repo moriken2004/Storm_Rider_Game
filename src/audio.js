@@ -188,6 +188,16 @@ const SFX={
   horn(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.4;for(const f of[98,147,99.5]){tone(AU.sfx,'sawtooth',f,f,t,2.6,.1,.25,{lp:520,rev:.8});}tone(AU.sfx,'sawtooth',98,98,t+3.1,1.1,.09,.2,{lp:520,rev:.8});},
   ignite(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',70,34,t,.7,.9,.004);burst(AU.sfx,t,.5,.8,'lowpass',1400,160,.7,.4);burst(AU.sfx,t+.03,1.6,.4,'bandpass',500,1600,.8,.3,.1);for(let i=0;i<6;i++)burst(AU.sfx,t+.1+i*.09,.05,.18,'bandpass',900+Math.random()*1400,500,3);},
   rip(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.35,.8,'bandpass',1400,3800,2.2,.3);burst(AU.sfx,t+.04,.5,.5,'highpass',3000,5200,.8,.3);tone(AU.sfx,'square',440,95,t,.28,.16,.003,{lp:2400});tone(AU.sfx,'sine',150,50,t,.3,.5,.003);for(let i=0;i<4;i++)tone(AU.sfx,'triangle',1800+Math.random()*2200,900,t+.1+i*.07,.12,.06,.002,{rev:.4});},
+  // 機銃：低い発射の衝撃＋乾いた破裂音（連射で重なる）
+  gun(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',140,48,t,.07,.32,.002);burst(AU.sfx,t,.05,.34,'bandpass',2600,1200,1.2,.08);burst(AU.sfx,t,.09,.22,'lowpass',900,200,.7);},
+  // 弾が金属に当たる：短い打撃と高い響き
+  ting(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.03,.25,'highpass',3000,2000,1);const f=1800+Math.random()*1600;tone(AU.sfx,'triangle',f,f*.97,t,.18,.06,.002);},
+  // 弾が海面に当たる
+  plip(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.12,.12,'bandpass',1400,500,2);},
+  // ミサイルがかすめる：近づいて遠ざかる風切り（ドップラーで下がる）
+  whoosh(pan){if(!AU.ctx)return;const ctx=AU.ctx,t=ctx.currentTime,s=ctx.createBufferSource();s.buffer=AU.noise;s.loop=true;const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=1.4;
+    f.frequency.setValueAtTime(2600,t);f.frequency.exponentialRampToValueAtTime(420,t+.9);const g=ctx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.55,t+.18);g.gain.exponentialRampToValueAtTime(.0001,t+1.0);
+    s.connect(f);f.connect(g);if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.setValueAtTime(pan||0,t);p.pan.linearRampToValueAtTime(-(pan||0),t+.9);g.connect(p);p.connect(AU.sfx);}else g.connect(AU.sfx);s.start(t,Math.random());s.stop(t+1.1);},
   spark(){if(!AU.ctx)return;const t=AU.ctx.currentTime;for(let i=0;i<3;i++)burst(AU.sfx,t+i*.04,.035,.18,'highpass',4200,6000,1);},
   radioEnd(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.11,.1,'bandpass',1900,2700,4);},
   charge(d){if(!AU.ctx)return;const t=AU.ctx.currentTime,v=sat(1-d/900)*.5+.08;tone(AU.sfx,'sawtooth',180,1900,t,2.05,.045*v*2,1.6,{lp:5000,rev:.3});for(let i=0;i<9;i++)burst(AU.sfx,t+.4+i*.19-i*i*.004,.03,.12*v,'highpass',5000,7000,1);},

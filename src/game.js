@@ -100,7 +100,7 @@ function causeText(){
 }
 function damage(n,cause){
   if(P.inv>0||G.mode!=='play')return;n*=DF().dmg;hurtBy(srcOf(cause),n);
-  P.hull=Math.max(0,P.hull-n);P.inv=1.3;G.hurt=1;G.shake=1;G.stats.dmg+=n;SFX.hit();glitch();shedArmor(false);
+  P.hull=Math.max(0,P.hull-n);P.inv=1.3;G.hurt=1;G.shake=1;if(IS_TOUCH&&navigator.vibrate)navigator.vibrate(n>15?[60,30,90]:[40]);G.stats.dmg+=n;SFX.hit();glitch();shedArmor(false);
   if(P.hull<=0){G.mode='dying';G.dieT=0;G.cause=cause;setAlarm(false);clearRadio();
     say(W[1].state!=='gone'?'H':'C','隊長！　応答してください、隊長！');}
   else if(P.hull<=30&&!G.flags.lowHull){G.flags.lowHull=1;say('S','機体損傷が限界に近い。これ以上の被弾は危険');}
@@ -275,10 +275,11 @@ function chaseCam(dt,snap){
   fwdOf(P.camYaw,P.camPitch,tA);
   const sh=G.shake*2.6+(P.turb||0)*1.3;
   const lowV=sat(1-(P.pos.y-12)/60);
-  camera.position.copy(P.pos).addScaledVector(tA,-47).add(tB.set((Math.random()-.5)*sh,11.5+lowV*8+(Math.random()-.5)*sh,(Math.random()-.5)*sh));
+  const tt=G.t,sx=Math.sin(tt*23.1)*.6+Math.sin(tt*37.7+1.3)*.4,sy=Math.sin(tt*19.3+.7)*.6+Math.sin(tt*41.9+2.1)*.4,sz=Math.sin(tt*29.3+2.9)*.5;
+  camera.position.copy(P.pos).addScaledVector(tA,-47).add(tB.set(sx*sh*.5,11.5+lowV*8+sy*sh*.5,sz*sh*.5));
   tC.copy(P.pos).addScaledVector(tA,70);tC.y+=5-lowV*13;
   camera.up.set(Math.sin(P.roll*.22)*Math.cos(P.camYaw)*-1,1,Math.sin(P.roll*.22)*Math.sin(P.camYaw)).normalize();
-  camera.lookAt(tC);
+  camera.lookAt(tC);if(sh>.02)camera.rotateZ((Math.sin(tt*17.9)*.6+Math.sin(tt*31.3+1.1)*.4)*sh*.006);
   const fov=62+(P.speed-150)*.11;if(Math.abs(camera.fov-fov)>.05){camera.fov=damp(camera.fov,fov,4,dt);camera.updateProjectionMatrix();}
 }
 function setCam(px,py,pz,lx,ly,lz,fov){camera.up.set(0,1,0);camera.position.set(px,py,pz);camera.lookAt(lx,ly,lz);if(fov&&camera.fov!==fov){camera.fov=fov;camera.updateProjectionMatrix();}}
@@ -517,6 +518,22 @@ const _cl=new V3(),_cw=new V3();
 function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
   if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();}
   for(const[im,k]of[[B.trees,[1,.6,.4][t]],[B.shrubs,[1,.5,0][t]]]){if(!im)continue;if(im.userData.n0===undefined)im.userData.n0=im.count;im.count=Math.floor(im.userData.n0*k);}}
+// ── 夕方の灯り：港の灯りが水面に縦に伸びて揺らめく帯と、灯りの光の玉を夕方ほど明るく
+const REFL={list:[],sprites:null};
+function initRefl(){const P2=baseGroup.userData.lodPort;if(!P2||!P2.userData.refl)return;
+  for(const[x,z,h,c]of P2.userData.refl){const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.ShaderMaterial({uniforms:{uC:{value:new V3(c[0],c[1],c[2])},uA:{value:0},uT:U.uTime,tN:U.tNoise2,tDepth:U.tDepth,uRes:U.uRes,uSeed:{value:x*.013+z*.007}},
+      transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,
+      vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader:'uniform vec3 uC;uniform float uA,uT,uSeed;uniform sampler2D tN,tDepth;uniform vec2 uRes;varying vec2 vUv;void main(){float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;float y=vUv.y;float w=1.0-abs(vUv.x-.5)*2.0;float n=texture2D(tN,vec2(vUv.x*.3+uSeed,y*1.8-uT*.12)).b;float br=.45+.55*smoothstep(.25,.8,n+.12*sin(y*70.0+uT*3.0));gl_FragColor=vec4(uC*uA*pow(w,2.2)*br*pow(1.0-y,1.6)*.16,1.0);}'}));
+    m.frustumCulled=false;m.visible=false;m.userData={x:BASE.x+x,z:BASE.z+z,h};overlay.add(m);REFL.list.push(m);}
+  // 灯りの光の玉（基地・港）の元の大きさ
+  REFL.sprites=[];baseGroup.traverse(o=>{if(o.isSprite&&!o.userData.dyn)REFL.sprites.push({o,s:o.scale.x});});}
+function updateRefl(){if(!REFL.list.length&&!REFL.tried){REFL.tried=1;initRefl();}const k=sat((G.gold||0)*1.1+(G.gloom||0)*.5);
+  if(REFL.sprites&&Math.abs(k-(REFL.k||0))>.01){REFL.k=k;for(const q of REFL.sprites)q.o.scale.set(q.s*(1+k*.6),q.s*(1+k*.6),1);}
+  for(const m of REFL.list){const u=m.userData,dx=camera.position.x-u.x,dz=camera.position.z-u.z,dist=Math.hypot(dx,dz);if(k<.02||dist>3500){m.visible=false;continue;}
+    // 灯りの真下から手前（カメラ側）へ伸びる帯。長さは灯りの高さとカメラの高さで決まる
+    const L=Math.min(110,u.h*(1.4+dist/Math.max(camera.position.y,8)*.1)),ang=Math.atan2(dx,dz);m.visible=true;
+    m.position.set(u.x+Math.sin(ang)*L*.5,.9,u.z+Math.cos(ang)*L*.5);m.rotation.set(-Math.PI/2,ang,0,'YXZ');m.scale.set(2.5+dist*.0025,L,1);m.material.uniforms.uA.value=k;}}
 // ── 雲の中のちぎれ雲：雲の中を飛んでいる間、機体の横を流れ去る切れ端（速さと奥行き）。稲光で照らされる
 const SCUD={list:[],col:new V3(.1,.11,.12),on:false,_f:new V3(),_r:new V3(),_u:new V3()},_scS={},_scV=new V3();
 function initScud(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),r=mulberry(4242);
@@ -982,7 +999,7 @@ function icpReset(){ICP.cleared=false;ICP.doomT=0;ICP.f.forEach(f=>{f.dead=false
 function icpTracersOnly(dt,playing){for(const t of ICP.trc){if(t.life<=0)continue;t.life-=dt;const st=720*dt;t.pos.addScaledVector(t.dir,st);if(t.live==='P'&&t.life>0){tB.copy(t.pos).addScaledVector(t.dir,-st);if(strHit(t,tB,st))t.life=0;}t.m.position.copy(t.pos);tD.copy(t.pos).add(t.dir);t.m.lookAt(tD);if(t.life<=0)t.m.visible=false;}}
 function icpTracer(from,to,spread,live){const t=ICP.trc.find(q=>q.life<=0);if(!t)return;t.pos.copy(from);t.dir.copy(to).sub(from).normalize();t.dir.x+=(Math.random()-.5)*spread;t.dir.y+=(Math.random()-.5)*spread;t.dir.z+=(Math.random()-.5)*spread;t.dir.normalize();t.life=1.3;t.live=live;t.m.visible=true;}
 
-function icpMissile(f,tgt){const m=ICP.mis.find(q=>q.life<=0);if(!m)return false;m.tgt=tgt||null;fwdOf(f.yaw,f.pitch,tA);m.pos.copy(f.pos).addScaledVector(tA,6);m.pos.y-=1.5;m.dir.copy(tA);m.life=9;m.lost=false;m.smoke=0;m.m.visible=m.gl.visible=true;SFX.launch();return true;}
+function icpMissile(f,tgt){const m=ICP.mis.find(q=>q.life<=0);if(!m)return false;m.wh=0;m.tgt=tgt||null;fwdOf(f.yaw,f.pitch,tA);m.pos.copy(f.pos).addScaledVector(tA,6);m.pos.y-=1.5;m.dir.copy(tA);m.life=9;m.lost=false;m.smoke=0;m.m.visible=m.gl.visible=true;SFX.launch();return true;}
 function updateIntercept(dt){
   const playing=G.mode==='play'&&!P.wingLost,d=areaOut();
   if(!ICP.st){
@@ -1050,6 +1067,8 @@ function updateIntercept(dt){
       if(dw<16&&wv.state!=='gone'&&wv.state!=='down'){m.life=0;m.m.visible=m.gl.visible=false;wingHit(wv);continue;}
       if(wv.state==='gone'||wv.state==='down')m.tgt=null;}
     tC.copy(P.pos).sub(m.pos);const dist=tC.length();if(!m.tgt)closest=Math.min(closest,dist);
+    // かすめたとき：風切り音（左右に流れる）と小さな揺れ
+    if(!m.tgt&&playing&&dist<95&&!m.wh){m.wh=1;fwdOf(P.yaw,0,tD);SFX.whoosh(clamp((m.pos.x-P.pos.x)*-tD.z+(m.pos.z-P.pos.z)*tD.x,-60,60)/60*-.8);G.shake=Math.max(G.shake,.35);}
     if(!m.tgt&&!m.lost&&playing){tC.addScaledVector(P.vel,Math.min(1.2,dist/300)).normalize();const ang=Math.acos(clamp(m.dir.dot(tC),-1,1));if(ang>1.35)m.lost=true;else if(ang>1e-4){m.dir.lerp(tC,Math.min(1,turn*dt/ang)).normalize();}}
     m.pos.addScaledVector(m.dir,300*dt);m.m.position.copy(m.pos);tD.copy(m.pos).add(m.dir);m.m.lookAt(tD);m.gl.position.copy(m.pos).addScaledVector(m.dir,-2.5);
     m.smoke-=dt;if(m.smoke<=0){m.smoke=.025;puff(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,0,1.5,0,2.2,1.6,.55);}
@@ -1197,7 +1216,7 @@ function updateCommon(dt){
   if(coreShell.visible){const d=camera.position.distanceTo(CORE),s=clamp(d*.07,34,460);coreShell.position.copy(CORE);coreShell.scale.setScalar(s);coreShell.quaternion.copy(camera.quaternion);coreShell.userData.inner.rotation.z+=dt*(G.lock>0?2.4:.5);
     const lk=G.lock>=1,pu=.75+.25*Math.sin(G.t*(lk?16:3));coreShell.traverse(o=>{if(o.isMesh){o.material.uniforms.uAlpha.value=pu;o.material.uniforms.uColor.value.set(lk?3.4:2.4,lk?.5:1.5,lk?.3:.5);}});}
   if(boomFx.visible){boomFx.userData.t+=dt;const u=boomFx.userData.t/1.4,s=boomFx.userData.t>=1.05&&G.mode!=='cut'?14*(1.5-u):80+u*520;boomFx.scale.set(s,s,1);boomFx.quaternion.copy(camera.quaternion);boomFx.material.uniforms.uAlpha.value=Math.max(0,1-u)*2;if(u>=1)boomFx.visible=false;}
-  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();updateScud();
+  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();updateScud();updateRefl();
   if(strikeGlow&&strikeGlow.visible){const g=strikeGlow;g.userData.t+=dt;const u=g.userData.t/.45,s=260+u*520;g.scale.set(s,s*.5,1);g.quaternion.copy(camera.quaternion);g.material.uniforms.uAlpha.value=Math.max(0,1-u)*(0.6+0.4*Math.sin(G.t*90));if(u>=1)g.visible=false;}
   rings.forEach((r,i)=>{if(r.visible)r.rotation.z+=dt*.6;});
   gateRings.forEach(r=>{if(r.visible)r.material.uniforms.uAlpha.value=.7+.3*Math.sin(G.t*4);});
@@ -1298,19 +1317,19 @@ function strHit(t,a,st){
     for(const s of ships){if(s.dead)continue;const L=s.m.userData.len,B=s.m.userData.beam,dx=q.x-s.x,dz=q.z-s.z;if(Math.abs(dx)>L||Math.abs(dz)>L)continue;
       const c=Math.cos(s.h),sn=Math.sin(s.h),lx=dx*c-dz*sn,lz=dx*sn+dz*c,top=L>100?30:L>50?15:7;
       if(Math.abs(lx)<B/2+1&&Math.abs(lz)<L/2+1&&q.y<top){
-        if(s.hp===undefined)s.hp=L>100?70:L>50?28:10;s.hp--;puff(q.x,q.y,q.z,0,3,0,1.6,.5,.9);if(Math.random()<.4)SFX.spark();
+        if(s.hp===undefined)s.hp=L>100?70:L>50?28:10;s.hp--;puff(q.x,q.y,q.z,0,3,0,1.6,.5,.9);if(Math.random()<.5&&q.distanceTo(camera.position)<500)SFX.ting();
         {const pt=s.m.userData.kind==='patrol';strSay(pt?'patrol':'ship','C',pt?'自国の巡視船を撃っています！　射撃を中止してください':'民間船への発砲を確認。ただちに射撃を中止してください');}
         if(s.hp<=0)strSink(s);return true;}}
     const lx=q.x-BASE.x,lz=q.z-BASE.z;
     if(Math.abs(lx)<2700&&Math.abs(lz)<3100&&q.y<260){
       for(const o of STR.cols){const c=o.c;if(q.x>c[0]-1&&q.x<c[3]+1&&q.z>c[2]-1&&q.z<c[5]+1&&q.y>c[1]-1&&q.y<c[4]+1){
-        puff(q.x,q.y,q.z,0,2,0,1.6,.5,.9);if(Math.random()<.4)SFX.spark();
+        puff(q.x,q.y,q.z,0,2,0,1.6,.5,.9);if(Math.random()<.5&&q.distanceTo(camera.position)<500)SFX.ting();
         if(!o.dead&&!c[7]){o.hp--;strSay('base','G',lx>1050?'おい、港を撃つな！　何やってる！':'おい！　そこは味方の基地だぞ！');
           if(o.hp<=0){o.dead=true;if(G.stats)G.stats.wreck=(G.stats.wreck||0)+1;_sq.set((c[0]+c[3])/2,Math.min(c[4],c[1]+(c[4]-c[1])*.7),(c[2]+c[5])/2);explode(_sq,Math.min(1,.4+(c[3]-c[0])/60));
             STR.burn.push({x:_sq.x,y:c[4],z:_sq.z,r:Math.min(14,(c[3]-c[0])/4+3),t:0,max:90});strSay('baseK','C','施設の損壊を確認……すべて記録しています');}}
         return true;}}
       if(q.y<Math.max(islandH(lx,lz),3.5)){puff(q.x,Math.max(islandH(lx,lz),3.5),q.z,0,5,0,1.4,.6,.8);return true;}}
-    else if(q.y<3.5){puff(q.x,3.6,q.z,0,7,0,1.3,.6);return true;}}
+    else if(q.y<3.5){puff(q.x,3.6,q.z,0,7,0,1.3,.6);if(Math.random()<.25&&q.distanceTo(camera.position)<400)SFX.plip();return true;}}
   return false;
 }
 function strSink(s){s.dead=true;if(G.stats)G.stats.sunk=(G.stats.sunk||0)+1;s.sinkT=0;const L=s.m.userData.len;_sq.set(s.x,6,s.z);explode(_sq,L>100?1:L>50?.7:.45);STR.burn.push({ship:s,x:s.x,y:6,z:s.z,r:Math.min(14,L/8+3),t:0,max:L>100?80:45});
@@ -1449,7 +1468,7 @@ function updateArmed(dt){
     {let bt=null,bo=.1;for(const f of ICP.f){if(f.dead||!f.mesh.visible)continue;tB.copy(f.pos).sub(P.pos);const dd=tB.length();if(dd>1000)continue;const o=Math.acos(clamp(tB.dot(tA)/dd,-1,1));if(o<bo){bo=o;bt=f;}}
       if(bt){const tt=bt.pos.distanceTo(P.pos)/720;tC.copy(bt.pos).addScaledVector(bt.vel,tt);}
       else{let bs=null,bo2=.07;for(const q of ships){if(q.dead)continue;tB.set(q.x,q.m.userData.len>100?8:3,q.z).sub(P.pos);const dd=tB.length();if(dd>1000)continue;const o=Math.acos(clamp(tB.dot(tA)/dd,-1,1));if(o<bo2){bo2=o;bs=q;}}   // 船にも弱い照準補正
-        if(bs){const tt=Math.hypot(bs.x-P.pos.x,bs.z-P.pos.z)/720;tC.set(bs.x-Math.sin(bs.h)*bs.sp*tt,bs.m.userData.len>100?8:3,bs.z-Math.cos(bs.h)*bs.sp*tt);}}}tD.copy(P.pos).addScaledVector(tA,8);tD.y+=.6;icpTracer(tD,tC,.006,'P');if(Math.random()<.5)SFX.spark();G.shake=Math.max(G.shake,.06);}}
+        if(bs){const tt=Math.hypot(bs.x-P.pos.x,bs.z-P.pos.z)/720;tC.set(bs.x-Math.sin(bs.h)*bs.sp*tt,bs.m.userData.len>100?8:3,bs.z-Math.cos(bs.h)*bs.sp*tt);}}}tD.copy(P.pos).addScaledVector(tA,8);tD.y+=.6;icpTracer(tD,tC,.006,'P');SFX.gun();G.shake=Math.max(G.shake,.06);}}
   wp.textContent='MSL '+'▮'.repeat(P.msl)+'▯'.repeat(Math.max(0,4-P.msl))+'　GUN'+(input.gun?' ●':'')+(G.lockF?(G.lockT>=1.1?'　LOCK':'　…'):'');
 }
 // 迎撃機が撃たれた
