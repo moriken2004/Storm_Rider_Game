@@ -13,7 +13,7 @@ function shoreTex(){const N=512,d=new Uint8Array(N*N*4),H=new Float32Array(N*N),
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i;let v=D[k];if(i>0)v=Math.min(v,D[k-1]+cs);if(j>0)v=Math.min(v,D[k-N]+cs);if(i>0&&j>0)v=Math.min(v,D[k-N-1]+cs*1.414);if(i<N-1&&j>0)v=Math.min(v,D[k-N+1]+cs*1.414);D[k]=v;}
   for(let j=N-1;j>=0;j--)for(let i=N-1;i>=0;i--){const k=j*N+i;let v=D[k];if(i<N-1)v=Math.min(v,D[k+1]+cs);if(j<N-1)v=Math.min(v,D[k+N]+cs);if(i<N-1&&j<N-1)v=Math.min(v,D[k+N+1]+cs*1.414);if(i>0&&j<N-1)v=Math.min(v,D[k+N-1]+cs*1.414);D[k]=v;}
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i,x=-3200+6400*(i+.5)/N,z=-3400+6800*(j+.5)/N,h=H[k];let v=h;
-    if(h<=0){const dd=D[k],nz=.75+.5*vnoise2(x/420+3,z/420+7)+.25*vnoise2(x/90,z/90),shelf=Math.pow(dd/900,1.25)*30*nz;v=-Math.max(-h*Math.max(0,1-dd/260),.4+shelf);}
+    if(h<=0){const dd=D[k],nz=.75+.5*vnoise2(x/420+3,z/420+7)+.25*vnoise2(x/90,z/90),shelf=Math.pow(dd/900,1.25)*30*nz+8*cliffAt(x,z)*Math.min(1,dd/50)*(1-smooth(80,300,dd));v=-Math.max(-h*Math.max(0,1-dd/260),.4+shelf);}
     const q=Math.max(0,Math.min(255,Math.round((v+64)/72*255))),o=k*4;d[o]=d[o+1]=d[o+2]=q;d[o+3]=255;}
   const t=new THREE.DataTexture(d,N,N,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.LinearFilter;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;t.needsUpdate=true;return t;}
 function buildCanopy(){
@@ -112,11 +112,12 @@ void main(){
   vec2 il=(xz-vec2(0.0,21000.0))/vec2(1500.0,1750.0);float idv=length(il)+(texture2D(tNoise2,xz/2600.0).b-0.5)*0.22;
   float hbm=harb(xz);
   float sh=shoreH(xz),dep=max(-sh,0.0);
-  float shal=(1.0-smoothstep(1.0,38.0,dep));shal=shal*shal*(1.0-hbm);
-  body=mix(body,vec3(0.02,0.16,0.20)*(E+0.04),(1.0-smoothstep(10.0,45.0,dep))*(1.0-hbm)*0.6);
+  float shal=(1.0-smoothstep(1.0,38.0,dep));shal=shal*shal*(1.0-hbm*0.55);
+  body=mix(body,vec3(0.02,0.16,0.20)*(E+0.04),(1.0-smoothstep(10.0,45.0,dep))*0.6);
   body=mix(body,vec3(0.035,0.30,0.29)*(E+0.04),shal*0.85);
   body=mix(body,vec3(0.36,0.33,0.25)*(E+0.06),(1.0-smoothstep(0.0,2.2,dep))*(1.0-hbm)*0.55);
-  body=mix(body,vec3(0.012,0.085,0.090)*(E+0.04),hbm*0.85);
+  // 港の中：浚渫して少し深く、濁った青緑。むらを付けて周りの海から急に色が変わらないように
+  {float hn=texture2D(tNoise2,xz/180.0).b;body=mix(body,vec3(0.022,0.15,0.14)*(0.85+0.3*hn)*(E+0.04),hbm*0.55);}
   vec3 col=mix(body,refl,F);
   // 太陽のきらめき
   vec3 Hh=normalize(V+uSunDir);float NdH=max(dot(N,Hh),0.0);
@@ -558,12 +559,24 @@ function vnoise2(x,y){const x0=Math.floor(x),y0=Math.floor(y);let fx=x-x0,fy=y-y
   const g=(i,j)=>_iL[((j&63)<<6)|(i&63)],a=g(x0,y0),b=g(x0+1,y0),c=g(x0,y0+1),d=g(x0+1,y0+1);return(a+(b-a)*fx)*(1-fy)+(c+(d-c)*fx)*fy;}
 function fbm2(x,y){let s=0,a=.5,f=1;for(let i=0;i<5;i++){s+=a*vnoise2(x*f,y*f);a*=.5;f*=2.03;}return s/.97;}
 // 島の高さ（基地ローカル座標）。西側は尾根の立った山地、東は滑走路のある平地
-function islandH(x,z){
-  // 海岸線：楕円に、角度ごとの岬と入り江（周期の違う波の重ね合わせ）と大きなむらを足す。滑走路の両端・港・灯台・沖の岩のまわりは元の線を保つ
-  const a=Math.atan2(z,x),keep=Math.max((1-smooth(250,520,Math.abs(x-30)))*smooth(900,1250,Math.abs(z-130)),(1-smooth(150,420,Math.hypot(x-1200,z-150)))*.9+(1-smooth(200,480,Math.abs(z-150)))*smooth(850,1050,x)*.9,1-smooth(120,330,Math.hypot(x-250,z+1330)));
+// 海岸線を元のまま保つ場所（滑走路の両端・港・灯台）
+function coastKeep(x,z){return Math.min(1,Math.max((1-smooth(250,520,Math.abs(x-30)))*smooth(900,1250,Math.abs(z-130)),(1-smooth(150,420,Math.hypot(x-1200,z-150)))*.9+(1-smooth(200,480,Math.abs(z-150)))*smooth(850,1050,x)*.9,1-smooth(120,330,Math.hypot(x-250,z+1330))));}
+// 崖になる海岸の度合い（方角で決まる。沖でも同じ値なので海底の深さにも使う）
+// 西（山側）・南西・北西・北東の 4 か所に崖。幅は方角のむらで少し揺らす
+function cliffAt(x,z){const a=Math.atan2(z,x),w=.24+.06*(fbm2(Math.cos(a)*3+1,Math.sin(a)*3+4)-.5)*4;let c=0;
+  for(const[ac,k]of[[Math.PI,1.3],[2.35,.8],[-2.15,1],[-.6,.8]]){let d=a-ac;while(d>Math.PI)d-=6.2832;while(d<-Math.PI)d+=6.2832;c=Math.max(c,1-smooth(w*k*.55,w*k,Math.abs(d)));}
+  return c*(1-coastKeep(x,z));}
+function coastD(x,z){
+  // 海岸線：楕円に、角度ごとの岬と入り江（周期の違う波の重ね合わせ）と大きなむらを足す。滑走路の両端・港・灯台のまわりは元の線
+  const a=Math.atan2(z,x),keep=coastKeep(x,z);
   const coast=(.075*Math.sin(3*a+1.3)+.05*Math.sin(5*a-.7)+.035*Math.sin(7*a+2.1)+.02*Math.sin(11*a+.4)+(fbm2(x*.00055+9,z*.00055+4)-.5)*.32+(fbm2(x*.0015+21,z*.0015+13)-.5)*.13)*(1-Math.min(1,keep));
   const d=Math.hypot(x/1500,z/1750)*(1+coast)+(fbm2(x*.0016+3,z*.0016+7)-.5)*.12;
+  return d;}
+function islandH(x,z){
+  const d=coastD(x,z);
   let h=(1-smooth(.5,1,d))*30-9+(fbm2(x*.004,z*.004)-.5)*10;
+  // 崖：海岸の手前で一段高く持ち上げ、海側は砂浜を作らずにすぐ深くする
+  {const c=cliffAt(x,z);if(c>0){const top=1-smooth(.822,.846,d),H=18+16*fbm2(x*.003+7,z*.003+1);h+=c*top*H*(.6+.4*smooth(.6,.82,d));h=lerp(h,Math.min(h,-6-8*smooth(.85,.95,d)),c*smooth(.828,.846,d));}}
   const rg=1-Math.abs(fbm2(x*.0011+11,z*.0011+5)*2-1),m=smooth(-250,-800,x)*(1-smooth(.4,.9,d));
   h+=m*(50+250*rg*rg+(fbm2(x*.006+1,z*.006)-.5)*46);
   h+=(1-smooth(0,460,Math.hypot(x-560,z+1080)))*(1-smooth(.5,.95,d))*(60+(fbm2(x*.008,z*.008)-.5)*30);
@@ -611,7 +624,7 @@ function buildBase(){
   for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i);p.setY(i,islandH(x,z));
     // r:舗装のマスク g:森のマスク
     col[i*3]=Math.max((1-smooth(105,135,Math.abs(x-262)))*(1-smooth(175,205,Math.abs(z+30))),(1-smooth(95,120,Math.abs(x-330)))*(1-smooth(60,85,Math.abs(z-400))),(1-smooth(14,22,Math.abs(x-150)))*(1-smooth(200,230,Math.abs(z-120))));
-    col[i*3+1]=forestMask(x,z);}
+    col[i*3+1]=forestMask(x,z);col[i*3+2]=cliffAt(x,z)*smooth(.76,.81,coastD(x,z));}
   tg.setAttribute('color',new THREE.BufferAttribute(col,3));tg.computeVertexNormals();
   const tm=std({vertexColors:true,roughness:.95,metalness:0});
   tm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;Object.assign(sh.uniforms,{uT:U.uTime,tN3:U.tNoise,uSunDir:U.uSunDir,uStorm:U.uStorm,tGr:GT.grass,tGrN:GT.grassN,tRk:GT.rock,tRkN:GT.rockN,tSd:GT.sand,tSdN:GT.sandN});
@@ -646,6 +659,7 @@ vec3 sand=sA.rgb*sA.rgb*(0.8+0.4*n1);
 vec3 tc=mix(grass,forest,vColor.g*smoothstep(6.0,16.0,hgt)*0.85);
 float mRock=clamp(smoothstep(0.34,0.42,slope+(n1-0.5)*0.05+(n3-0.5)*0.10+(gA.a-0.5)*0.10)+smoothstep(190.0,280.0,hgt)*0.5*smoothstep(0.35,0.6,n3+gA.a*0.5),0.0,1.0);
 float mSand=(1.0-smoothstep(3.0,8.0,hgt+(n1-0.5)*3.5))*(1.0-smoothstep(0.3,0.55,slope));
+mRock=max(mRock,vColor.b*max(smoothstep(0.08,0.22,slope),1.0-smoothstep(3.0,7.0,hgt))*smoothstep(-2.0,0.5,hgt));mSand*=1.0-smoothstep(0.2,0.6,vColor.b);
 tc=mix(tc,rock,mRock);tc=mix(tc,sand,mSand);
 // 凹凸（勾配テクスチャ）
 float bf=1.0/(1.0+length(vViewPosition)/260.0);
@@ -675,6 +689,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   {const sg=crownGeo(8,23),sm=leafMat(),N=13000,im=new THREE.InstancedMesh(sg,sm,N),d=new THREE.Object3D(),rd=mulberry(29),tc=new THREE.Color();let n=0,g=0;
     while(n<N&&g++<160000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,9))continue;
       if(h<4||h>240||(Math.abs(x-30)<200&&Math.abs(z-130)<1400)||(Math.abs(x-250)<300&&Math.abs(z-150)<420))continue;
+      if(Math.abs(islandH(x+6,z)-h)+Math.abs(islandH(x,z+6)-h)>4.5)continue;   // 崖などの急斜面には生やさない
       const fm=forestMask(x,z),p=.12+.88*Math.max(0,1-Math.abs(fm-.45)*2.2);if(rd()>p)continue;
       const sc=1.6+rd()*rd()*3.2;d.position.set(x,h+sc*.25,z);d.scale.set(sc*(.9+rd()*.5),sc*(.6+rd()*.35),sc*(.9+rd()*.5));d.rotation.y=rd()*6;d.updateMatrix();im.setMatrixAt(n,d.matrix);
       tc.setRGB(.45+rd()*.3,.5+rd()*.28,.36+rd()*.22);im.setColorAt(n,tc);n++;}
@@ -711,13 +726,13 @@ float wet=1.0-smoothstep(1.0,4.2,vRP.y+(ra-0.5)*1.5);c=mix(c,c*0.32,wet);c=mix(c
 c=mix(c,vec3(0.55,0.53,0.48),(1.0-smoothstep(0.5,1.6,abs(vRP.y-1.7)))*smoothstep(0.55,0.75,rc)*0.5);   // フジツボの帯
 diffuseColor.rgb=c;`);};
     // 岩の形：頂点をつなげて滑らかにし、尾根のある起伏・地層の縞・平らな底を付ける。くぼみの度合いは aCav に残す
-    const rockGeo=seed=>{const src=new THREE.IcosahedronGeometry(1,5),sp=src.attributes.position,map=new Map(),P=[],I=[],cav=[];
+    const rockGeo=(seed,det)=>{const src=new THREE.IcosahedronGeometry(1,det||5),sp=src.attributes.position,map=new Map(),P=[],I=[],cav=[];
       for(let i=0;i<sp.count;i++){const x=sp.getX(i),y=sp.getY(i),z=sp.getZ(i),key=Math.round(x*1e4)+','+Math.round(y*1e4)+','+Math.round(z*1e4);let id=map.get(key);
         if(id===undefined){id=P.length/3;map.set(key,id);const o=seed*13.7,n1=vnoise2(x*1.6+y*1.9+o,z*1.6-y*.7+o*.3),n2=vnoise2(x*4.2-y*2.3+o,z*4.2+y*3.1-o),n3=vnoise2(x*11+y*7+o,z*11-y*9),ridge=1-Math.abs(2*n2-1);
           let k=.66+.42*n1+.16*ridge+.05*n3+.035*Math.sin(y*16+n1*5);const yy=y<-.05?y*.3:y*(1.0+.15*n1);P.push(x*k,yy*k,z*k*(.85+.3*vnoise2(o+3,y*2)));cav.push(Math.min(1,Math.max(0,(k-.62)*1.6)));}I.push(id);}
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('aCav',new THREE.Float32BufferAttribute(cav,1));g.setIndex(I);g.computeVertexNormals();return g;};
-    const RG=[rockGeo(1),rockGeo(2),rockGeo(3)],rr=mulberry(808);
-    const small=new THREE.InstancedMesh(RG[2],rm,120),d=new THREE.Object3D();let ns=0;
+    const RG=[rockGeo(1),rockGeo(2),rockGeo(3)],RGs=rockGeo(4,2),rr=mulberry(808);
+    const small=new THREE.InstancedMesh(RGs,rm,120),d=new THREE.Object3D();let ns=0;
     for(const[x,z,sc,hh,v]of[[-1420,-760,34,60,0],[-1500,-640,22,38,1],[-1380,-900,18,26,2],[-1250,1480,30,44,1],[-1330,1400,16,22,0],[900,-1620,20,24,2]]){const r=new THREE.Mesh(RG[v],rm);r.position.set(x,hh*.12,z);r.scale.set(sc,hh,sc*.8);r.rotation.y=x;r.userData.rock=1;r.castShadow=true;r.receiveShadow=true;B.add(r);
       // 根元に寄せる白波の輪（x＝外向き、0 が岩側）
       {const R1=sc*.72,R2=sc*1.05+14,NA=64,P=[],U=[],I=[];for(let i=0;i<=NA;i++){const a=i/NA*6.2832,c=Math.cos(a),s2=Math.sin(a);P.push(c*R1,.8,s2*R1*.85,c*R2,.8,s2*R2*.85);U.push(0,a*R2,1,a*R2);if(i<NA){const q=i*2;I.push(q,q+1,q+2,q+1,q+3,q+2);}}
@@ -725,6 +740,11 @@ diffuseColor.rgb=c;`);};
         const fm=new THREE.Mesh(g,foamMat(3,{alpha:.8,sx:R2-R1,sy:1,speed:.05,inScene:1}));fm.position.set(x,0,z);fm.rotation.y=x;fm.frustumCulled=false;B.add(fm);}
       for(let k=0;k<14&&ns<120;k++){const a=rr()*6.28,rad=sc*(.9+rr()*1.4),s3=1.5+rr()*rr()*sc*.22;d.position.set(x+Math.cos(a)*rad,-s3*.25,z+Math.sin(a)*rad*.85);d.rotation.set(rr()*.6,rr()*6,rr()*.6);d.scale.set(s3,s3*(.5+rr()*.6),s3);d.updateMatrix();small.setMatrixAt(ns++,d.matrix);}}
     small.count=ns;small.castShadow=true;small.userData.rock=1;B.add(small);
+    // 崖のふもとに崩れ落ちた岩
+    {const fall=new THREE.InstancedMesh(RGs,rm,260),d2=new THREE.Object3D();let nf=0;
+      for(let k=0;k<3000&&nf<260;k++){const a2=rr()*6.2832,c=cliffAt(Math.cos(a2)*1400,Math.sin(a2)*1600);if(c<.5)continue;let r2=600;while(r2<2600&&islandH(Math.cos(a2)*r2,Math.sin(a2)*r2)>0)r2+=3;
+        const rr2=r2+(rr()-.3)*22,x=Math.cos(a2)*rr2,z=Math.sin(a2)*rr2,sc=1.5+rr()*rr()*7;d2.position.set(x,Math.max(islandH(x,z),-2)-sc*.25,z);d2.rotation.set(rr()*.8,rr()*6,rr()*.8);d2.scale.set(sc,sc*(.5+rr()*.5),sc);d2.updateMatrix();fall.setMatrixAt(nf++,d2.matrix);}
+      fall.count=nf;fall.castShadow=true;fall.userData.rock=1;B.add(fall);}
     const lx=250,lz=-1330,ly=Math.max(islandH(lx,lz),2);
     const LH=new THREE.Group();B.add(LH);B.userData.lodLH=LH;buildLighthouse(LH,lx,ly,lz);Object.assign(B.userData,LH.userData,{lodLH:LH});}
   // 滑走路（幅64m×長さ1900m、方位 18/36）。標識は実際の精密進入滑走路の並びに合わせる
