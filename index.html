@@ -1622,9 +1622,21 @@ if(hgt<-1.2)discard;
 float n1=texture2D(tN2,vWP.xz/41.0).b,n2=texture2D(tN2,vWP.xz/263.0).b,n3=texture2D(tN2,vWP.xz/6.7).b,n4=texture2D(tN2,vWP.xz/900.0+0.3).b;
 // 近景用（13m）と中景用（71m・回転）の 2 段で貼り、繰り返しを目立たなくする
 vec2 uA=vWP.xz/13.0,uB=vec2(vWP.x*0.8+vWP.z*0.6,vWP.z*0.8-vWP.x*0.6)/71.0;
-vec4 gA=texture2D(tGr,uA),gB=texture2D(tGr,uB);
-vec3 grass=gA.rgb*gA.rgb*(0.45+1.25*gB.a)*(0.62+0.8*n2);
-grass=mix(grass,grass*vec3(1.75,1.25,0.95)+vec3(0.03,0.02,0.0),smoothstep(0.52,0.72,n4)*0.55);
+// 繰り返しを崩す：向きと縮尺の違う 2 枚を場所ごとのむらで混ぜ、近くは細かい凹凸、遠くは周期の違う 2 つの色むら
+vec2 uA2=vec2(vWP.x*0.54-vWP.z*0.84,vWP.x*0.84+vWP.z*0.54)/11.3+0.37,uC=vec2(vWP.x*0.97+vWP.z*0.26,vWP.z*0.97-vWP.x*0.26)/3.1;
+vec2 uA3=vec2(vWP.x*-0.35+vWP.z*0.94,vWP.x*-0.94-vWP.z*0.35)/17.9+0.71;
+float w1=0.25+texture2D(tN2,vWP.xz/57.0).b,w2=0.25+texture2D(tN2,vWP.xz/57.0+0.43).b,w3=0.25+texture2D(tN2,vWP.xz/57.0+0.77).b;w1*=w1*w1;w2*=w2*w2;w3*=w3*w3;
+vec4 gA=(texture2D(tGr,uA)*w1+texture2D(tGr,uA2)*w2+texture2D(tGr,uA3)*w3)/(w1+w2+w3);float gC=texture2D(tGr,uC).a;
+// 中景の斑：周期の違う 3 枚（71・97・139m、向きもずらす）を混ぜて周期をなくす
+float gBa=(texture2D(tGr,uB).a+texture2D(tGr,vec2(vWP.x*0.31+vWP.z*0.95,vWP.z*0.31-vWP.x*0.95)/97.0+0.29).a+texture2D(tGr,vec2(vWP.x*-0.88+vWP.z*0.47,vWP.x*0.47+vWP.z*0.88)/139.0+0.53).a)/3.0;
+gBa=0.5+(gBa-0.5)*1.6;
+// 遠くでは草の細かい模様（縞に見える）を平均の色へ
+float gd=smoothstep(70.0,420.0,length(vViewPosition));gA.rgb=mix(gA.rgb,vec3(0.27,0.36,0.17),gd*0.75);
+vec3 grass=gA.rgb*gA.rgb*(0.55+1.0*gBa)*(0.62+0.8*n2)*mix(1.0,0.82+0.36*gC,1.0-smoothstep(40.0,160.0,length(vViewPosition)));
+float gq1=texture2D(tN2,vWP.xz/1700.0+0.61).b;float gq2=texture2D(tN2,vec2(vWP.x*0.8-vWP.z*0.6,vWP.x*0.6+vWP.z*0.8)/620.0+0.13).b;float gqm=gq1*0.6+gq2*0.4;
+grass*=mix(vec3(0.66,0.9,0.62),vec3(1.22,1.08,0.82),smoothstep(0.25,0.75,gqm));                              // 青々とした草〜乾き気味
+grass=mix(grass,grass*vec3(1.55,1.22,0.9)+vec3(0.02,0.015,0.0),smoothstep(0.58,0.76,n4*0.5+gq2*0.5)*0.5);     // 枯れ草の斑
+grass=mix(grass,grass*vec3(0.62,0.78,0.6),smoothstep(0.62,0.8,gq1*0.4+n2*0.6)*0.45);                         // 湿った濃い草
 vec3 an=abs(normalize(vNw));vec2 uR=(an.x>an.z?vWP.zy:vWP.xy)/19.0;uR=mix(vWP.xz/19.0,uR,smoothstep(0.25,0.5,slope));
 vec4 rA=texture2D(tRk,uR),rB=texture2D(tRk,uR*0.23+0.37);
 vec4 sA=texture2D(tSd,vWP.xz/9.0);
@@ -1637,7 +1649,8 @@ float mSand=(1.0-smoothstep(3.0,8.0,hgt+(n1-0.5)*3.5))*(1.0-smoothstep(0.3,0.55,
 tc=mix(tc,rock,mRock);tc=mix(tc,sand,mSand);
 // 凹凸（勾配テクスチャ）
 float bf=1.0/(1.0+length(vViewPosition)/260.0);
-vec2 bmp=(texture2D(tGrN,uA).rg-0.5)*1.5*(1.0-mRock)*(1.0-mSand)*(1.0-vColor.r)+(texture2D(tRkN,uR).rg-0.5)*3.2*mRock+(texture2D(tSdN,vWP.xz/9.0).rg-0.5)*1.0*mSand;bmp*=bf;
+vec2 gN=(texture2D(tGrN,uA).rg*w1+texture2D(tGrN,uA2).rg*w2+texture2D(tGrN,uA3).rg*w3)/(w1+w2+w3);
+vec2 bmp=(gN-0.5)*1.1*(1.0-gd*0.8)*(1.0-mRock)*(1.0-mSand)*(1.0-vColor.r)+(texture2D(tRkN,uR).rg-0.5)*3.2*mRock+(texture2D(tSdN,vWP.xz/9.0).rg-0.5)*1.0*mSand;bmp*=bf;
 tc=mix(tc,tc*0.42,1.0-smoothstep(0.1,1.7,hgt));
 {vec2 sl=vWP.xz/7.5,fi=floor(sl),fr=fract(sl);float hs=fract(sin(dot(fi,vec2(12.9898,78.233)))*43758.5453);
   vec3 pv=vec3(0.30,0.305,0.30)*(0.82+0.2*hs)*(0.8+0.4*n3);float jt=max(smoothstep(0.035,0.0,min(fr.x,1.0-fr.x)),smoothstep(0.035,0.0,min(fr.y,1.0-fr.y)));pv*=1.0-0.45*jt;
@@ -1890,7 +1903,9 @@ diffuseColor.rgb=c;`);};
       if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0,o.userData.rock?1:0]);});
     B.userData.colliders=cols;}
   weatherize(B);
-  mergeStatic(HG);mergeStatic(LOD);mergeStatic(B.userData.lodLH);
+  for(const o of B.userData.spin||[])o.userData.dyn=1;for(const o of(B.userData.detail&&B.userData.detail.userData.flags)||[])o.userData.dyn=1;
+  mergeStatic(HG);mergeStatic(LOD);mergeStatic(B.userData.lodLH);mergeStatic(B);
+  {const dg=[];B.traverse(o=>{if(o.userData.dyn&&!o.isMesh&&!o.userData.noWeather&&!o.userData.noMerge)dg.push(o);});for(const g of dg){g.userData.dyn=0;mergeStatic(g);g.userData.dyn=1;}}
 }
 
 // ───────────────────────── 竜巻（海上竜巻） ─────────────────────────
@@ -2490,11 +2505,16 @@ function buildDolphin(){
 
 // ───────────────────────── 格納庫の内装 ─────────────────────────
 // 動かない Mesh を材質ごとに 1 つの形状へまとめる。userData.dyn の付いた枝、非表示のもの、一括描画・点・線・スプライトはそのまま残す
+const MATSIG=new WeakMap();
+function matSig(m){if(MATSIG.has(m))return MATSIG.get(m);let k=m.uuid;
+  if(m.isMeshStandardMaterial&&(!m.hasOwnProperty('onBeforeCompile')||m.userData.wx)){const c=x=>x?x.getHexString():'';k=['S',c(m.color),m.roughness,m.metalness,m.map?m.map.uuid:'',c(m.emissive),m.emissiveIntensity,m.emissiveMap?m.emissiveMap.uuid:'',m.side,m.transparent,m.opacity,m.alphaTest,m.vertexColors,m.polygonOffset,m.polygonOffsetFactor,m.envMapIntensity,m.userData.wx?1:0,m.depthWrite].join('|');}
+  else if(m.isMeshBasicMaterial&&!m.hasOwnProperty('onBeforeCompile')){const c=m.color;k=['B',c.r.toFixed(3),c.g.toFixed(3),c.b.toFixed(3),m.map?m.map.uuid:'',m.side,m.transparent,m.opacity,m.blending,m.depthWrite,m.polygonOffset].join('|');}
+  MATSIG.set(m,k);return k;}
 function mergeStatic(root){
   if(window.__NOMERGE)return;
   root.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),bins=new Map(),kill=[];
-  const walk=o=>{if(o.userData.dyn||!o.visible)return;if(o.isMesh&&!o.isInstancedMesh&&!Array.isArray(o.material)&&o.geometry.attributes.position&&!o.geometry.morphAttributes.position){
-      const k=o.material.uuid+(o.castShadow?'c':'')+(o.receiveShadow?'r':'')+(o.renderOrder||0);let b=bins.get(k);if(!b)bins.set(k,b={m:o.material,c:o.castShadow,r:o.receiveShadow,ro:o.renderOrder,list:[]});b.list.push(o);kill.push(o);}
+  const walk=o=>{if(o.userData.dyn||!o.visible)return;if(o.isMesh&&!o.isInstancedMesh&&!Array.isArray(o.material)&&o.geometry.attributes.position&&!o.geometry.morphAttributes.position&&Object.keys(o.geometry.attributes).every(a=>a==='position'||a==='normal'||a==='uv')){
+      const k=matSig(o.material)+(o.castShadow?'c':'')+(o.receiveShadow?'r':'')+(o.renderOrder||0);let b=bins.get(k);if(!b)bins.set(k,b={m:o.material,c:o.castShadow,r:o.receiveShadow,ro:o.renderOrder,list:[]});b.list.push(o);kill.push(o);}
     for(const c of o.children.slice())walk(c);};
   for(const c of root.children.slice())walk(c);
   const M=new THREE.Matrix4(),N=new THREE.Matrix3(),v=new V3();
@@ -2813,7 +2833,7 @@ function buildPort(B,M){
     // 機械室（後ろ張り出しの上）と手すり
     A(11,5,9.6,wh2,-22,GY+3.6,0);A(11.4,.4,10,pm,-22,GY+6.3,0);for(const z of GZ)A(X2-X0,.08,.08,steel,(X0+X2)/2,GY+2.1,z*1.12);
     // 横行台車（運転室・つり索・つり具・荷）。game.js の animPort が動かす
-    const tro=new THREE.Group();tro.userData.dyn=1;g.add(tro);const T2=(m)=>{g.remove(m);tro.add(m);return m;};
+    const tro=new THREE.Group();tro.userData.dyn=1;tro.userData.noMerge=1;g.add(tro);const T2=(m)=>{g.remove(m);tro.add(m);return m;};
     T2(A(5,1.6,10.6,darkM,36,GY-1.8,0));T2(A(4.4,3,4.4,wh2,36,GY-4.1,-4.4));T2(A(4.5,1.4,.1,glassM,36,GY-4.3,-6.66));
     const r1=T2(A(.14,1,.14,steel,36,26,-1.6)),r2=T2(A(.14,1,.14,steel,36,26,1.6)),sp=T2(A(6.4,.7,12.6,yel,36,16.8,0));
     const bx=new THREE.Mesh(new THREE.BoxGeometry(2.44,2.59,12.19),containerMat());bx.position.set(0,-1.65,0);sp.add(bx);
@@ -4236,7 +4256,8 @@ function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if
     for(let i=0;i<pa.count;i++){const u=(x0[i]+1.8)/3.6;pa.setZ(i,Math.sin(t*6.5-u*5.5)*.32*u+Math.sin(t*11-u*9)*.06*u);pa.setX(i,x0[i]-u*u*.15);}pa.needsUpdate=true;m.geometry.computeVertexNormals();}}
 function animCrew(dt){
   const HG=baseGroup.userData.hangar,cr=HG&&HG.userData.crew;if(!cr)return;
-  if(G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700)return;
+  const far=G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700;if(far!==animCrew.far){animCrew.far=far;for(const c of cr)c.g.visible=!far;}   // 遠いときは描かない
+  if(far)return;
   const pl=HG.worldToLocal(_cl.copy(P.pos)),t=G.t,lit=baseGroup.userData.hlight.intensity>1.1,door=G.doorO||0,pw=P.power||0;
   const gone=pl.z<-160||pl.y>40||Math.abs(pl.x)>80,eng=pw>.2&&!gone,loud=pw>.62&&pl.z>-110,moving=pl.z<-31&&!gone&&pl.z>-400;
   const k=1-Math.exp(-dt*7),D=(o,ax,v)=>{o.rotation[ax]+=(v-o.rotation[ax])*k;};
@@ -4957,7 +4978,7 @@ let sprayTrail,puffs=[],ships=[],dpods=[],tether;const qT=new THREE.Quaternion()
 function initSeaLife(){
   sprayTrail=makeTrail();sprayTrail.mesh.material.uniforms.uColor.value.set(1.0,1.06,1.12);
   for(let i=0;i<70;i++)puffs.push({m:makeBillboard(new V3(.95,1.0,1.06)),life:0,max:1,vel:new V3(),s:1});
-  for(const[k,x,z,h,sp]of[['cargo',-1100,BASE.z-3600,2.5,7],['fish',420,BASE.z-2300,.6,4],['cargo',1700,BASE.z-5400,-.4,7],['fish',-380,BASE.z-4700,3.6,4],['patrol',900,BASE.z-1900,1.9,11],['fish',260,BASE.z-6100,5.2,4]]){const m=buildShip(k);scene.add(m);overlay.add(m.userData.wake);overlay.add(m.userData.bow);ships.push({m,x,z,h,sp,ph:x});}
+  for(const[k,x,z,h,sp]of[['cargo',-1100,BASE.z-3600,2.5,7],['fish',420,BASE.z-2300,.6,4],['cargo',1700,BASE.z-5400,-.4,7],['fish',-380,BASE.z-4700,3.6,4],['patrol',900,BASE.z-1900,1.9,11],['fish',260,BASE.z-6100,5.2,4]]){const m=buildShip(k);if(m.userData.radar)m.userData.radar.userData.dyn=1;mergeStatic(m);scene.add(m);overlay.add(m.userData.wake);overlay.add(m.userData.bow);ships.push({m,x,z,h,sp,ph:x});}
   for(const[x,z]of[[-55,BASE.z-3350],[70,BASE.z-4600],[35,BASE.z-1750]]){const pod={x,z,z0:z,d:[]};for(let i=0;i<5;i++){const m=buildDolphin();m.visible=false;scene.add(m);pod.d.push({m,ox:(i-2)*4.5+((i*7)%3),oz:(i%2)*6+i*2.2,ph:i*.37+x*.01,was:false});}dpods.push(pod);}
   const tg=new THREE.CylinderGeometry(.2,.2,1,6);tg.rotateX(Math.PI/2);tether=new THREE.Mesh(tg,glowMat(new V3(.5,2.6,3.6),0));tether.visible=false;tether.frustumCulled=false;overlay.add(tether);
 }
@@ -5178,7 +5199,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();

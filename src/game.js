@@ -518,7 +518,8 @@ function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if
     for(let i=0;i<pa.count;i++){const u=(x0[i]+1.8)/3.6;pa.setZ(i,Math.sin(t*6.5-u*5.5)*.32*u+Math.sin(t*11-u*9)*.06*u);pa.setX(i,x0[i]-u*u*.15);}pa.needsUpdate=true;m.geometry.computeVertexNormals();}}
 function animCrew(dt){
   const HG=baseGroup.userData.hangar,cr=HG&&HG.userData.crew;if(!cr)return;
-  if(G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700)return;
+  const far=G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700;if(far!==animCrew.far){animCrew.far=far;for(const c of cr)c.g.visible=!far;}   // 遠いときは描かない
+  if(far)return;
   const pl=HG.worldToLocal(_cl.copy(P.pos)),t=G.t,lit=baseGroup.userData.hlight.intensity>1.1,door=G.doorO||0,pw=P.power||0;
   const gone=pl.z<-160||pl.y>40||Math.abs(pl.x)>80,eng=pw>.2&&!gone,loud=pw>.62&&pl.z>-110,moving=pl.z<-31&&!gone&&pl.z>-400;
   const k=1-Math.exp(-dt*7),D=(o,ax,v)=>{o.rotation[ax]+=(v-o.rotation[ax])*k;};
@@ -1239,7 +1240,7 @@ let sprayTrail,puffs=[],ships=[],dpods=[],tether;const qT=new THREE.Quaternion()
 function initSeaLife(){
   sprayTrail=makeTrail();sprayTrail.mesh.material.uniforms.uColor.value.set(1.0,1.06,1.12);
   for(let i=0;i<70;i++)puffs.push({m:makeBillboard(new V3(.95,1.0,1.06)),life:0,max:1,vel:new V3(),s:1});
-  for(const[k,x,z,h,sp]of[['cargo',-1100,BASE.z-3600,2.5,7],['fish',420,BASE.z-2300,.6,4],['cargo',1700,BASE.z-5400,-.4,7],['fish',-380,BASE.z-4700,3.6,4],['patrol',900,BASE.z-1900,1.9,11],['fish',260,BASE.z-6100,5.2,4]]){const m=buildShip(k);scene.add(m);overlay.add(m.userData.wake);overlay.add(m.userData.bow);ships.push({m,x,z,h,sp,ph:x});}
+  for(const[k,x,z,h,sp]of[['cargo',-1100,BASE.z-3600,2.5,7],['fish',420,BASE.z-2300,.6,4],['cargo',1700,BASE.z-5400,-.4,7],['fish',-380,BASE.z-4700,3.6,4],['patrol',900,BASE.z-1900,1.9,11],['fish',260,BASE.z-6100,5.2,4]]){const m=buildShip(k);if(m.userData.radar)m.userData.radar.userData.dyn=1;mergeStatic(m);scene.add(m);overlay.add(m.userData.wake);overlay.add(m.userData.bow);ships.push({m,x,z,h,sp,ph:x});}
   for(const[x,z]of[[-55,BASE.z-3350],[70,BASE.z-4600],[35,BASE.z-1750]]){const pod={x,z,z0:z,d:[]};for(let i=0;i<5;i++){const m=buildDolphin();m.visible=false;scene.add(m);pod.d.push({m,ox:(i-2)*4.5+((i*7)%3),oz:(i%2)*6+i*2.2,ph:i*.37+x*.01,was:false});}dpods.push(pod);}
   const tg=new THREE.CylinderGeometry(.2,.2,1,6);tg.rotateX(Math.PI/2);tether=new THREE.Mesh(tg,glowMat(new V3(.5,2.6,3.6),0));tether.visible=false;tether.frustumCulled=false;overlay.add(tether);
 }
@@ -1460,7 +1461,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();
