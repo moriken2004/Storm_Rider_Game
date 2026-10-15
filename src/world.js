@@ -957,7 +957,7 @@ diffuseColor.rgb=c;`);};
   B.add(runwayLights);
   // 動かない部品は材質ごとに 1 つへまとめる（描画の呼び出し回数を減らす）
   {B.updateMatrixWorld(true);const cols=[],bx=new THREE.Box3(),skip=o=>{for(let q=o;q&&q!==B;q=q.parent)if(q===HG)return true;return false;};
-    B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=o.material;if(Array.isArray(m)||m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;if(o.geometry.attributes.position.count>20000)return;
+    B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=Array.isArray(o.material)?o.material[0]:o.material;if(m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;   // 面ごとに材質が違う建物（bld）も当たり判定に入れるif(o.geometry.attributes.position.count>20000)return;
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
       if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0,o.userData.rock?1:0]);});
     B.userData.colliders=cols;}

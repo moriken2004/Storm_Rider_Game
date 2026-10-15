@@ -1966,7 +1966,7 @@ diffuseColor.rgb=c;`);};
   B.add(runwayLights);
   // 動かない部品は材質ごとに 1 つへまとめる（描画の呼び出し回数を減らす）
   {B.updateMatrixWorld(true);const cols=[],bx=new THREE.Box3(),skip=o=>{for(let q=o;q&&q!==B;q=q.parent)if(q===HG)return true;return false;};
-    B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=o.material;if(Array.isArray(m)||m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;if(o.geometry.attributes.position.count>20000)return;
+    B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=Array.isArray(o.material)?o.material[0]:o.material;if(m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;   // 面ごとに材質が違う建物（bld）も当たり判定に入れるif(o.geometry.attributes.position.count>20000)return;
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
       if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0,o.userData.rock?1:0]);});
     B.userData.colliders=cols;}
@@ -3975,7 +3975,15 @@ function updateArmor(dt){for(const a of P.armor){if(a.life<=0)continue;a.life-=d
 
 // ───────────────────────── プレイヤー ─────────────────────────
 const CEIL={approach:1500,bands:1300,wall:1300,eye:4700,spare:4700,ret:3400};
+// 地面の高さ（島の上は地形、それ以外は海面）
+function groundAt(x,z){const lx=x-BASE.x,lz=z-BASE.z;return Math.abs(lx)<2700&&Math.abs(lz)<3100?Math.max(islandH(lx,lz),0):0;}
+// 航行中の船：船体と上部構造の箱（船の向きに合わせた座標で判定）
+function shipHit(){if(P.pos.y>60)return null;for(const s of ships){if(s.dead)continue;const L=s.m.userData.len,B=s.m.userData.beam,dx=P.pos.x-s.x,dz=P.pos.z-s.z;if(Math.abs(dx)>L||Math.abs(dz)>L)continue;
+    const c=Math.cos(s.h),sn=Math.sin(s.h),lx=dx*c-dz*sn,lz=dx*sn+dz*c,k=s.m.userData.kind;
+    const top=k==='cargo'?(lz>55&&lz<80?48:Math.abs(lz)<70?26:14):k==='patrol'?(Math.abs(lz+5)<10?16:8):(Math.abs(lz-1)<3?7:4.5);
+    if(Math.abs(lx)<B/2+2&&Math.abs(lz)<L/2+2&&P.pos.y<top+2)return{why:{cargo:'貨物船',patrol:'巡視船',fish:'漁船'}[k]+'に激突した'};}return null;}
 function hitTest(){
+  {const sh=shipHit();if(sh)return sh;}
   const lx=P.pos.x-BASE.x,lz=P.pos.z-BASE.z,ly=P.pos.y-RWY_Y;if(!(Math.abs(lx)<2300&&Math.abs(lz)<2600&&P.pos.y<460))return null;
   const hz=lz-HANGAR_Z;if(Math.abs(lx)<53&&Math.abs(hz)<92&&ly<41&&!(Math.abs(lx)<42&&ly<25.5&&hz<85))return{why:'格納庫に激突した'};
   const x=P.pos.x,y=P.pos.y,z=P.pos.z,cy=Math.cos(P.yaw),sy=Math.sin(P.yaw),name=c=>lx>1050?(c&&c[6]?'港の照明塔':'港の施設'):(Math.hypot(lx-250,lz+1330)<40?'灯台':(c&&c[6]&&c[4]-c[1]>45&&lx<-200?'風車':(c&&c[6]?'基地の柱':'基地の建物')));
@@ -4845,7 +4853,7 @@ function dogfight(f,i,dt){
   const wp=clamp(Math.atan2(tD.y,Math.hypot(tD.x,tD.z)),-.5,.5);f.pitch=damp(f.pitch,wp,1.6,dt);
   // 速さ：追いつくまでは速く、すぐ後ろに来たら合わせる（近すぎると前へ飛び出す）
   const ts=off<.6&&dist<450?Math.max(150,P.speed+10):(f.extT>0?262:f.evT>0?238:245);f.spd=damp(f.spd,ts,.8,dt);
-  fwdOf(f.yaw,f.pitch,tA);f.vel.copy(tA).multiplyScalar(f.spd);f.pos.addScaledVector(f.vel,dt);if(f.pos.y<40)f.pos.y=40;
+  fwdOf(f.yaw,f.pitch,tA);f.vel.copy(tA).multiplyScalar(f.spd);f.pos.addScaledVector(f.vel,dt);{const fl=groundAt(f.pos.x,f.pos.z)+40;if(f.pos.y<fl)f.pos.y=fl;}
   f.off=off;f.dist=dist;f.pNose=pNose;
   f.mesh.position.copy(f.pos);f.mesh.rotation.set(f.pitch,f.yaw,f.roll,'YXZ');f.mesh.userData.setPower(sat((f.spd-140)/180));f.mesh.userData.beacon.visible=(G.t*1.2+i*.4)%1<.12;
 }
@@ -4882,7 +4890,7 @@ function updateIntercept(dt){
   // ── 迎撃機の動き
   ICP.f.forEach((f,i)=>{if(!f.mesh.visible)return;
     if(f.dead){f.downT+=dt;f.vel.y-=14*dt;f.pos.addScaledVector(f.vel,dt);f.roll+=dt*(3+f.downT)*f.sd;f.pitch=damp(f.pitch,-1,.8,dt);f.mesh.position.copy(f.pos);f.mesh.rotation.set(f.pitch,f.yaw,f.roll,'YXZ');f.mesh.userData.setPower(0);
-      if(Math.random()<dt*40)puff(f.pos.x,f.pos.y,f.pos.z,0,3,0,5+Math.random()*3,1.6,.85);if(f.pos.y<5||f.downT>9){explode(f.pos,.6);f.mesh.visible=false;}return;}
+      if(Math.random()<dt*40)puff(f.pos.x,f.pos.y,f.pos.z,0,3,0,5+Math.random()*3,1.6,.85);if(f.pos.y<groundAt(f.pos.x,f.pos.z)+5||f.downT>9){explode(f.pos,.6);f.mesh.visible=false;}return;}
     let vmax=560;
     if(ICP.st<=3){tC.copy(P.pos).addScaledVector(tB,f.sd*(34+i*4)).addScaledVector(tA,10-i*16);tC.y+=5+i*3+Math.sin(G.t*1.1+i*2)*1.5;}
     else if(ICP.st===4){const wv=Math.sin(G.t*.7+i*2.6);tC.copy(P.pos).addScaledVector(tA,-(430+i*190)).addScaledVector(tB,f.sd*(60+i*50)+wv*90);tC.y+=45+i*30+Math.cos(G.t*.9+i)*25;vmax=340;}
@@ -4890,7 +4898,7 @@ function updateIntercept(dt){
     if(ICP.st===4){dogfight(f,i,dt);return;}
     // 目標の位置との差に比例した速度を、隊長機の速度に上乗せする（離脱中は自分の針路だけ）
     tD.subVectors(tC,f.pos);const L=tD.length();tD.multiplyScalar(Math.min(1.3,vmax/Math.max(L,1)));if(ICP.st<=4)tD.add(P.vel);f.vel.lerp(tD,Math.min(1,dt*2.6));
-    f.pos.addScaledVector(f.vel,dt);if(f.pos.y<30)f.pos.y=30;
+    f.pos.addScaledVector(f.vel,dt);{const fl=groundAt(f.pos.x,f.pos.z)+30;if(f.pos.y<fl)f.pos.y=fl;}
     const v=f.vel,h=Math.hypot(v.x,v.z);let wy=h>20?Math.atan2(-v.x,-v.z):f.yaw;if(ICP.st<=3&&L<220)wy=P.yaw;let dy=wy-f.yaw;while(dy>Math.PI)dy-=6.2832;while(dy<-Math.PI)dy+=6.2832;
     f.yaw+=dy*Math.min(1,dt*2.4);f.roll=damp(f.roll,clamp(-dy*1.6,-1.1,1.1)+(ICP.st<=3&&L<220?P.roll*.8:0),3,dt);f.pitch=damp(f.pitch,clamp(Math.atan2(v.y,Math.max(h,60)),-.6,.6),2.5,dt);
     f.mesh.position.copy(f.pos);f.mesh.rotation.set(f.pitch,f.yaw,f.roll,'YXZ');f.mesh.userData.setPower(sat((f.vel.length()-140)/260));f.mesh.userData.beacon.visible=(G.t*1.2+i*.4)%1<.12;

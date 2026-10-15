@@ -16,6 +16,7 @@ const T=[
   ['設定画面の機体プレビュー','preview.mjs',[],o=>!/✗/.test(o)&&/✓/.test(o)],
   ['画面遷移とキー操作','ui.mjs',[],o=>/問題 0 件/.test(o)],
   ['画面遷移（スマートフォン）','ui.mjs',['mobile'],o=>/問題 0 件/.test(o)],
+  ['建物と船の当たり判定','hit.mjs',[],o=>(o.match(/激突/g)||[]).length>=7&&/高さ60: 通り抜けた/.test(o)],
   ['自動の画質調整','adapt.mjs',[],o=>/その後3 \{"scale":1,"tier":0/.test(o)],
 ];
 const run=(f,a)=>new Promise(res=>{const p=spawn(process.execPath,[new URL('./'+f,import.meta.url).pathname,...a]);let o='';p.stdout.on('data',d=>o+=d);p.stderr.on('data',d=>o+=d);p.on('close',c=>res({o,c}));});
