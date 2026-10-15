@@ -2245,6 +2245,8 @@ function buildShip(kind){
     acc(24,15,13,yA,64);acc(22,6,11,yA+15,63);acc(30,3,9,yA+21,62,bm);M(new THREE.BoxGeometry(31,.5,10),wht,0,yA+24.2,62);
     for(const s of[-1,1]){M(new THREE.BoxGeometry(2.4,1.2,7),wht,s*15.6,yA+21.6,62);light(s*15.8,yA+22.6,60,s<0?new THREE.Color(2.6,.2,.15):new THREE.Color(.2,2.4,.5),2.4);}
     for(let k=0;k<6;k++)M(new THREE.BoxGeometry(24.4,.25,.6),wht,0,yA+3*k+3,57.2);   // 各層の張り出し通路
+    {const cw=winTex('grey');const cm2=C(0xffffff,.6,.15,{map:cw});const cs=M(boxM(10,24.4,11,[16,6]),cm2,0,yA+12.2,72.5);M(new THREE.BoxGeometry(10.6,.4,11.6),wht,0,yA+24.5,72.5);
+      for(let k=1;k<8;k++)M(new THREE.BoxGeometry(10.3,.2,.5),wht,0,yA+3*k,78.2);}   // 囲壁と後ろの通路
     const fun=M(new THREE.CylinderGeometry(3.2,4.2,12,4,1),C(0x1d2c44,.55,.35),0,yA+30,72);fun.rotation.y=Math.PI/4;fun.scale.set(1,1,1.5);
     const band=M(new THREE.CylinderGeometry(3.45,3.62,2.2,4,1,true),C(0xdedfd8,.6,.1),0,yA+31.5,72);band.rotation.y=Math.PI/4;band.scale.set(1,1,1.5);
     const band2=M(new THREE.CylinderGeometry(3.38,3.45,.7,4,1,true),C(0xa4302a,.6,.1),0,yA+31.5,72);band2.rotation.y=Math.PI/4;band2.scale.set(1.01,1,1.51);
@@ -2252,8 +2254,8 @@ function buildShip(kind){
     M(new THREE.CylinderGeometry(.25,.35,9,8),wht,0,yA+29,60);M(new THREE.BoxGeometry(6,.25,.25),wht,0,yA+31,60);
     const rdr=M(new THREE.BoxGeometry(5.2,.35,.5),dark,0,yA+33.8,60);g.userData.radar=rdr;M(new THREE.CylinderGeometry(.5,.5,.6,10),wht,0,yA+33.3,60);
     M(new THREE.BoxGeometry(3.6,.3,.4),dark,2.6,yA+26,63.5);
-    const lb=M(new THREE.SphereGeometry(1,16,10),C(0xe06a1c,.55,.1),0,yA+5,74);lb.scale.set(1.6,1.5,4.2);lb.rotation.x=.5;
-    M(new THREE.BoxGeometry(1.2,.3,10),stl,-1.8,yA+3.5,75).rotation.x=.5;M(new THREE.BoxGeometry(1.2,.3,10),stl,1.8,yA+3.5,75).rotation.x=.5;
+    const lb=M(new THREE.SphereGeometry(1,16,10),C(0xe06a1c,.55,.1),0,yA+5,86);lb.scale.set(1.6,1.5,4.2);lb.rotation.x=.5;
+    M(new THREE.BoxGeometry(1.2,.3,10),stl,-1.8,yA+3.5,87).rotation.x=.5;M(new THREE.BoxGeometry(1.2,.3,10),stl,1.8,yA+3.5,87).rotation.x=.5;
     for(const s of[-1,1]){const rl=M(new THREE.BoxGeometry(.12,.12,150),wht,s*14.7,o.D+1.1,-6);for(let k=0;k<30;k++)M(new THREE.BoxGeometry(.08,1.1,.08),wht,s*14.7,o.D+.55,-80+k*5);}
     navLights(yA+38,60,yA+22.6,60,15.8);light(0,yA+3,80,new THREE.Color(2.4,2.3,2),3);
     for(const[x,y,z]of[[-11,yA+16,57],[11,yA+16,57]])light(x,y,z,new THREE.Color(2.2,2,1.6),4);
