@@ -3234,6 +3234,94 @@ function detailBase(B0,M){
   // 管制塔の胴に窓の帯、足元に基部棟
   for(let k=0;k<5;k++){const w=new THREE.Mesh(new THREE.CylinderGeometry(4.6-k*.42,4.8-k*.42,1.1,12,1,true),new THREE.MeshBasicMaterial({color:new THREE.Color(.18,.5,.6)}));w.position.set(200,RWY_Y+10+k*12,360);B.add(w);}
   bld(26,7,20,200,RWY_Y+3.5,360,wallA);
+  baseBuildings(B,{bld,box,facade,cv,wallA,wallB,roof,hullM,paleM,darkM,glassM,cyM,amM,copperM,brassM});
+}
+// 基地の建物の作り込み：格納庫の外まわり、本棟の玄関、管制塔、燃料タンク、新しい建物（消防庁舎・整備工場・変電所・職員宿舎）
+function baseBuildings(B,M){
+  const{bld,box,facade,cv,wallA,wallB,roof,hullM,paleM,darkM,glassM,cyM,amM,copperM,brassM}=M,r=mulberry(77),Y=RWY_Y,P=(x,y,z)=>new V3(x,y,z);
+  const steel=std({color:lin(0x8d949a),roughness:.45,metalness:.75}),concM=std({color:lin(0xa8a59c),roughness:.9,metalness:0}),redM=std({color:lin(0xa8281c),roughness:.55,metalness:.2});
+  const mesh=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;B.add(o);return o;};
+  // 屋上の空調機（箱＋ファン）
+  const acUnit=(x,y,z,ry)=>{const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry||0;B.add(g);const b=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.6,2.2),paleM);b.position.y=.8;g.add(b);
+    for(const dx of[-.8,.8]){const f=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.12,16),darkM);f.position.set(dx,1.66,0);g.add(f);}const gr=new THREE.Mesh(new THREE.BoxGeometry(3.3,.08,.2),darkM);gr.position.set(0,.4,1.12);g.add(gr);};
+  // 巻き上げ扉の絵柄
+  const doorT=cv(256,256,(x,w,h)=>{x.fillStyle='#9aa1a4';x.fillRect(0,0,w,h);for(let i=0;i<32;i++){x.fillStyle=i%2?'rgba(0,0,0,.16)':'rgba(255,255,255,.1)';x.fillRect(0,i*8,w,4);}x.fillStyle='rgba(0,0,0,.35)';x.fillRect(0,h-10,w,10);x.fillStyle='#d9a21b';for(let i=0;i<8;i++)x.fillRect(i*32+(i%2)*0,h-10,16,10);});
+  const doorM=std({map:doorT,roughness:.6,metalness:.45});
+  // ── 格納庫の外まわり（中心 0, Y, 1085、壁は x=±49 で外へ 0.1 傾く）
+  {const HZ=1085;
+    for(const sd of[-1,1]){
+      // 両脇の作業棟（窓のある低い棟 2 つ）と、その屋上の空調機・換気筒
+      for(const[z0,L]of[[-62,58],[18,62]]){const wx=sd*58.5;bld(10.5,8,L,wx,Y+4,HZ+z0+L/2-29,wallB);box(B,11.2,.5,L+.6,copperM,wx,Y+8.2,HZ+z0+L/2-29,true);
+        for(let k=0;k<Math.floor(L/16);k++)acUnit(wx,Y+8.45,HZ+z0-29+8+k*16,0);
+        for(let k=0;k<3;k++){const v=mesh(new THREE.CylinderGeometry(.35,.35,2.4,10),steel,wx+sd*2.5,Y+9.6,HZ+z0-29+6+k*L/3);}
+        const dz=HZ+z0-29+L/2;const dr=mesh(new THREE.BoxGeometry(.2,4.2,5.5),doorM,sd*63.8,Y+2.1,dz);box(B,.6,.4,6.6,darkM,sd*63.9,Y+4.45,dz);}
+      // 控え柱（21m ごと）と地面への筋交い
+      for(let k=-4;k<=4;k++){const z=HZ+k*21,top=P(sd*50.9,Y+30.5,z),bot=P(sd*53.6,Y,z);beam(B,bot,top,1.4,hullM,2.2);if(Math.abs(k)===4||k===0){}else beam(B,P(sd*63.5,Y+.3,z),P(sd*52.6,Y+16,z),.7,steel);}
+      // 雨どいと縦どい
+      box(B,.6,.6,178,darkM,sd*51.7,Y+30.8,HZ,false);for(let k=-4;k<=2;k+=2){const dp=mesh(new THREE.CylinderGeometry(.18,.18,30,8),darkM,sd*52.8,Y+15.4,HZ+k*21+10.5);dp.rotation.z=sd*.09;}}
+    // 屋根の頂部：明かり取りの帯と換気口
+    const sky=std({color:lin(0x9fb6c2),roughness:.15,metalness:.6});box(B,9,.35,170,sky,0,Y+38.9,HZ,false);for(const sd of[-1,1])box(B,.5,.9,170,darkM,sd*4.7,Y+38.8,HZ,false);
+    for(let k=-3;k<=3;k++){const v=mesh(new THREE.CylinderGeometry(1.1,1.4,1.8,12),steel,(k%2?11:-11),Y+37.4,HZ+k*24);const c=mesh(new THREE.ConeGeometry(1.6,.9,12),steel,(k%2?11:-11),Y+38.7,HZ+k*24);}
+    // 背面のよろい戸と非常階段
+    for(let k=-2;k<=2;k++){const lv=mesh(new THREE.BoxGeometry(7,4,.4),darkM,k*16,Y+24,HZ+91.4);for(let j=0;j<6;j++)box(B,6.8,.12,.5,steel,k*16,Y+22.3+j*.65,HZ+91.6);}
+    for(let k=0;k<4;k++){beam(B,P(30+k*0,Y+k*6,HZ+93),P(42,Y+(k+1)*6,HZ+93),.5,steel,1.6);box(B,4,.25,2,steel,44,Y+(k+1)*6,HZ+93);}
+    beam(B,P(46,Y,HZ+93),P(46,Y+24.3,HZ+93),.3,steel);beam(B,P(42,Y,HZ+94),P(42,Y+24.3,HZ+94),.3,steel);}
+  // ── 本棟（中心 330, 400、正面は z=362 の北側）
+  {const fz=361.5;
+    box(B,40,1,12,copperM,330,Y+9.2,fz-5,true);box(B,40.6,.4,12.6,brassM,330,Y+9.8,fz-5,false);                  // 玄関ひさし
+    for(let k=0;k<6;k++){const c=mesh(new THREE.CylinderGeometry(.55,.65,8.7,16),paleM,312+k*7.2,Y+4.35,fz-10);const cap=mesh(new THREE.CylinderGeometry(.9,.6,.5,16),brassM,312+k*7.2,Y+8.6,fz-10);}
+    for(let k=0;k<3;k++)box(B,44-k*2,.3,3-k*.6,concM,330,Y+.15+k*.3,fz-12.5+k*.5,true);                          // 階段
+    for(const dx of[-6,0,6]){box(B,4.2,5.6,.2,glassM,330+dx,Y+2.8,fz-.1,false);box(B,4.6,.3,.3,brassM,330+dx,Y+5.75,fz-.15,false);}  // 玄関のガラス扉
+    {const t=cv(1024,96,(x,w,h)=>{x.fillStyle='rgba(0,0,0,0)';x.clearRect(0,0,w,h);x.fillStyle='#d9b45c';x.font='600 54px "Helvetica Neue",Arial';x.textAlign='center';x.textBaseline='middle';x.fillText('MIZUHA  WEATHER  CONTROL  CENTER',w/2,h/2);});
+      const sg=new THREE.Mesh(new THREE.PlaneGeometry(34,3.2),new THREE.MeshStandardMaterial({map:t,transparent:true,roughness:.4,metalness:.8}));sg.rotation.y=Math.PI;sg.position.set(330,Y+11.6,fz-11.3);sg.rotation.y=Math.PI;B.add(sg);}
+    // 旗竿 3 本と旗
+    for(let k=0;k<3;k++){const x=318+k*12;mesh(new THREE.CylinderGeometry(.12,.16,14,8),steel,x,Y+7,fz-26);mesh(new THREE.SphereGeometry(.25,8,6),brassM,x,Y+14.1,fz-26);
+      const fl=new THREE.Mesh(new THREE.PlaneGeometry(3.6,2.2,8,1),std({color:lin([0x1f4f8f,0xe8e6dc,0x1c6a70][k]),roughness:.8,side:THREE.DoubleSide}));fl.position.set(x+1.85,Y+12.6,fz-26);fl.userData.flag=1;(B.userData.flags=B.userData.flags||[]).push(fl);B.add(fl);}
+    // 屋上の手すり（低層の屋根のふち）と給水槽
+    for(const[a,b]of[[[256,362.2],[404,362.2]],[[256,437.8],[404,437.8]]]){box(B,b[0]-a[0],.08,.08,steel,(a[0]+b[0])/2,Y+15.6,a[1],false);for(let x=a[0];x<=b[0];x+=3)box(B,.08,1,.08,steel,x,Y+15.1,a[1],false);}
+    mesh(new THREE.CylinderGeometry(3,3,4,20),paleM,390,Y+16.6,372);for(let k=0;k<4;k++){const a=k*1.571+.785;mesh(new THREE.CylinderGeometry(.2,.2,2,6),steel,390+Math.cos(a)*2.4,Y+15.6,372+Math.sin(a)*2.4);}
+    for(const[x,z]of[[270,372],[270,428],[392,428],[262,400]])acUnit(x,Y+14.6,z,0);}
+  // ── 管制塔：管制室の窓枠とキャットウォーク、頂部のアンテナ
+  {for(let k=0;k<20;k++){const a=k/20*6.283;const m=mesh(new THREE.BoxGeometry(.25,4.4,.25),darkM,200+Math.cos(a)*12.6,Y+70,360+Math.sin(a)*12.6);m.rotation.y=-a;}
+    for(let k=0;k<36;k++){const a=k/36*6.283;box(B,.08,1.1,.08,steel,200+Math.cos(a)*16.4,Y+71.8,360+Math.sin(a)*16.4,false);}
+    const rl=new THREE.Mesh(new THREE.TorusGeometry(16.4,.06,4,64),steel);rl.rotation.x=Math.PI/2;rl.position.set(200,Y+72.3,360);B.add(rl);
+    for(const[dx,dz,h]of[[3,0,9],[-2,2.5,6],[-1.5,-3,7]]){mesh(new THREE.CylinderGeometry(.06,.1,h,6),steel,200+dx,Y+79+h/2,360+dz);}
+    mesh(new THREE.BoxGeometry(2.2,.2,.3),darkM,203,Y+86,360);}
+  // ── 燃料タンク：斜めの階段・頂部の手すり・防油堤
+  {for(let k=0;k<3;k++){const z=-40+k*44;
+      for(let j=0;j<16;j++){const a=-.6+j*.09,y=Y+1+j*1.18;box(B,1.4,.12,.9,steel,440+Math.cos(a)*15.6,y,z+Math.sin(a)*15.6,false).rotation.y=-a;}
+      beam(B,P(440+Math.cos(-.6)*16.3,Y,z+Math.sin(-.6)*16.3),P(440+Math.cos(.75)*16.3,Y+19.8,z+Math.sin(.75)*16.3),.12,steel);
+      const tr=new THREE.Mesh(new THREE.TorusGeometry(14.2,.07,4,56),steel);tr.rotation.x=Math.PI/2;tr.position.set(440,Y+21.3,z);B.add(tr);for(let j=0;j<24;j++){const a=j/24*6.283;box(B,.08,1.2,.08,steel,440+Math.cos(a)*14.2,Y+20.7,z+Math.sin(a)*14.2,false);}}
+    for(const[w,d,x,z]of[[44,1,440,-66],[44,1,440,74],[1,140,418,4],[1,140,462,4]])box(B,w,1.6,d,concM,x,Y+.8,z,true);}
+  // ── 消防庁舎（道の南、扉は道の側 +z）
+  {const cx=325,cz=262;bld(44,9,20,cx,Y+4.5,cz,wallB);box(B,45,.6,21,copperM,cx,Y+9.3,cz,true);
+    for(let k=0;k<4;k++){const x=cx-16.5+k*11;mesh(new THREE.BoxGeometry(8,6,.2),doorM,x,Y+3,cz+10.05);box(B,9,.6,.6,redM,x,Y+6.3,cz+10.2,false);for(const dx of[-4.3,4.3])box(B,.6,6.6,.6,redM,x+dx,Y+3.3,cz+10.2,false);}
+    bld(5,20,5,cx+24.5,Y+10,cz-6,wallA);box(B,6,.6,6,copperM,cx+24.5,Y+20.3,cz-6,true);                                     // ホース乾燥塔
+    {const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(3,.3,.2),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(cx+24.5,Y+21.4,cz-6);sp.scale.set(3,3,1);B.add(glowLOD(sp,90,.2));}
+    for(const x of[cx-13,cx+2])acUnit(x,Y+9.6,cz-4,0);
+    for(let k=0;k<2;k++){const v=buildVehicle('fire',0xb3261c);v.position.set(cx-16.5+k*11,Y,cz+17);v.rotation.y=Math.PI;B.add(v);}}
+  // ── 整備工場（のこぎり屋根）
+  {const cx=405,cz=262,W=34,D=24;bld(W,8,D,cx,Y+4,cz,wallA);
+    for(let k=0;k<4;k++){const x0=cx-W/2+k*(W/4);const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(W/4,0);sh.lineTo(W/4,3.6);sh.lineTo(0,0);const g=new THREE.ExtrudeGeometry(sh,{depth:D,bevelEnabled:false});const m=mesh(g,roof,x0,Y+8,cz-D/2);
+      const gl=mesh(new THREE.BoxGeometry(.15,3.2,D-1),std({color:lin(0x9fb6c2),roughness:.15,metalness:.6}),x0+W/4-.1,Y+9.7,cz);}
+    mesh(new THREE.BoxGeometry(9,6.5,.2),doorM,cx-6,Y+3.25,cz+12.05);mesh(new THREE.BoxGeometry(9,6.5,.2),doorM,cx+7,Y+3.25,cz+12.05);
+    beam(B,P(cx+W/2+.4,Y,cz-6),P(cx+W/2+.4,Y+11.8,cz-6),.12,steel);beam(B,P(cx+W/2+.4,Y,cz-5.4),P(cx+W/2+.4,Y+11.8,cz-5.4),.12,steel);for(let j=0;j<24;j++)box(B,.1,.06,.6,steel,cx+W/2+.4,Y+.4+j*.48,cz-5.7,false);
+    const tug=buildVehicle('tug',0xd9a21b);tug.position.set(cx+14,Y,cz+18);tug.rotation.y=2.6;B.add(tug);}
+  // ── 変電所（本棟の南）：基礎・変圧器・がいし・鉄骨の架構・フェンス
+  {const cx=330,cz=500;box(B,34,.3,24,concM,cx,Y+.15,cz,true);
+    const tf=std({color:lin(0x6e7a6e),roughness:.6,metalness:.4});for(let k=0;k<3;k++){const x=cx-10+k*10;mesh(new THREE.BoxGeometry(4.4,3.6,3.2),tf,x,Y+2.1,cz-3);for(let j=0;j<7;j++)box(B,4.6,2.6,.08,tf,x,Y+2,cz-1.3+(j-3)*.0,false).position.z=cz-1.25-(j%2)*.0;
+      for(let j=0;j<3;j++){mesh(new THREE.CylinderGeometry(.18,.25,1.6,10),std({color:lin(0x8a5a3a),roughness:.3,metalness:.1}),x-1.2+j*1.2,Y+4.7,cz-3);}}
+    for(const x of[cx-15,cx-5,cx+5,cx+15]){beam(B,P(x,Y,cz+6),P(x,Y+12,cz+6),.35,steel);beam(B,P(x,Y,cz-8),P(x,Y+12,cz-8),.35,steel);beam(B,P(x,Y+12,cz-8),P(x,Y+12,cz+6),.3,steel);beam(B,P(x,Y,cz-8),P(x,Y+12,cz+6),.15,steel);}
+    beam(B,P(cx-15,Y+12,cz+6),P(cx+15,Y+12,cz+6),.3,steel);beam(B,P(cx-15,Y+12,cz-8),P(cx+15,Y+12,cz-8),.3,steel);
+    {const wm=new THREE.LineBasicMaterial({color:0x222426}),pts=[];for(let k=0;k<3;k++){const x=cx-10+k*10;pts.push(x-1.2,Y+5.5,cz-3,x-1.2,Y+11.8,cz+6,x+1.2,Y+5.5,cz-3,x+1.2,Y+11.8,cz+6);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));B.add(new THREE.LineSegments(g,wm));}
+    const fp=new THREE.InstancedMesh(new THREE.CylinderGeometry(.06,.06,2.6,5),darkM,80),d=new THREE.Object3D();let n=0;for(const[a,b]of[[[cx-18,cz-13],[cx+18,cz-13]],[[cx+18,cz-13],[cx+18,cz+13]],[[cx+18,cz+13],[cx-18,cz+13]],[[cx-18,cz+13],[cx-18,cz-13]]]){const L=Math.hypot(b[0]-a[0],b[1]-a[1]);for(let t=0;t<L;t+=3){d.position.set(a[0]+(b[0]-a[0])*t/L,Y+1.3,a[1]+(b[1]-a[1])*t/L);d.updateMatrix();fp.setMatrixAt(n++,d.matrix);}
+      const rl=new THREE.Mesh(new THREE.BoxGeometry(L,.06,.06),steel);rl.position.set((a[0]+b[0])/2,Y+2.55,(a[1]+b[1])/2);rl.rotation.y=-Math.atan2(b[1]-a[1],b[0]-a[0]);B.add(rl);}
+    fp.count=n;B.add(fp);}
+  // ── 職員宿舎（3 階建て、ベランダと屋上の水槽）
+  {const cx=405,cz=505,dorm=std({map:facade(3,22,.35),roughness:.75,metalness:.05});bld(48,11,14,cx,Y+5.5,cz,dorm);box(B,49,.5,15,copperM,cx,Y+11.25,cz,true);
+    for(let f=1;f<3;f++){box(B,48,.25,1.6,concM,cx,Y+f*3.67,cz-7.8,true);box(B,48,.9,.08,steel,cx,Y+f*3.67+.55,cz-8.55,false);}
+    mesh(new THREE.BoxGeometry(6,2.4,4),paleM,cx+16,Y+12.7,cz);for(const dx of[-4,6])acUnit(cx+dx,Y+11.5,cz+2,0);
+    bld(6,3.2,5,cx-27,Y+1.6,cz-3,wallB);}
 }
 
 // ───────────────────────── 音（すべて WebAudio で合成） ─────────────────────────
@@ -4142,6 +4230,10 @@ const GH=o=>RWY_Y+3.6*o.mesh.scale.y,GP=(o,p)=>(2.3*Math.sin(Math.max(p,0))+3.6*
 function setDoors(o){G.doorO=o;const d=baseGroup.userData.doors;d[0].position.x=-23.75-o*46.5;d[1].position.x=23.75+o*46.5;}
 // ── 格納庫の整備員：灯り・扉・エンジン出力・機体の位置を見て動く
 const _cl=new V3(),_cw=new V3();
+// 本棟の前の旗：根元から先へ行くほど大きく波打つ
+function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if(!fl)return;if(camera.position.distanceTo(_cw.set(BASE.x+330,RWY_Y,BASE.z+335))>900)return;const t=G.t;
+  for(const m of fl){const pa=m.geometry.attributes.position;if(!m.userData.x0)m.userData.x0=Float32Array.from({length:pa.count},(_,i)=>pa.getX(i));const x0=m.userData.x0;
+    for(let i=0;i<pa.count;i++){const u=(x0[i]+1.8)/3.6;pa.setZ(i,Math.sin(t*6.5-u*5.5)*.32*u+Math.sin(t*11-u*9)*.06*u);pa.setX(i,x0[i]-u*u*.15);}pa.needsUpdate=true;m.geometry.computeVertexNormals();}}
 function animCrew(dt){
   const HG=baseGroup.userData.hangar,cr=HG&&HG.userData.crew;if(!cr)return;
   if(G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700)return;
@@ -4790,7 +4882,7 @@ function updateCommon(dt){
   if(coreShell.visible){const d=camera.position.distanceTo(CORE),s=clamp(d*.07,34,460);coreShell.position.copy(CORE);coreShell.scale.setScalar(s);coreShell.quaternion.copy(camera.quaternion);coreShell.userData.inner.rotation.z+=dt*(G.lock>0?2.4:.5);
     const lk=G.lock>=1,pu=.75+.25*Math.sin(G.t*(lk?16:3));coreShell.traverse(o=>{if(o.isMesh){o.material.uniforms.uAlpha.value=pu;o.material.uniforms.uColor.value.set(lk?3.4:2.4,lk?.5:1.5,lk?.3:.5);}});}
   if(boomFx.visible){boomFx.userData.t+=dt;const u=boomFx.userData.t/1.4,s=boomFx.userData.t>=1.05&&G.mode!=='cut'?14*(1.5-u):80+u*520;boomFx.scale.set(s,s,1);boomFx.quaternion.copy(camera.quaternion);boomFx.material.uniforms.uAlpha.value=Math.max(0,1-u)*2;if(u>=1)boomFx.visible=false;}
-  updateSeaLife(dt);strUpdate(dt);animCrew(dt);
+  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();
   if(strikeGlow&&strikeGlow.visible){const g=strikeGlow;g.userData.t+=dt;const u=g.userData.t/.45,s=260+u*520;g.scale.set(s,s*.5,1);g.quaternion.copy(camera.quaternion);g.material.uniforms.uAlpha.value=Math.max(0,1-u)*(0.6+0.4*Math.sin(G.t*90));if(u>=1)g.visible=false;}
   rings.forEach((r,i)=>{if(r.visible)r.rotation.z+=dt*.6;});
   gateRings.forEach(r=>{if(r.visible)r.material.uniforms.uAlpha.value=.7+.3*Math.sin(G.t*4);});
