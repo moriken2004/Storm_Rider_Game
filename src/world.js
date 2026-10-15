@@ -806,7 +806,7 @@ diffuseColor.rgb=c;`);};
   hangarInterior(HG,{hullM,paleM,darkM,glassM,cyM,amM,whM,box});
   B.userData.cones=hangarDetail(HG,{hullM,paleM,darkM,glassM,cyM,amM,whM,box});
   const doors=[-1,1].map(s=>{const d=new THREE.Group();d.userData.dyn=true;d.position.set(s*23.75,0,-88.5);HG.add(d);
-    box(d,47.5,28,1.6,std({color:lin(0x4f6e70),roughness:.6,metalness:.4}),0,14,0,true);box(d,47.38,1.2,1.8,darkM,0,9,0);box(d,47.38,1.2,1.8,darkM,0,19,0);box(d,40,.5,.3,amM,0,14,-.9);{const dm=new THREE.Mesh(new THREE.PlaneGeometry(47.3,27.8),B.userData.cones.doorM);dm.position.set(0,14,.82);d.add(dm);for(const y of[4.5,14,23.5])box(d,47.5,.5,.5,darkM,0,y,1.0);}return d;});
+    box(d,47.5,27.8,1.6,std({color:lin(0x4f6e70),roughness:.6,metalness:.4}),0,13.9,0,true);box(d,47.38,1.2,1.8,darkM,0,9,0);box(d,47.38,1.2,1.8,darkM,0,19,0);box(d,40,.5,.3,amM,0,14,-.9);{const dm=new THREE.Mesh(new THREE.PlaneGeometry(47.3,27.8),B.userData.cones.doorM);dm.position.set(0,14,.82);d.add(dm);for(const y of[4.5,14,23.5])box(d,47.5,.5,.5,darkM,0,y,1.0);}return d;});
   const hlight=new THREE.PointLight(0xcfe2ff,2.2,300,1.4);hlight.position.set(0,27,0);HG.add(hlight);
   B.userData.hangar=HG;B.userData.doors=doors;B.userData.hlight=hlight;B.userData.strip=whM;
   // 滑走路の縁の発光ライン
@@ -1290,7 +1290,7 @@ function hullGeo(o){
     for(let j=0;j<n-1;j++){if(sd>0)I.push(c0,c0+1+j,c0+2+j);else I.push(c0,c0+2+j,c0+1+j);}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));g.setIndex(I);g.computeVertexNormals();return g;};
   // 甲板：左右の舷縁を結ぶ帯
-  const DP=[],DU=[],DI=[];S.forEach((s,i)=>{const z=zOf(s.u,s.dk,s);DP.push(-s.dW,s.dk,z,s.dW,s.dk,z);DU.push(0,s.u*L/8,1,s.u*L/8);if(i<S.length-1){const a=i*2;DI.push(a,a+2,a+1,a+1,a+2,a+3);}});
+  const DP=[],DU=[],DI=[];S.forEach((s,i)=>{const z=zOf(s.u,s.dk,s);for(let k=0;k<=4;k++){const xx=-s.dW+s.dW*k/2;DP.push(xx,s.dk,z);DU.push(.5+xx/B,s.u*L/8);}if(i<S.length-1){const a=i*5;for(let k=0;k<4;k++)DI.push(a+k,a+5+k,a+k+1,a+k+1,a+5+k,a+6+k);}});
   const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.Float32BufferAttribute(DP,3));dg.setAttribute('uv',new THREE.Float32BufferAttribute(DU,2));dg.setIndex(DI);dg.computeVertexNormals();
   return{port:mk(-1),stbd:mk(1),deck:dg,Dm,S,zOf,deckAt:u=>{const i=Math.min(S.length-1,Math.round(u*NU));return S.reduce((b,s)=>Math.abs(s.u-u)<Math.abs(b.u-u)?s:b,S[0]);}};
 }
@@ -1330,6 +1330,32 @@ function hullTex(o){
   if(o.num)name(o.num,B(o.numU),o.numY,o.numH,o.numCol||'#16181a','900');
   const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;return t;
 }
+// 甲板の絵柄：横＝船幅 B（uv 0〜1）、縦＝長さ 8m で繰り返す。鋼板の継ぎ目と溶接線、塗装のむらとすり減り、錆、
+// 舷側沿いの安全線、通路の塗り分け、固定金具。o:{B,base,walk,line,rust,anti(滑り止めの粒),plate:[横,縦]m}
+function deckTex(o){const key='deck_'+o.key;if(SHIPTEX[key])return SHIPTEX[key];const W=512,H=Math.round(512*8/o.B*1.0),c=document.createElement('canvas');c.width=W;c.height=Math.max(128,Math.min(2048,H));
+  const x=c.getContext('2d'),r=mulberry(o.key.length*71+3),px=W/o.B,py=c.height/8;x.fillStyle=o.base;x.fillRect(0,0,W,c.height);
+  for(let i=0;i<500;i++){const g=r();x.fillStyle=g<.5?'rgba(0,0,0,'+(.03+r()*.07)+')':'rgba(255,255,255,'+(.02+r()*.04)+')';x.beginPath();x.ellipse(r()*W,r()*c.height,8+r()*60,6+r()*40,r()*3,0,7);x.fill();}
+  if(o.walk){x.fillStyle=o.walk;x.fillRect(W*.5-1.1*px,0,2.2*px,c.height);}                         // 中央の通路
+  if(o.anti)for(let i=0;i<9000;i++){x.fillStyle='rgba(0,0,0,'+(.08+r()*.12)+')';x.fillRect(r()*W,r()*c.height,1.2,1.2);}
+  // 鋼板の継ぎ目（横方向の突合せと縦の条板）と溶接の盛り上がり
+  const[pw,ph]=o.plate||[2.4,6];x.lineWidth=1.6;for(let y=0;y<8;y+=ph/2){x.strokeStyle='rgba(0,0,0,.35)';x.beginPath();x.moveTo(0,y*py);x.lineTo(W,y*py);x.stroke();x.strokeStyle='rgba(255,255,255,.1)';x.beginPath();x.moveTo(0,y*py+1.5);x.lineTo(W,y*py+1.5);x.stroke();}
+  for(let xm=pw;xm<o.B;xm+=pw){x.strokeStyle='rgba(0,0,0,.3)';x.beginPath();x.moveTo(xm*px,0);x.lineTo(xm*px,c.height);x.stroke();}
+  // 錆：継ぎ目と金具のまわりに染み、筋
+  for(let i=0;i<70*o.rust;i++){const X=r()*W,Y=r()*c.height,rr=3+r()*18,g=x.createRadialGradient(X,Y,0,X,Y,rr);g.addColorStop(0,'rgba(120,58,24,'+(.25+r()*.35)+')');g.addColorStop(1,'rgba(120,58,24,0)');x.fillStyle=g;x.fillRect(X-rr,Y-rr,rr*2,rr*2);}
+  // 固定金具（D リング）と排水口
+  for(let k=0;k<6;k++){const X=(k%2?.18:.82)*W,Y=(k+.5)/6*c.height;x.fillStyle='rgba(30,30,30,.8)';x.beginPath();x.arc(X,Y,3,0,7);x.fill();x.strokeStyle='rgba(200,200,190,.5)';x.lineWidth=1.5;x.beginPath();x.arc(X,Y-2,4,Math.PI,0);x.stroke();}
+  // 舷側沿いの安全線（すり減り）
+  if(o.line){x.fillStyle=o.line;for(const X0 of[.35*px,W-.65*px]){x.fillRect(X0,0,.3*px,c.height);}for(let i=0;i<300;i++){x.fillStyle=o.base;x.fillRect((r()<.5?.35:o.B-.65)*px+r()*.3*px,r()*c.height,2+r()*4,1+r()*3);}}
+  // 汚れの流れ（排水口から舷へ）と靴跡のすり減り
+  for(let i=0;i<40;i++){x.fillStyle='rgba(20,18,14,'+(.05+r()*.08)+')';x.fillRect(r()*W,r()*c.height,1+r()*2,10+r()*60);}
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.wrapS=THREE.ClampToEdgeWrapping;t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;return SHIPTEX[key]=t;}
+// 艙口蓋の絵柄（上面 1 枚＝27m×12.6m）：パネルの継ぎ目、補強のリブ、錆、番号
+function hatchTex(){if(SHIPTEX.hatch)return SHIPTEX.hatch;const c=document.createElement('canvas');c.width=1024;c.height=480;const x=c.getContext('2d'),r=mulberry(919);
+  x.fillStyle='#5b3427';x.fillRect(0,0,1024,480);for(let i=0;i<300;i++){x.fillStyle='rgba(0,0,0,'+(.03+r()*.07)+')';x.beginPath();x.ellipse(r()*1024,r()*480,10+r()*50,6+r()*30,r()*3,0,7);x.fill();}
+  for(let k=1;k<3;k++){x.fillStyle='rgba(0,0,0,.45)';x.fillRect(k*1024/3-2,0,4,480);}for(let k=0;k<12;k++){x.fillStyle='rgba(255,255,255,.06)';x.fillRect(0,20+k*38,1024,3);x.fillStyle='rgba(0,0,0,.12)';x.fillRect(0,23+k*38,1024,2);}
+  for(let i=0;i<60;i++){const X=r()*1024,Y=r()*480,rr=4+r()*16,g=x.createRadialGradient(X,Y,0,X,Y,rr);g.addColorStop(0,'rgba(140,70,28,.5)');g.addColorStop(1,'rgba(140,70,28,0)');x.fillStyle=g;x.fillRect(X-rr,Y-rr,rr*2,rr*2);}
+  x.fillStyle='rgba(230,226,210,.7)';x.font='bold 54px Arial';x.fillText('HC',60,260);x.fillStyle='#d9a21b';x.fillRect(0,0,1024,8);x.fillRect(0,472,1024,8);
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;return SHIPTEX.hatch=t;}
 // 箱の uv をメートル単位にする（繰り返しの絵柄が面の大きさによらず同じ縮尺で貼られる）
 function boxM(w,h,d,unit){const g=new THREE.BoxGeometry(w,h,d),uv=g.attributes.uv,dims=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
   for(let f=0;f<6;f++)for(let k=0;k<4;k++){const i=f*4+k;uv.setXY(i,uv.getX(i)*dims[f][0]/unit[0],uv.getY(i)*dims[f][1]/unit[1]);}return g;}
@@ -1396,7 +1422,7 @@ function buildShip(kind){
   if(kind==='cargo'){
     const o={L:196,B:30,D:11,T:10,rake:9,sheerF:3.2,sheerA:1.2,trans:.9,entry:.2,run:.18,flat:.88,sRake:4};
     const h=hullOf(o,{hull:'#1c2733',hullTop:'#243241',bottom:'#6a2b20',boot:'#141516',bootTop:1.2,rust:1,deckY:u=>o.D+(u<.28?o.sheerF*Math.pow(1-u/.28,2):0)-.3,hawse:.035,hawseY:o.D+1.2,hawseR:1.3,draft:1,name:'OCEAN LARK',nameU:.11,nameY:o.D-2.6,nameH:3.4,stern:'OCEAN LARK  MIZUHA',sternY:o.D-1.6,sternH:1.6,seed:11});
-    const deckM=C(0x5a3a2c,.85,.15),grn=C(0x3f5f48,.8,.2),wht=C(0xd9dad5,.62,.15),dark=C(0x22272c,.6,.5),stl=C(0x8a9196,.45,.7);
+    const deckM=C(0xffffff,.82,.2,{map:deckTex({key:'cargo',B:30,base:'#6a3b2c',line:'#c9a43a',rust:1.2,plate:[2.5,6]})}),grn=C(0x3f5f48,.8,.2),wht=C(0xd9dad5,.62,.15),dark=C(0x22272c,.6,.5),stl=C(0x8a9196,.45,.7);
     M(h.deck,deckM);
     // 船首楼のブルワーク（波よけの V 字の壁）、係船機、前マスト
     const yF=h.deckAt(.06).dk;{const bw=M(new THREE.BoxGeometry(24,2.6,.4),dark,0,o.D+1.3,-69);bw.rotation.y=0;for(const s of[-1,1]){const w2=M(new THREE.BoxGeometry(12,2.6,.4),dark,s*7.5,o.D+1.3,-72.5);w2.rotation.y=s*.42;}}
@@ -1405,7 +1431,8 @@ function buildShip(kind){
     // 艙口蓋とコンテナ（40ft、ベイの間にラッシングブリッジ）
     const cm=containerMat(),cg=new THREE.BoxGeometry(2.44,2.59,12.19),im=new THREE.InstancedMesh(cg,cm,900),d=new THREE.Object3D(),r=mulberry(kind.length+g.id);let n=0;
     const bays=[];for(let z=-60;z<50;z+=13.2)bays.push(z);
-    bays.forEach((bz,bi)=>{M(new THREE.BoxGeometry(27,.8,12.6),C(0x4a3226,.8,.2),0,o.D+.4,bz);
+    const hatchM=C(0xffffff,.8,.25,{map:hatchTex()});
+    bays.forEach((bz,bi)=>{M(new THREE.BoxGeometry(27,.8,12.6),hatchM,0,o.D+.4,bz);
       const maxT=bi===0?3:bi<2?4:6;for(let row=0;row<11;row++){const edge=row===0||row===10;let hh=Math.max(1,maxT-(edge?1:0)-Math.floor(r()*r()*3));if(r()<.06)hh=0;
         for(let k=0;k<hh&&n<900;k++){d.position.set(-12.2+row*2.44,o.D+.8+1.3+k*2.6,bz);d.updateMatrix();im.setMatrixAt(n,d.matrix);im.setColorAt(n,CONT_PAL[Math.floor(r()*CONT_PAL.length)]);n++;}}
       if(bi>0){const lb=new THREE.Group();lb.position.set(0,o.D+.8,bz-6.6);g.add(lb);M(new THREE.BoxGeometry(28,.35,.35),stl,0,5.4,0,lb);M(new THREE.BoxGeometry(28,.35,.35),stl,0,2.7,0,lb);for(let k=0;k<8;k++)M(new THREE.BoxGeometry(.3,5.4,.3),stl,-13.5+k*3.85,2.7,0,lb);}});
@@ -1440,7 +1467,7 @@ function buildShip(kind){
     const h=hullOf(o,{hull:'#e6e8e6',hullTop:'#eef0ee',bottom:'#6a2b20',boot:'#141516',bootTop:.7,rust:.25,deckY:u=>o.D+(u<.28?o.sheerF*Math.pow(1-u/.28,2):0)-.2,hawse:.06,hawseY:o.D+1.5,hawseR:.45,draft:1,
       stripes:[[2.4,'#1f4f8f',.16],[.8,'#b3261c',.205]],num:'MZ 31',numU:.085,numY:o.D-.9,numH:2.2,stern:'みずは',sternY:o.D-1.2,sternH:1.1,nameCol:'#1a1c1e',face:'"Hiragino Sans","Yu Gothic",sans-serif',seed:23});
     const grey=C(0xe2e4e2,.55,.2),dk=C(0x5e666c,.7,.3),dkD=C(0x3b4249,.7,.3),gl=C(0x101820,.08,.9),blk=C(0x1a1d20,.6,.3);
-    M(h.deck,dk);
+    M(h.deck,C(0xffffff,.88,.15,{map:deckTex({key:'patrol',B:12,base:'#5a6066',walk:'#4a5056',line:'#e8e4d6',rust:.25,anti:1,plate:[1.5,4]})}));
     // 上部構造：低い甲板室と傾いた窓の船橋（面を斜めに切った形）
     const wedge=(w,hh,dd,y,z,lean,m)=>{const ge=new THREE.BoxGeometry(w,hh,dd);const p=ge.attributes.position;for(let i=0;i<p.count;i++){if(p.getY(i)>0){p.setZ(i,p.getZ(i)+(p.getZ(i)<0?lean:0));p.setX(i,p.getX(i)*.9);}}ge.computeVertexNormals();return M(ge,m,0,y+hh/2,z);};
     wedge(9.4,3,24,o.D,-2,1.2,grey);wedge(8.2,2.8,11,o.D+3,-6,1.6,grey);
@@ -1464,7 +1491,7 @@ function buildShip(kind){
     const h=hullOf(o,{hull:'#eceae4',hullTop:'#f2f0ea',bottom:'#8a2a20',boot:'#1f4f8a',bootTop:.5,rust:.5,deckY:u=>o.D+(u<.28?o.sheerF*Math.pow(1-u/.28,2):0)-.1,sheerLine:'#1f4f8a',sheerW:10,hawse:.07,hawseY:o.D+1.2,hawseR:.22,
       name:'第八 瑞穂丸',nameU:.16,nameY:o.D-.1,nameH:.75,nameCol:'#1a2a44',face:'"Hiragino Mincho ProN","Yu Mincho",serif',seed:31,strake:1.2,butt:4,rough:.55,metal:.1});
     const wht=C(0xeceae4,.55,.1),blue=C(0x1f4a78,.6,.2),dk=C(0x6a6e6a,.8,.1),stl=C(0x9aa0a4,.45,.6);
-    M(h.deck,C(0x8a8a82,.85,.05));
+    M(h.deck,C(0xffffff,.9,.05,{map:deckTex({key:'fish',B:7,base:'#7d8278',walk:'#6f746b',line:'#2a5a8a',rust:.8,anti:1,plate:[1.2,2.5]})}));
     // 操舵室（窓つき）、屋根のライト、マスト、集魚灯、網の巻き取り機、ブイ、ガントリー
     const wm=C(0xffffff,.55,.1,{map:winTex('cabin')});const wh=M(boxM(4.4,2.6,5,[2.2,2.6]),wm,0,o.D+1.3,1.2);
     M(new THREE.BoxGeometry(4.9,.25,5.8),blue,0,o.D+2.75,1.2);M(new THREE.BoxGeometry(3.2,1.1,2.4),wht,0,o.D+3.4,1.8);
@@ -2268,7 +2295,7 @@ function baseBuildings(B,M){
   {const HZ=1085;
     for(const sd of[-1,1]){
       // 両脇の作業棟（窓のある低い棟 2 つ）と、その屋上の空調機・換気筒
-      for(const[z0,L]of[[-62,58],[18,62]]){const wx=sd*58.5;bld(10.5,8,L,wx,Y+4,HZ+z0+L/2-29,wallB);box(B,11.2,.5,L+.6,copperM,wx,Y+8.2,HZ+z0+L/2-29,true);
+      for(const[z0,L]of[[-53,49],[18,62]]){const wx=sd*58.5;bld(10.5,8,L,wx,Y+4,HZ+z0+L/2-29,wallB);box(B,11.2,.5,L+.6,copperM,wx,Y+8.2,HZ+z0+L/2-29,true);
         for(let k=0;k<Math.floor(L/16);k++)acUnit(wx,Y+8.45,HZ+z0-29+8+k*16,0);
         for(let k=0;k<3;k++){const v=mesh(new THREE.CylinderGeometry(.35,.35,2.4,10),steel,wx+sd*2.5,Y+9.6,HZ+z0-29+6+k*L/3);}
         const dz=HZ+z0-29+L/2;const dr=mesh(new THREE.BoxGeometry(.2,4.2,5.5),doorM,sd*63.8,Y+2.1,dz);box(B,.6,.4,6.6,darkM,sd*63.9,Y+4.45,dz);}
