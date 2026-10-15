@@ -559,7 +559,10 @@ function vnoise2(x,y){const x0=Math.floor(x),y0=Math.floor(y);let fx=x-x0,fy=y-y
 function fbm2(x,y){let s=0,a=.5,f=1;for(let i=0;i<5;i++){s+=a*vnoise2(x*f,y*f);a*=.5;f*=2.03;}return s/.97;}
 // 島の高さ（基地ローカル座標）。西側は尾根の立った山地、東は滑走路のある平地
 function islandH(x,z){
-  const d=Math.hypot(x/1500,z/1750)+(fbm2(x*.0016+3,z*.0016+7)-.5)*.12;
+  // 海岸線：楕円に、角度ごとの岬と入り江（周期の違う波の重ね合わせ）と大きなむらを足す。滑走路の両端・港・灯台・沖の岩のまわりは元の線を保つ
+  const a=Math.atan2(z,x),keep=Math.max((1-smooth(250,520,Math.abs(x-30)))*smooth(900,1250,Math.abs(z-130)),(1-smooth(150,420,Math.hypot(x-1200,z-150)))*.9+(1-smooth(200,480,Math.abs(z-150)))*smooth(850,1050,x)*.9,1-smooth(120,330,Math.hypot(x-250,z+1330)));
+  const coast=(.075*Math.sin(3*a+1.3)+.05*Math.sin(5*a-.7)+.035*Math.sin(7*a+2.1)+.02*Math.sin(11*a+.4)+(fbm2(x*.00055+9,z*.00055+4)-.5)*.32+(fbm2(x*.0015+21,z*.0015+13)-.5)*.13)*(1-Math.min(1,keep));
+  const d=Math.hypot(x/1500,z/1750)*(1+coast)+(fbm2(x*.0016+3,z*.0016+7)-.5)*.12;
   let h=(1-smooth(.5,1,d))*30-9+(fbm2(x*.004,z*.004)-.5)*10;
   const rg=1-Math.abs(fbm2(x*.0011+11,z*.0011+5)*2-1),m=smooth(-250,-800,x)*(1-smooth(.4,.9,d));
   h+=m*(50+250*rg*rg+(fbm2(x*.006+1,z*.006)-.5)*46);
@@ -691,7 +694,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
     const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));cg.setIndex(idx);cg.computeVertexNormals();
     const N=260,crown=new THREE.InstancedMesh(cg,std({color:lin(0x2f5a22),roughness:.8,metalness:0,side:THREE.DoubleSide}),N),tg2=new THREE.CylinderGeometry(.14,.24,1,6);tg2.translate(0,.5,0);
     const trunk=new THREE.InstancedMesh(tg2,std({color:lin(0x6b5a45),roughness:.95,metalness:0}),N),d=new THREE.Object3D(),rd=mulberry(19);let n=0,g=0;
-    while(n<N&&g++<60000){const a=rd()*6.283,rr3=.7+rd()*.2,x=Math.cos(a)*1500*rr3,z=Math.sin(a)*1750*rr3,h=islandH(x,z);if(inPort(x,z))continue;if(h<2.4||h>6.5||(Math.abs(x-30)<200&&Math.abs(z-130)<1450))continue;
+    while(n<N&&g++<200000){const x=(rd()-.5)*3600,z=(rd()-.5)*4000,h=islandH(x,z);if(inPort(x,z))continue;if(h<2.4||h>6.5||(Math.abs(x-30)<200&&Math.abs(z-130)<1450))continue;
       const H=5.5+rd()*4.5,lx=(rd()-.5)*.28,lz=(rd()-.5)*.28;d.position.set(x,h-.3,z);d.rotation.set(lz,rd()*6,-lx);d.scale.set(1,H,1);d.updateMatrix();trunk.setMatrixAt(n,d.matrix);
       d.position.set(x+lx*H,h-.3+H*.98,z+lz*H);d.rotation.set(0,rd()*6,0);const s=.8+rd()*.5;d.scale.set(s,s,s);d.updateMatrix();crown.setMatrixAt(n,d.matrix);n++;}
     crown.count=trunk.count=n;crown.frustumCulled=trunk.frustumCulled=false;B.add(crown);B.add(trunk);B.userData.palms=[crown,trunk];}
