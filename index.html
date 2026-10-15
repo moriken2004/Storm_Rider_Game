@@ -1579,7 +1579,7 @@ function islandH(x,z){
   const d=coastD(x,z);
   let h=(1-smooth(.5,1,d))*30-9+(fbm2(x*.004,z*.004)-.5)*10;
   // 崖：海岸の手前で一段高く持ち上げ、海側は砂浜を作らずにすぐ深くする
-  {const c=cliffAt(x,z);if(c>0){const top=1-smooth(.822,.846,d),H=18+16*fbm2(x*.003+7,z*.003+1);h+=c*top*H*(.6+.4*smooth(.6,.82,d));h=lerp(h,Math.min(h,-6-8*smooth(.85,.95,d)),c*smooth(.828,.846,d));}}
+  {const c=cliffAt(x,z);if(c>0){const top=1-smooth(.832,.846,d),H=18+16*fbm2(x*.003+7,z*.003+1);h+=c*top*H*(.6+.4*smooth(.6,.82,d));h=lerp(h,Math.min(h,-6-8*smooth(.85,.95,d)),c*smooth(.836,.849,d));}}
   const rg=1-Math.abs(fbm2(x*.0011+11,z*.0011+5)*2-1),m=smooth(-250,-800,x)*(1-smooth(.4,.9,d));
   h+=m*(50+250*rg*rg+(fbm2(x*.006+1,z*.006)-.5)*46);
   h+=(1-smooth(0,460,Math.hypot(x-560,z+1080)))*(1-smooth(.5,.95,d))*(60+(fbm2(x*.008,z*.008)-.5)*30);
@@ -1662,6 +1662,25 @@ vec3 sand=sA.rgb*sA.rgb*(0.8+0.4*n1);
 vec3 tc=mix(grass,forest,vColor.g*smoothstep(6.0,16.0,hgt)*0.85);
 float mRock=clamp(smoothstep(0.34,0.42,slope+(n1-0.5)*0.05+(n3-0.5)*0.10+(gA.a-0.5)*0.10)+smoothstep(190.0,280.0,hgt)*0.5*smoothstep(0.35,0.6,n3+gA.a*0.5),0.0,1.0);
 float mSand=(1.0-smoothstep(3.0,8.0,hgt+(n1-0.5)*3.5))*(1.0-smoothstep(0.3,0.55,slope));
+// 崖の岩肌：3 方向から投影した岩の模様、厚さと色の不ぞろいな地層（うねりと傾き）、張り出しの影、縦の亀裂と浸食の溝、雨水の跡、張り出しの草
+if(vColor.b>0.01){
+  vec3 nw=normalize(vNw),wt=pow(abs(nw),vec3(4.0));wt/=wt.x+wt.y+wt.z;
+  vec3 tA=texture2D(tRk,vWP.zy/7.0).rgb*wt.x+texture2D(tRk,vWP.xz/7.0).rgb*wt.y+texture2D(tRk,vWP.xy/7.0).rgb*wt.z;
+  float tB=texture2D(tRk,vWP.zy/23.0+0.3).a*wt.x+texture2D(tRk,vWP.xz/23.0+0.3).a*wt.y+texture2D(tRk,vWP.xy/23.0+0.3).a*wt.z;
+  vec2 lp=vWP.xz-vec2(0.0,21000.0);float ht=atan(lp.y,lp.x)*1650.0;                    // 崖に沿った横方向の座標（島の中心からの角度×おおよその半径。面の向きに頼ると三角形ごとに飛ぶ）
+  float yw=vWP.y+(texture2D(tN2,vWP.xz/140.0).b-0.5)*9.0+(texture2D(tN2,vec2(ht/37.0,0.21)).b-0.5)*3.0+dot(vWP.xz,vec2(0.012,-0.008));
+  float L=texture2D(tN2,vec2(yw/21.0,0.37)).b*0.72+texture2D(tN2,vec2(yw/6.5,0.71)).b*0.18+(texture2D(tN2,vec2(ht/48.0,yw/26.0)).b-0.5)*0.45;   // 地層は厚く、横に行くと途切れる
+  vec3 cs=mix(vec3(0.20,0.19,0.17),vec3(0.42,0.38,0.33),smoothstep(0.3,0.7,L));
+  cs=mix(cs,vec3(0.44,0.32,0.21),smoothstep(0.58,0.78,texture2D(tN2,vec2(yw/31.0,0.53)).b+(texture2D(tN2,vec2(ht/70.0,0.4)).b-0.5)*0.4)*0.55);   // 鉄分の黄土色の層
+  float ledge=smoothstep(0.03,0.0,abs(fract(yw/9.0+texture2D(tN2,vec2(ht/60.0,0.9)).b*1.5)-0.5)-0.47)*smoothstep(0.35,0.6,texture2D(tN2,vec2(ht/30.0,yw/40.0)).b);cs*=1.0-0.45*ledge;   // 張り出しの下の影
+  float cr=smoothstep(0.70,0.86,texture2D(tN2,vec2(ht/3.5+texture2D(tN2,vec2(yw/12.0,ht/50.0)).b*0.6,yw/45.0)).b);float gul=smoothstep(0.55,0.8,texture2D(tN2,vec2(ht/22.0,yw/300.0)).b);
+  cs*=(1.0-0.5*cr)*(1.0-0.28*gul)*(0.9+0.2*texture2D(tN2,vec2(floor(ht/2.6)*0.13,floor(yw/3.5)*0.17)).b);   // 割れ目・溝・節理で割れたブロックごとの色
+  cs*=1.0-0.25*smoothstep(0.6,0.85,texture2D(tN2,vec2(ht/2.7,yw/55.0)).b);                    // 雨水が流れた黒い筋
+  vec3 cr2=cs*(0.35+1.6*tA*tA)*(0.65+0.7*tB);
+  cr2=mix(cr2,vec3(0.10,0.15,0.06)*(0.7+0.6*n3),smoothstep(0.86,0.95,nw.y)*smoothstep(0.35,0.6,texture2D(tN2,vWP.xz/9.0).b)*0.8);  // 張り出しの草
+  cr2=mix(cr2,vec3(0.55,0.53,0.48),(1.0-smoothstep(0.4,1.4,abs(hgt-1.8)))*smoothstep(0.55,0.8,n3)*0.18);   // 波しぶきの塩の帯
+  rock=mix(rock,cr2,smoothstep(0.1,0.5,vColor.b));
+}
 mRock=max(mRock,vColor.b*max(smoothstep(0.08,0.22,slope),1.0-smoothstep(3.0,7.0,hgt))*smoothstep(-2.0,0.5,hgt));mSand*=1.0-smoothstep(0.2,0.6,vColor.b);
 tc=mix(tc,rock,mRock);tc=mix(tc,sand,mSand);
 // 凹凸（勾配テクスチャ）
@@ -1712,7 +1731,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
     const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));cg.setIndex(idx);cg.computeVertexNormals();
     const N=260,crown=new THREE.InstancedMesh(cg,std({color:lin(0x2f5a22),roughness:.8,metalness:0,side:THREE.DoubleSide}),N),tg2=new THREE.CylinderGeometry(.14,.24,1,6);tg2.translate(0,.5,0);
     const trunk=new THREE.InstancedMesh(tg2,std({color:lin(0x6b5a45),roughness:.95,metalness:0}),N),d=new THREE.Object3D(),rd=mulberry(19);let n=0,g=0;
-    while(n<N&&g++<200000){const x=(rd()-.5)*3600,z=(rd()-.5)*4000,h=islandH(x,z);if(inPort(x,z))continue;if(h<2.4||h>6.5||(Math.abs(x-30)<200&&Math.abs(z-130)<1450))continue;
+    while(n<N&&g++<200000){const x=(rd()-.5)*3600,z=(rd()-.5)*4000,h=islandH(x,z);if(cliffAt(x,z)>.2)continue;if(inPort(x,z))continue;if(h<2.4||h>6.5||(Math.abs(x-30)<200&&Math.abs(z-130)<1450))continue;
       const H=5.5+rd()*4.5,lx=(rd()-.5)*.28,lz=(rd()-.5)*.28;d.position.set(x,h-.3,z);d.rotation.set(lz,rd()*6,-lx);d.scale.set(1,H,1);d.updateMatrix();trunk.setMatrixAt(n,d.matrix);
       d.position.set(x+lx*H,h-.3+H*.98,z+lz*H);d.rotation.set(0,rd()*6,0);const s=.8+rd()*.5;d.scale.set(s,s,s);d.updateMatrix();crown.setMatrixAt(n,d.matrix);n++;}
     crown.count=trunk.count=n;crown.frustumCulled=trunk.frustumCulled=false;B.add(crown);B.add(trunk);B.userData.palms=[crown,trunk];}
