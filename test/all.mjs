@@ -13,7 +13,8 @@ const T=[
   ['武装モード','armed.mjs',[],o=>/読み込み直し後 false/.test(o)&&!/PAGEERR/.test(o)],
   ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=16;}],
-  ['自動の画質調整','adapt.mjs',[],o=>/その後2 \{"scale":1,"tier":0/.test(o)],
+  ['設定画面の機体プレビュー','preview.mjs',[],o=>!/✗/.test(o)&&/✓/.test(o)],
+  ['自動の画質調整','adapt.mjs',[],o=>/その後3 \{"scale":1,"tier":0/.test(o)],
 ];
 const run=(f,a)=>new Promise(res=>{const p=spawn(process.execPath,[new URL('./'+f,import.meta.url).pathname,...a]);let o='';p.stdout.on('data',d=>o+=d);p.stderr.on('data',d=>o+=d);p.on('close',c=>res({o,c}));});
 const rows=[];const t0=Date.now();

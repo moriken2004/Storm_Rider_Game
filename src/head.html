@@ -166,7 +166,7 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #opts .row input[type=range]{width:150px}
 #opts{cursor:grab;touch-action:none}#opts.grabbing{cursor:grabbing}#opts .panel{cursor:auto;touch-action:auto}
 .orbHint{font-size:11px;letter-spacing:.12em;opacity:.7;margin:-4px 0 10px}body.small .orbHint,body.touch .orbHint{display:none}
-@media (max-width:760px){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}
+@media (max-width:760px){.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}@media (max-width:760px) and (orientation:portrait){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}}
 #res{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.10),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}
 .plate{position:relative;width:min(600px,92vw);margin-top:min(9vh,64px);padding:74px 34px 24px;border-radius:44px 44px 30px 30px;
   background:linear-gradient(180deg,rgba(14,111,120,.42),rgba(6,44,54,.78));
@@ -248,7 +248,7 @@ body.small.cine #radio{bottom:calc(11vh + 6px);width:min(760px,calc(80vw / var(-
 body.small .screen{padding:6px;overflow:hidden}
 body.small #plate,body.small .panel,body.small .plate{transform:scale(var(--ui));transform-origin:50% 50%;flex:none;margin-top:0}
 body.small #plate{margin-top:calc(30px * var(--ui))}
-body.small #opts{align-items:center}body.small #opts .panel{margin-right:0;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
+body.small #opts{align-items:flex-end;background:linear-gradient(90deg,rgba(2,16,22,0) 30%,rgba(2,16,22,.55))}body.small #opts .panel{margin-right:calc(8px + var(--sr));transform-origin:100% 50%;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
 body.small #help .panel{max-width:760px}
 body.small .panel p,body.small .panel li{line-height:1.6}
 </style>

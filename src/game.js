@@ -1252,11 +1252,14 @@ function step(dt){
   else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
+    {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
+        const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(camera.view?camera.view.offsetX!==ox:true){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+      else if(camera.view&&camera.view.enabled)camera.clearViewOffset();}
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
     else if(G.mode==='title'&&G.optPrev&&G.orb){// ドラッグで回した視点（格納庫の床・天井・壁を突き抜けない範囲）
-      const o=G.orb,ce=Math.cos(o.el),cx=Math.sin(o.az)*ce*o.r,cz=Math.cos(o.az)*ce*o.r,l=Math.hypot(cx,cz)||1,k=innerWidth>760?9:0;G.indoor=.5;
+      const o=G.orb,ce=Math.cos(o.el),cx=Math.sin(o.az)*ce*o.r,cz=Math.cos(o.az)*ce*o.r,l=Math.hypot(cx,cz)||1,k=0;G.indoor=.5;
       setCam(P.pos.x+cx,P.pos.y+.6+Math.sin(o.el)*o.r,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
-    else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=innerWidth>760?9:0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
+    else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'){const a=G.t*.02+.6;G.indoor=0;setCam(Math.sin(a)*17000,33000,Math.cos(a)*17000+3000,0,0,-800,48);}
     else if(G.mode==='result'){const a=G.t*.05;setCam(BASE.x-260*Math.cos(a),RWY_Y+120,P.pos.z-260*Math.sin(a),P.pos.x,P.pos.y,P.pos.z,46);}
   }

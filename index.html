@@ -166,7 +166,7 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #opts .row input[type=range]{width:150px}
 #opts{cursor:grab;touch-action:none}#opts.grabbing{cursor:grabbing}#opts .panel{cursor:auto;touch-action:auto}
 .orbHint{font-size:11px;letter-spacing:.12em;opacity:.7;margin:-4px 0 10px}body.small .orbHint,body.touch .orbHint{display:none}
-@media (max-width:760px){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}
+@media (max-width:760px){.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}@media (max-width:760px) and (orientation:portrait){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}}
 #res{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.10),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}
 .plate{position:relative;width:min(600px,92vw);margin-top:min(9vh,64px);padding:74px 34px 24px;border-radius:44px 44px 30px 30px;
   background:linear-gradient(180deg,rgba(14,111,120,.42),rgba(6,44,54,.78));
@@ -248,7 +248,7 @@ body.small.cine #radio{bottom:calc(11vh + 6px);width:min(760px,calc(80vw / var(-
 body.small .screen{padding:6px;overflow:hidden}
 body.small #plate,body.small .panel,body.small .plate{transform:scale(var(--ui));transform-origin:50% 50%;flex:none;margin-top:0}
 body.small #plate{margin-top:calc(30px * var(--ui))}
-body.small #opts{align-items:center}body.small #opts .panel{margin-right:0;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
+body.small #opts{align-items:flex-end;background:linear-gradient(90deg,rgba(2,16,22,0) 30%,rgba(2,16,22,.55))}body.small #opts .panel{margin-right:calc(8px + var(--sr));transform-origin:100% 50%;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
 body.small #help .panel{max-width:760px}
 body.small .panel p,body.small .panel li{line-height:1.6}
 </style>
@@ -5100,11 +5100,14 @@ function step(dt){
   else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
+    {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
+        const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(camera.view?camera.view.offsetX!==ox:true){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+      else if(camera.view&&camera.view.enabled)camera.clearViewOffset();}
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
     else if(G.mode==='title'&&G.optPrev&&G.orb){// ドラッグで回した視点（格納庫の床・天井・壁を突き抜けない範囲）
-      const o=G.orb,ce=Math.cos(o.el),cx=Math.sin(o.az)*ce*o.r,cz=Math.cos(o.az)*ce*o.r,l=Math.hypot(cx,cz)||1,k=innerWidth>760?9:0;G.indoor=.5;
+      const o=G.orb,ce=Math.cos(o.el),cx=Math.sin(o.az)*ce*o.r,cz=Math.cos(o.az)*ce*o.r,l=Math.hypot(cx,cz)||1,k=0;G.indoor=.5;
       setCam(P.pos.x+cx,P.pos.y+.6+Math.sin(o.el)*o.r,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
-    else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=innerWidth>760?9:0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
+    else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'){const a=G.t*.02+.6;G.indoor=0;setCam(Math.sin(a)*17000,33000,Math.cos(a)*17000+3000,0,0,-800,48);}
     else if(G.mode==='result'){const a=G.t*.05;setCam(BASE.x-260*Math.cos(a),RWY_Y+120,P.pos.z-260*Math.sin(a),P.pos.x,P.pos.y,P.pos.z,46);}
   }
