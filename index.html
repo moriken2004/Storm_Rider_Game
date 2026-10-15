@@ -4582,7 +4582,10 @@ function updateHUD(dt){
     el.hidden=false;tA.copy(G.target).applyMatrix4(camera.matrixWorldInverse);
     const hw=view.cssW/2,hh=view.cssH/2,f=hh/Math.tan(camera.fov*Math.PI/360);let x,y,off=false;
     if(tA.z<-1){x=tA.x/-tA.z*f;y=-tA.y/-tA.z*f;}else{x=tA.x*1e4;y=-tA.y*1e4;if(Math.abs(x)<1&&Math.abs(y)<1)y=1e4;off=true;}
-    const mx=hw-60,myT=hh-120,myB=hh-190,my=y>0?myB:myT;if(Math.abs(x)>mx||Math.abs(y)>my){const k=Math.min(mx/Math.max(Math.abs(x),1e-6),my/Math.max(Math.abs(y),1e-6));x*=k;y*=k;off=true;}
+    // 画面の端に寄せるときの余白は画面の大きさに比例させる（固定値だとスマートフォンの横向きで下の余白が中心近くまで来る）
+    const mx=hw-(IS_TOUCH?Math.min(150,view.cssW*.17):Math.min(60,view.cssW*.07)),   // スマートフォンは左右の操作ボタンとスティックを避ける
+    myT=hh-Math.min(120,view.cssH*.2),myB=hh-Math.min(190,view.cssH*.27),my=y>0?myB:myT;const onScreen=!off&&Math.abs(x)<hw-14&&Math.abs(y)<hh-14;   // 画面に見えている間はその場所に出す
+    if(!onScreen&&(Math.abs(x)>mx||Math.abs(y)>my)){const k=Math.min(mx/Math.max(Math.abs(x),1e-6),my/Math.max(Math.abs(y),1e-6));x*=k;y*=k;off=true;}
     el.style.transform=`translate(${hw+x}px,${hh+y}px)`;el.classList.toggle('off',off);el.classList.toggle('lock',G.lock>=1);
     el.firstElementChild.style.transform=off?`rotate(${Math.atan2(y,x)*180/Math.PI-45}deg)`:'';
     const d=G.target.distanceTo(P.pos);el.lastElementChild.textContent=G.targetLabel+' '+(d>=1000?(d/1000).toFixed(1)+'km':Math.round(d)+'m');
@@ -4755,7 +4758,7 @@ function dogfight(f,i,dt){
 }
 // 線分（始点 a、向き d、長さ len）と点 p の最短距離
 const _sg=new V3();function segDist(a,d,len,p){_sg.copy(p).sub(a);const s=clamp(_sg.dot(d),0,len);return _sg.addScaledVector(d,-s).length();}
-function icpReset(){ICP.cleared=false;ICP.f.forEach(f=>{f.dead=false;f.hp=8;});for(const m of PM){m.life=0;m.m.visible=m.gl.visible=false;}P.msl=4;G.lockF=null;armMeshes();ICP.doomed=false;ICP.kill=null;ICP.st=0;ICP.t=0;ICP.n=0;ICP.pre=0;ICP.atkT=0;for(const f of ICP.f)f.mesh.visible=false;for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}for(const t of ICP.trc){t.life=0;t.m.visible=false;}}
+function icpReset(){ICP.cleared=false;ICP.doomT=0;ICP.f.forEach(f=>{f.dead=false;f.hp=8;});for(const m of PM){m.life=0;m.m.visible=m.gl.visible=false;}P.msl=4;G.lockF=null;armMeshes();ICP.doomed=false;ICP.kill=null;ICP.st=0;ICP.t=0;ICP.n=0;ICP.pre=0;ICP.atkT=0;for(const f of ICP.f)f.mesh.visible=false;for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}for(const t of ICP.trc){t.life=0;t.m.visible=false;}}
 function icpTracersOnly(dt,playing){for(const t of ICP.trc){if(t.life<=0)continue;t.life-=dt;const st=720*dt;t.pos.addScaledVector(t.dir,st);if(t.live==='P'&&t.life>0){tB.copy(t.pos).addScaledVector(t.dir,-st);if(strHit(t,tB,st))t.life=0;}t.m.position.copy(t.pos);tD.copy(t.pos).add(t.dir);t.m.lookAt(tD);if(t.life<=0)t.m.visible=false;}}
 function icpTracer(from,to,spread,live){const t=ICP.trc.find(q=>q.life<=0);if(!t)return;t.pos.copy(from);t.dir.copy(to).sub(from).normalize();t.dir.x+=(Math.random()-.5)*spread;t.dir.y+=(Math.random()-.5)*spread;t.dir.z+=(Math.random()-.5)*spread;t.dir.normalize();t.life=1.3;t.live=live;t.m.visible=true;}
 
@@ -4850,7 +4853,7 @@ const icpLevel=dt=>{P.pitch=damp(P.pitch,0,2,dt);P.roll=damp(P.roll,0,2,dt);cutF
 const CUT_ICP={mid:true,
   blendIn:.7,blendOut:1.1,
   subs:[[.2,'C','国籍不明機が 2 機、急速に接近！　ノルド連邦の迎撃機です',3.6],[5.2,'F','警告する。貴機はノルド連邦の領空を侵犯している。ただちに反転し、領空から退去せよ',5.6],[11.6,'G',()=>G.armed?'隊長、相手は本気だ。こっちも積んではいるが、撃ち合えば戦争だぞ。引き返せ！':'隊長、相手は本気だ。こっちは丸腰だぞ、引き返せ！',3.6]],
-  begin(){SFX.caution();},
+  begin(){if(!ICP.f.length)icpInit();SFX.caution();},
   shots:[
     // 後ろの空から 2 機が迫ってくる（隊長機の前から振り返る）
     {dur:4.2,setup(){SFX.boost();},update(t,u,dt){icpLevel(dt);const e=1-Math.pow(1-u,2.2);icpPose(0,lerp(-1500,-70,e),lerp(120,40,e),lerp(170,14,e),lerp(.5,0,e),1);icpPose(1,lerp(-1750,-150,e),lerp(-170,-46,e),lerp(230,22,e),lerp(-.5,0,e),1);
@@ -4863,7 +4866,9 @@ const CUT_ICP={mid:true,
       const f=ICP.f[1];fwdOf(P.yaw,0,tA);tB.set(-tA.z,0,tA.x);setCam(f.pos.x-tA.x*30-tB.x*17,f.pos.y+7,f.pos.z-tA.z*30-tB.z*17,f.pos.x+tA.x*4+tB.x*10,f.pos.y-.5,f.pos.z+tA.z*4+tB.z*10,lerp(26,22,u));}},
     // 真上から：両側を挟まれた隊長機
     {dur:3.4,update(t,u,dt){icpLevel(dt);icpPose(0,10,34,5,0);icpPose(1,-6,-38,7,0);icpCam(-30,0,lerp(95,60,ease(u)),14,0,0,40);}}],
-  end(){G.mode='play';$('hud').hidden=false;P.camYaw=P.yaw;P.camPitch=P.pitch*.62;P.inv=1;ICP.st=2;ICP.t=2;ICP.dPrev=undefined;chaseCam(0,true);}
+  end(){G.mode='play';$('hud').hidden=false;P.camYaw=P.yaw;P.camPitch=P.pitch*.62;P.inv=1;ICP.st=2;ICP.t=2;ICP.dPrev=undefined;
+    // すぐ飛ばしたときは迎撃機がまだ遠くにいるので、警告の位置（左右に並ぶ）へ置く
+    ICP.f.forEach((f,i)=>{if(f.pos.distanceTo(P.pos)>600)icpPose(i,10-i*16,f.sd*(34+i*4),5+i*3,0,.3);});chaseCam(0,true);}
 };
 // 僚機が撃墜されるカットシーン
 const CK={};
@@ -4877,7 +4882,7 @@ const ckSkip=wi=>{if(W[wi].state==='gone'&&CUT)CUT.t=1e9;};
 const CUT_KILL={mid:true,
   blendIn:.6,blendOut:1.0,
   subs:[[.2,'F','警告は終わりだ。攻撃する',2.6],[2.9,'H','ミ、ミサイルです！　2番機、後ろ！',2.4]],
-  begin(){SFX.caution();setAlarm(true);for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}},
+  begin(){if(!ICP.f.length)icpInit();SFX.caution();setAlarm(true);for(const m of ICP.mis){m.life=0;m.m.visible=m.gl.visible=false;}},
   shots:[
     // 迎撃機が後ろへ下がり、編隊の真後ろに付く（迎撃機の背中越し）
     {dur:3.0,update(t,u,dt){ckFly(dt);const e=ease(u);icpPose(0,lerp(12,-300,e),lerp(32,26,e),lerp(5,26,e),lerp(0,-.25,Math.sin(u*3.14)),.2);icpPose(1,lerp(-4,-380,e),lerp(-38,-30,e),lerp(7,34,e),lerp(0,.25,Math.sin(u*3.14)),.2);
@@ -5268,7 +5273,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND},view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();
