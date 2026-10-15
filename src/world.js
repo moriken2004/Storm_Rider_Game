@@ -527,7 +527,7 @@ function buildAircraft(accentHex,label,shapeI,scheme){
   // 衝突防止灯
   const stb=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.6,1.6,1.8),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   stb.position.set(0,-1.2,4);stb.scale.set(1.4,1.4,1);g.add(glowLOD(stb,70,.18));ud.strobe=stb;
-  const bcn=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(5,.3,.2),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
+  const bcn=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.4,.2,.12),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   bcn.position.set(0,SH.orig?4.1:2.1,SH.orig?-1.9:3);bcn.scale.set(1.6,1.6,1);g.add(glowLOD(bcn,70,.18));ud.beacon=bcn;
   detailAircraft(g,accentHex,label||'SR-01');
   ud.power=1;
@@ -1101,7 +1101,7 @@ function addArmor(g){
 function buildDiffuser(){
   const g=new THREE.Group();
   const white=std({color:lin(0xc4cace),metalness:.6,roughness:.34}),dark=std({color:lin(0x14181c),metalness:.75,roughness:.4}),
-    amber=std({color:lin(0xd69a14),metalness:.3,roughness:.5}),cy=new THREE.MeshBasicMaterial({color:new THREE.Color(.35,2.6,3.6)});
+    amber=std({color:lin(0xd69a14),metalness:.3,roughness:.5}),cy=new THREE.MeshBasicMaterial({color:new THREE.Color(.16,.95,1.3)});CUTDIM.push([cy,cy.color.clone()]);
   g.add(new THREE.Mesh(latheZ([[-3.7,.02],[-3.45,.17],[-2.8,.34],[-1.9,.42],[2.5,.42],[3.0,.36],[3.35,.27]],20),white));
   const seek=new THREE.Mesh(new THREE.SphereGeometry(.19,14,10),dark);seek.position.z=-3.52;g.add(seek);
   // 放射リングと、その間の黒い帯
@@ -1113,7 +1113,8 @@ function buildDiffuser(){
   const fs=new THREE.Shape();fs.moveTo(0,0);fs.lineTo(1.25,0);fs.lineTo(1.25,.34);fs.lineTo(.95,.78);fs.lineTo(.55,.78);fs.closePath();
   const fg=new THREE.ExtrudeGeometry(fs,{depth:.045,bevelEnabled:false});fg.translate(0,0,-.022);fg.rotateY(-Math.PI/2);
   for(let k=0;k<4;k++){const f=new THREE.Group();f.rotation.z=k*Math.PI/2+Math.PI/4;const m=new THREE.Mesh(fg,white);m.position.set(0,.36,2.05);f.add(m);g.add(f);}
-  const noz=new THREE.Mesh(new THREE.CylinderGeometry(.2,.29,.4,16,1,true),dark);noz.rotation.x=Math.PI/2;noz.position.z=3.5;g.add(noz);
+  const noz=new THREE.Mesh(new THREE.CylinderGeometry(.2,.29,.4,16,1,true),dark);noz.material=noz.material.clone();noz.material.side=THREE.DoubleSide;noz.rotation.x=Math.PI/2;noz.position.z=3.5;g.add(noz);
+  {const cap=new THREE.Mesh(new THREE.CircleGeometry(.28,20),dark);cap.position.z=3.34;g.add(cap);const throat=new THREE.Mesh(new THREE.CircleGeometry(.2,16),new THREE.MeshBasicMaterial({color:0x020304}));throat.position.z=3.4;g.add(throat);}
   const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.6,3.2,5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   fl.position.z=4.1;fl.scale.set(2.6,2.6,1);fl.visible=false;g.add(fl);g.userData.flame=fl;
   g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial)o.castShadow=true;});
@@ -1284,7 +1285,7 @@ function detailAircraft(g,accentHex,label){
       const rg=add(new THREE.CylinderGeometry(.175,.175,.16,14,1,true),ud.wetMats[2],s*ax,py-.62,pz-.2);rg.rotation.x=Math.PI/2;
       for(const d of[-.07,.07]){const pr=add(new THREE.CylinderGeometry(.018,.018,.5,6),metal,s*ax+d,py-.62,pz-1.25);pr.rotation.x=Math.PI/2;}}
     // 翼端灯の電球
-    {const tp=ud.tipPos,bl=add(new THREE.SphereGeometry(.07,10,8),new THREE.MeshBasicMaterial({color:s>0?new THREE.Color(.2,2.2,.5):new THREE.Color(2.4,.2,.15)}),s*tp.x,tp.y,tp.z);bl.castShadow=false;}
+    {const tp=ud.tipPos,bl=add(new THREE.SphereGeometry(.07,10,8),new THREE.MeshBasicMaterial({color:s>0?new THREE.Color(.12,.95,.25):new THREE.Color(1.0,.1,.07)}),s*tp.x,tp.y,tp.z);CUTDIM.push([bl.material,bl.material.color.clone()]);bl.castShadow=false;}
     // 前縁の防氷ブーツ
     for(let k=0;k<2;k++){const a=S0[k],b=S0[k+1],ax=k?a[0]:1.9,qa=ud.wingAt(ax),L=Math.hypot(b[0]-ax,b[2]-qa.le),le=add(new THREE.BoxGeometry(L,OR?.16:.1,OR?.5:.2),OR?ud.wetMats[2]:dark,s*(ax+b[0])/2,(qa.y+b[1])/2+.01,(qa.le+b[2])/2+.07);le.rotation.y=-s*Math.atan2(b[2]-qa.le,b[0]-ax);le.rotation.z=s*Math.atan2(b[1]-qa.y,b[0]-ax);}
   }
@@ -1691,7 +1692,7 @@ function buildFighter(){
   {const t=A(latheZ([[-3.2,.02],[-2.6,.34],[0,.46],[2.4,.36],[3.2,.02]],14),bot,0,-1.25,1.4);A(new THREE.BoxGeometry(.14,.5,1.8),bot,0,-.75,1.4);}
   for(const[z,y]of[[-3.6,1.35],[2.2,.72]])A(new THREE.BoxGeometry(.04,.42,.5),dk,0,y,z);
   // 衝突防止灯
-  const bc=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(4,.3,.2),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));bc.position.set(0,1.0,3.5);bc.scale.set(1.5,1.5,1);g.add(glowLOD(bc,70,.18));ud.beacon=bc;
+  const bc=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.2,.18,.1),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));bc.position.set(0,1.0,3.5);bc.scale.set(1.5,1.5,1);g.add(glowLOD(bc,70,.18));ud.beacon=bc;
   g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
   // 推力に合わせて噴射の長さと光を変える
   ud.setPower=k=>{for(const p of ud.plumes)p.scale.set(1,1,1.5+k*9);for(const s of ud.glows){const q=2+k*3.5;s.scale.set(q,q,1);}};ud.setPower(.3);
