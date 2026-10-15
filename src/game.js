@@ -164,7 +164,7 @@ function fallNoWing(dt){
   if(hit&&!hit.wing){crashExplode('主翼を失い、'+hit.why);return;}
   if(P.pos.y<gy){P.pos.y=gy;crashExplode(P.wlWhat+'に主翼をぶつけて失い、'+(land?'地面に激突した':'海面に突っ込んだ'));}
 }
-function brEvade(){let ok=false;for(const m of ICP.mis){if(m.life<=0||m.tgt||m.lost)continue;const d=m.pos.distanceTo(P.pos);if(d<750&&Math.random()<(d>150?.65:.3)){m.lost=true;ok=true;}}
+function brEvade(){let ok=false;for(const m of ICP.mis){if(m.life<=0||m.tgt||m.lost)continue;const d=m.pos.distanceTo(P.pos);if(d<750&&Math.random()<(d>150?.65:.3)){m.lost=true;ok=true;if(G.stats)G.stats.evade=(G.stats.evade||0)+1;}}
   if(ok)say(W[0].state!=='gone'?'G':'C',W[0].state!=='gone'?'振り切った！　いいロールだ':'ミサイル、外れました',1.6);}
 function updatePlayer(dt){
   if(P.wingLost){fallNoWing(dt);return;}
@@ -512,6 +512,33 @@ const GH=o=>RWY_Y+3.6*o.mesh.scale.y,GP=(o,p)=>(2.3*Math.sin(Math.max(p,0))+3.6*
 function setDoors(o){G.doorO=o;const d=baseGroup.userData.doors;d[0].position.x=-23.75-o*46.5;d[1].position.x=23.75+o*46.5;}
 // ── 格納庫の整備員：灯り・扉・エンジン出力・機体の位置を見て動く
 const _cl=new V3(),_cw=new V3();
+// 重さの段階：0 通常、1 解像度の下限 50%・木 60%・低木 50%、2 下限 42%・木 40%・低木なし
+// （雲の歩数を減らすと、残り歩数で届かないときの粗い歩みに早く切り替わってかえって重くなるので、雲は解像度で軽くする）
+function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
+  if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();}
+  for(const[im,k]of[[B.trees,[1,.6,.4][t]],[B.shrubs,[1,.5,0][t]]]){if(!im)continue;if(im.userData.n0===undefined)im.userData.n0=im.count;im.count=Math.floor(im.userData.n0*k);}}
+// ── 雲の中のちぎれ雲：雲の中を飛んでいる間、機体の横を流れ去る切れ端（速さと奥行き）。稲光で照らされる
+const SCUD={list:[],col:new V3(.1,.11,.12),on:false,_f:new V3(),_r:new V3(),_u:new V3()},_scS={},_scV=new V3();
+function initScud(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),r=mulberry(4242);
+  for(let i=0;i<60;i++){const a=r()*6.283,d=Math.pow(r(),.7)*38,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d*.7,rr=14+r()*26,g=x.createRadialGradient(px,py,0,px,py,rr);g.addColorStop(0,'rgba(255,255,255,'+(.10+r()*.12)+')');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(px-rr,py-rr,rr*2,rr*2);}
+  const map={value:new THREE.CanvasTexture(c)},col={value:SCUD.col};
+  for(let i=0;i<46;i++){const mat=new THREE.ShaderMaterial({uniforms:{map,uCol:col,uOp:{value:0},tDepth:U.tDepth,uRes:U.uRes},transparent:true,depthTest:false,depthWrite:false,
+      vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader:'uniform sampler2D map,tDepth;uniform vec3 uCol;uniform vec2 uRes;uniform float uOp;varying vec2 vUv;void main(){float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;gl_FragColor=vec4(uCol,texture2D(map,vUv).a*uOp);}'});
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),mat);m.frustumCulled=false;m.visible=false;m.renderOrder=-2;overlay.add(m);SCUD.list.push({m,s:1,rot:r()*6.283});}}
+function updateScud(){if(!SCUD.list.length)initScud();const cam=camera.position,sc=stormAt(cam.x,cam.y,cam.z,_scS);
+  const inC=(G.mode==='title'||G.indoor>0)?0:sat(sc.c*1.5-.35)*(cam.y<sc.top*.95?1:0)*sat(cam.y/150);
+  if(inC<=.01&&!SCUD.on)return;
+  camera.getWorldDirection(SCUD._f);SCUD._r.crossVectors(SCUD._f,camera.up).normalize();SCUD._u.crossVectors(SCUD._r,SCUD._f);
+  const fl=U.uFlashI.value||0,base=.06+.1*(1-(G.gloom||0));SCUD.col.set(base+fl*.9,base*1.06+fl*.9,base*1.15+fl);   // 暗い灰色、稲光で白く
+  let any=false;
+  for(const q of SCUD.list){const m=q.m,rel=_scV.subVectors(m.position,cam),dz=rel.dot(SCUD._f),d=rel.length();
+    if(!m.visible||dz<-40||d>620){if(inC<.05){m.visible=false;continue;}
+      m.position.copy(cam).addScaledVector(SCUD._f,180+Math.random()*420).addScaledVector(SCUD._r,(Math.random()-.5)*360).addScaledVector(SCUD._u,(Math.random()-.5)*170);
+      q.s=50+Math.random()*90;q.rot=Math.random()*6.283;m.visible=true;m.material.uniforms.uOp.value=0;continue;}
+    m.quaternion.copy(camera.quaternion);m.rotateZ(q.rot);m.scale.set(q.s,q.s*.7,1);
+    m.material.uniforms.uOp.value=inC*.55*sat((d-20)/70)*(1-sat((d-430)/170));any=true;}
+  SCUD.on=any;}
 // 本棟の前の旗：根元から先へ行くほど大きく波打つ
 function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if(!fl)return;if(camera.position.distanceTo(_cw.set(BASE.x+330,RWY_Y,BASE.z+335))>900)return;const t=G.t;
   for(const m of fl){const pa=m.geometry.attributes.position;if(!m.userData.x0)m.userData.x0=Float32Array.from({length:pa.count},(_,i)=>pa.getX(i));const x0=m.userData.x0;
@@ -681,7 +708,7 @@ function showResult(){
   $('rank').textContent=rank;$('rankT').textContent={S:'伝説の嵐乗り',A:'一流のストームライダー',B:'頼れる隊長',C:'満身創痍の帰還'}[rank];
   $('resT').innerHTML=`<tr><td>難易度</td><td>${DF().name}</td></tr><tr><td>任務時間</td><td class="mono">${mm}:${String(ss).padStart(2,'0')}</td></tr><tr><td>機体の耐久（残り）</td><td class="mono">${Math.round(P.hull)}%</td></tr>`+
     `<tr><td>受けたダメージの合計</td><td class="mono">${Math.round(G.stats.dmg)}</td></tr><tr><td>3番機ハル</td><td>${G.stats.shot?'撃墜された':G.stats.saved?'救援成功・全機帰還':G.stats.saved===false?'途中離脱（救助済み）':'無事帰還'}</td></tr>`+
-    `<tr><td>再挑戦</td><td class="mono">${G.retries} 回</td></tr>`+(G.stats.kills?`<tr><td>撃墜した迎撃機</td><td class="mono">${G.stats.kills} 機</td></tr>`:'');
+    `<tr><td>再挑戦</td><td class="mono">${G.retries} 回</td></tr>`+(G.stats.kills?`<tr><td>撃墜した迎撃機</td><td class="mono">${G.stats.kills} 機</td></tr>`:'')+(G.stats.evade?`<tr><td>ロールで振り切ったミサイル</td><td class="mono">${G.stats.evade} 発</td></tr>`:'')+(G.stats.sunk?`<tr><td>沈めた船</td><td class="mono">${G.stats.sunk} 隻</td></tr>`:'')+(G.stats.wreck?`<tr><td>壊した施設</td><td class="mono">${G.stats.wreck} 棟</td></tr>`:'');
 }
 function updateDying(dt){
   G.dieWall=(G.dieWall||0)+dt;if(G.dieWall>9){gameOver();return;}
@@ -849,7 +876,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('title').hidden=true;startCut(CUT_INTRO);});
+  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('title').hidden=true;startCut(CUT_INTRO);});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -870,7 +897,7 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{view.scale=1;view.upT=0;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
@@ -1170,7 +1197,7 @@ function updateCommon(dt){
   if(coreShell.visible){const d=camera.position.distanceTo(CORE),s=clamp(d*.07,34,460);coreShell.position.copy(CORE);coreShell.scale.setScalar(s);coreShell.quaternion.copy(camera.quaternion);coreShell.userData.inner.rotation.z+=dt*(G.lock>0?2.4:.5);
     const lk=G.lock>=1,pu=.75+.25*Math.sin(G.t*(lk?16:3));coreShell.traverse(o=>{if(o.isMesh){o.material.uniforms.uAlpha.value=pu;o.material.uniforms.uColor.value.set(lk?3.4:2.4,lk?.5:1.5,lk?.3:.5);}});}
   if(boomFx.visible){boomFx.userData.t+=dt;const u=boomFx.userData.t/1.4,s=boomFx.userData.t>=1.05&&G.mode!=='cut'?14*(1.5-u):80+u*520;boomFx.scale.set(s,s,1);boomFx.quaternion.copy(camera.quaternion);boomFx.material.uniforms.uAlpha.value=Math.max(0,1-u)*2;if(u>=1)boomFx.visible=false;}
-  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();
+  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();updateScud();
   if(strikeGlow&&strikeGlow.visible){const g=strikeGlow;g.userData.t+=dt;const u=g.userData.t/.45,s=260+u*520;g.scale.set(s,s*.5,1);g.quaternion.copy(camera.quaternion);g.material.uniforms.uAlpha.value=Math.max(0,1-u)*(0.6+0.4*Math.sin(G.t*90));if(u>=1)g.visible=false;}
   rings.forEach((r,i)=>{if(r.visible)r.rotation.z+=dt*.6;});
   gateRings.forEach(r=>{if(r.visible)r.material.uniforms.uAlpha.value=.7+.3*Math.sin(G.t*4);});
@@ -1229,9 +1256,12 @@ function frame(now){
   fpsAcc+=dt;fpsN++;
   if(G.mode==='title'){fpsAcc=0;fpsN=0;}   // タイトルの重い俯瞰で下がった解像度を本編へ持ち込まない
   if(fpsAcc>1.5){const fps=fpsN/fpsAcc;fpsAcc=0;fpsN=0;
-    if(fps<36&&view.scale>.6){view.scale=Math.max(.6,view.scale*.85);view.upT=-8;resize();renderFrame();}
+    if(fps<36&&view.scale>(view.minScale||.6)+.001){view.scale=Math.max(view.minScale||.6,view.scale*.85);view.upT=-8;resize();renderFrame();}
+    // 解像度を最低まで下げてもまだ重いときは、雲の細かさと木・低木の本数を段階的に減らす（軽くなれば戻す）
+    else if(fps<30&&view.scale<=(view.minScale||.6)+.01&&(view.tier||0)<2&&G.mode==='play'){view.tierT=0;setTier((view.tier||0)+1);}
+    else if(fps>55&&view.tier>0&&view.scale>=.99){view.tierT=(view.tierT||0)+1;if(view.tierT>=4){view.tierT=0;setTier(view.tier-1);}}
     else if(fps>55&&view.scale<1){view.upT=(view.upT||0)+1;if(view.upT>=3){view.upT=0;view.scale=Math.min(1,view.scale*1.1);resize();renderFrame();}}
-    else view.upT=0;}
+    else{view.upT=0;view.tierT=0;}}
 }
 
 // ───────────────────────── 起動 ─────────────────────────
@@ -1276,14 +1306,14 @@ function strHit(t,a,st){
       for(const o of STR.cols){const c=o.c;if(q.x>c[0]-1&&q.x<c[3]+1&&q.z>c[2]-1&&q.z<c[5]+1&&q.y>c[1]-1&&q.y<c[4]+1){
         puff(q.x,q.y,q.z,0,2,0,1.6,.5,.9);if(Math.random()<.4)SFX.spark();
         if(!o.dead&&!c[7]){o.hp--;strSay('base','G',lx>1050?'おい、港を撃つな！　何やってる！':'おい！　そこは味方の基地だぞ！');
-          if(o.hp<=0){o.dead=true;_sq.set((c[0]+c[3])/2,Math.min(c[4],c[1]+(c[4]-c[1])*.7),(c[2]+c[5])/2);explode(_sq,Math.min(1,.4+(c[3]-c[0])/60));
+          if(o.hp<=0){o.dead=true;if(G.stats)G.stats.wreck=(G.stats.wreck||0)+1;_sq.set((c[0]+c[3])/2,Math.min(c[4],c[1]+(c[4]-c[1])*.7),(c[2]+c[5])/2);explode(_sq,Math.min(1,.4+(c[3]-c[0])/60));
             STR.burn.push({x:_sq.x,y:c[4],z:_sq.z,r:Math.min(14,(c[3]-c[0])/4+3),t:0,max:90});strSay('baseK','C','施設の損壊を確認……すべて記録しています');}}
         return true;}}
       if(q.y<Math.max(islandH(lx,lz),3.5)){puff(q.x,Math.max(islandH(lx,lz),3.5),q.z,0,5,0,1.4,.6,.8);return true;}}
     else if(q.y<3.5){puff(q.x,3.6,q.z,0,7,0,1.3,.6);return true;}}
   return false;
 }
-function strSink(s){s.dead=true;s.sinkT=0;const L=s.m.userData.len;_sq.set(s.x,6,s.z);explode(_sq,L>100?1:L>50?.7:.45);STR.burn.push({ship:s,x:s.x,y:6,z:s.z,r:Math.min(14,L/8+3),t:0,max:L>100?80:45});
+function strSink(s){s.dead=true;if(G.stats)G.stats.sunk=(G.stats.sunk||0)+1;s.sinkT=0;const L=s.m.userData.len;_sq.set(s.x,6,s.z);explode(_sq,L>100?1:L>50?.7:.45);STR.burn.push({ship:s,x:s.x,y:6,z:s.z,r:Math.min(14,L/8+3),t:0,max:L>100?80:45});
   strSay('sink','G',L>100?'貨物船が……沈んでいく。乗組員は無事なのか':'……船が沈んだ。何をしてるんだ、隊長');}
 const _fv=new V3();
 function exhaust(x,y,z,s){if(!STR.init)strInit();const p=STR.smoke.find(q=>q.life<=0);if(!p)return;p.life=p.max=7+Math.random()*3;p.s=3.4+Math.random();p.a=.9;
@@ -1466,7 +1496,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={setTier,view,renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();

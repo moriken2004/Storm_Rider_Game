@@ -712,7 +712,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
       const fm=forestMask(x,z),p=.12+.88*Math.max(0,1-Math.abs(fm-.45)*2.2);if(rd()>p)continue;
       const sc=1.6+rd()*rd()*3.2;d.position.set(x,h+sc*.25,z);d.scale.set(sc*(.9+rd()*.5),sc*(.6+rd()*.35),sc*(.9+rd()*.5));d.rotation.y=rd()*6;d.updateMatrix();im.setMatrixAt(n,d.matrix);
       tc.setRGB(.45+rd()*.3,.5+rd()*.28,.36+rd()*.22);im.setColorAt(n,tc);n++;}
-    im.count=n;im.instanceColor.needsUpdate=true;im.frustumCulled=false;B.add(im);}
+    im.count=n;im.instanceColor.needsUpdate=true;im.frustumCulled=false;B.userData.shrubs=im;B.add(im);}
   // 滑走路沿いと建物まわりの並木（幹＋3 つの葉むら）
   {const cg=crownGeo(34,11),cm=leafMat();
     const N=420,crown=new THREE.InstancedMesh(cg,cm,N),tgm=new THREE.CylinderGeometry(.16,.3,1,7);tgm.translate(0,.5,0);
