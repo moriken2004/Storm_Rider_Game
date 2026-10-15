@@ -323,6 +323,10 @@ void main(){
         sc0*=1.0-uAO*0.62*occ*0.25*(1.0-smoothstep(90.0,160.0,zc));}}
     col=mix(sc0,hz,hazeAmt(uCam,rd,d,uHaze));
   }
+  // 嵐の中では遠くが雨の幕に煙る（雲底の下に外の明るい空が帯状に見えないように）
+  {float vd=dep>=0.999999?1e9:length((uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).xyz/(uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).w-uCam);
+   float k=uGloom*smoothstep(4000.0,12000.0,vd)*(1.0-smoothstep(0.02,0.35,rd.y))*(1.0-smoothstep(1500.0,3500.0,uCam.y));
+   col=mix(col,vec3(0.048,0.054,0.064)*(0.9+0.2*texture2D(tNoise2,vec2(atan(rd.z,rd.x)*0.6,rd.y*3.0)+uTime*0.002).b),k*0.85);}
   vec2 o=0.5/uCRes;
   vec4 cb=0.25*(texture2D(tCloud,vUv+o*2.0)+texture2D(tCloud,vUv-o*2.0)+texture2D(tCloud,vUv+vec2(o.x,-o.y)*2.0)+texture2D(tCloud,vUv+vec2(-o.x,o.y)*2.0));
   vec4 c=cb;if(uSharp>0.01){vec4 cc=texture2D(tCloud,vUv);c=cc+(cc-cb)*uSharp;c.rgb=max(c.rgb,vec3(0.0));c.a=clamp(c.a,0.0,1.0);}
@@ -402,7 +406,7 @@ void main(){
       col=mix(col,(col+a)/13.0,sat(coc*3.0));}}
   // レンズの色収差（周辺だけ）
   vec2 ca=(vUv-0.5)*v*0.0045;
-  float caw=0.8*(1.0-sat(cocv*6.0));col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
+  float caw=0.8*(1.0-sat(cocv*6.0))*(1.0-sat(drop*4.0));   // 雨粒の中では色ずれを止める（明るい灯りが色の点に割れる）col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
   col+=texture2D(tBloom,suv).rgb*0.42;
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;

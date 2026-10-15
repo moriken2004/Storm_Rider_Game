@@ -540,7 +540,7 @@ function animAircraft(g,t,power,phase){
   ud.lastP=power;ud.ign=Math.max(0,(ud.ign||0)-.012);
   const ab=sat((power-1.02)/.4),lit=power>=.28?1:0,T=sat((power-.2)/1.1),fl=1+Math.sin(t*37+phase)*.06;
   // ノズル奥の色は温度で変わる（暗赤→橙→白）
-  const r=lit*(.5+3.6*T)+ud.ign*3,gc=lit*(.05+1.9*T*T)+ud.ign*1.2,b=lit*(.9*T*T*T+ab*1.6)+ud.ign*.2;
+  const r=lit*(.5+3.6*T)+ud.ign*1.2,gc=lit*(.05+1.9*T*T)+ud.ign*.5,b=lit*(.9*T*T*T+ab*1.6)+ud.ign*.2;
   ud.fires.forEach(f=>f.material.color.setRGB(r*fl,gc*fl,b*fl));
   ud.glows.forEach(s=>{const q=(1.0+T*1.2+ab*1.6+ud.ign*.7)*lit+ud.ign*.5;s.scale.set(q,q,1);s.material.color.setRGB((.25+.8*T+ud.ign)*fl,(.1+.42*T+ud.ign*.4)*fl,(.04+.2*T+ab*.5)*fl);s.visible=q>.05;});
   if(ud.plumeMat){const u=ud.plumeMat.uniforms;u.uPow.value=lit*(.25+.75*T);u.uAB.value=ab;u.uIgn.value=ud.ign*ud.ign;const L=2.2+T*2.5+ab*9+ud.ign*6;ud.plumes.forEach(p=>p.scale.set(1+ud.ign*.5,1+ud.ign*.5,L));}
@@ -971,7 +971,7 @@ diffuseColor.rgb=c;`);};
 let spoutMat;
 function buildSpout(){
   if(!spoutMat)spoutMat=new THREE.ShaderMaterial({
-    uniforms:{uTime:U.uTime,tNoise2:U.tNoise2,uLight:{value:1},uFlashI:U.uFlashI},transparent:true,depthWrite:true,side:THREE.DoubleSide,
+    uniforms:{uTime:U.uTime,tNoise2:U.tNoise2,uLight:{value:1},uFlashI:U.uFlashI},transparent:true,depthWrite:false,side:THREE.DoubleSide,
     vertexShader:`uniform float uTime;varying vec2 vUv;varying vec3 vN;varying vec3 vV;
 void main(){vUv=uv;vec3 p=position;float h=uv.y;
   p.x+=sin(h*5.0+uTime*0.7)*26.0*h*(1.0-h)*2.0+h*h*40.0;p.z+=cos(h*4.0+uTime*0.5)*22.0*h*(1.0-h)*2.0;
@@ -979,13 +979,16 @@ void main(){vUv=uv;vec3 p=position;float h=uv.y;
     fragmentShader:`uniform float uTime,uLight,uFlashI;uniform sampler2D tNoise2;varying vec2 vUv;varying vec3 vN;varying vec3 vV;
 float sat(float x){return clamp(x,0.0,1.0);}
 void main(){
-  float n=texture2D(tNoise2,vec2(vUv.x*3.0+vUv.y*2.4-uTime*0.8,vUv.y*2.2-uTime*0.22)).b;
-  float n2=texture2D(tNoise2,vec2(vUv.x*8.0-uTime*1.5,vUv.y*6.0-uTime*0.5)).b;
+  // らせん状に巻き上がる筋（上ほど速くねじれる）、ふちは柔らかく、芯は濃い
+  float tw=vUv.x*3.0+vUv.y*(5.0+vUv.y*4.0)-uTime*1.1;
+  float n=texture2D(tNoise2,vec2(tw,vUv.y*1.6-uTime*0.25)).b;
+  float n2=texture2D(tNoise2,vec2(vUv.x*9.0+vUv.y*12.0-uTime*2.2,vUv.y*7.0-uTime*0.6)).b;
+  float streak=smoothstep(0.35,0.75,texture2D(tNoise2,vec2(tw*2.0,vUv.y*0.4)).b);
   float f=abs(dot(normalize(vN),normalize(vV)));
-  float a=smoothstep(0.0,0.85,f)*(0.35+0.65*n)*smoothstep(0.0,0.04,vUv.y);
-  float far=1.0-smoothstep(3200.0,5200.0,length(vV));a*=(1.0-smoothstep(0.94,1.0,vUv.y)*0.9)*far;if(a<0.2)discard;
-  vec3 c=mix(vec3(0.05,0.057,0.068),vec3(0.2,0.22,0.25),n*0.55+n2*0.45)*(uLight+uFlashI*2.0);
-  gl_FragColor=vec4(c*0.8,sat(a*1.7));
+  float a=smoothstep(0.0,0.55,f)*(0.6+0.4*n)*smoothstep(0.0,0.05,vUv.y)*(0.8+0.3*streak);
+  float far=1.0-smoothstep(3200.0,5200.0,length(vV));a*=(1.0-smoothstep(0.9,1.0,vUv.y)*0.85)*far;if(a<0.03)discard;
+  vec3 c=mix(vec3(0.045,0.05,0.06),vec3(0.24,0.26,0.29),n*0.4+n2*0.3+streak*0.3)*(1.0-0.35*smoothstep(0.6,1.0,f))*(uLight+uFlashI*2.0);
+  gl_FragColor=vec4(c*0.8,sat(a*2.2));
 }`});
   const g=new THREE.Group();
   const col=new THREE.Mesh(new THREE.CylinderGeometry(84,17,640,28,48,true),spoutMat);col.position.y=310;g.add(col);

@@ -715,6 +715,10 @@ void main(){
         sc0*=1.0-uAO*0.62*occ*0.25*(1.0-smoothstep(90.0,160.0,zc));}}
     col=mix(sc0,hz,hazeAmt(uCam,rd,d,uHaze));
   }
+  // 嵐の中では遠くが雨の幕に煙る（雲底の下に外の明るい空が帯状に見えないように）
+  {float vd=dep>=0.999999?1e9:length((uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).xyz/(uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).w-uCam);
+   float k=uGloom*smoothstep(4000.0,12000.0,vd)*(1.0-smoothstep(0.02,0.35,rd.y))*(1.0-smoothstep(1500.0,3500.0,uCam.y));
+   col=mix(col,vec3(0.048,0.054,0.064)*(0.9+0.2*texture2D(tNoise2,vec2(atan(rd.z,rd.x)*0.6,rd.y*3.0)+uTime*0.002).b),k*0.85);}
   vec2 o=0.5/uCRes;
   vec4 cb=0.25*(texture2D(tCloud,vUv+o*2.0)+texture2D(tCloud,vUv-o*2.0)+texture2D(tCloud,vUv+vec2(o.x,-o.y)*2.0)+texture2D(tCloud,vUv+vec2(-o.x,o.y)*2.0));
   vec4 c=cb;if(uSharp>0.01){vec4 cc=texture2D(tCloud,vUv);c=cc+(cc-cb)*uSharp;c.rgb=max(c.rgb,vec3(0.0));c.a=clamp(c.a,0.0,1.0);}
@@ -794,7 +798,7 @@ void main(){
       col=mix(col,(col+a)/13.0,sat(coc*3.0));}}
   // レンズの色収差（周辺だけ）
   vec2 ca=(vUv-0.5)*v*0.0045;
-  float caw=0.8*(1.0-sat(cocv*6.0));col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
+  float caw=0.8*(1.0-sat(cocv*6.0))*(1.0-sat(drop*4.0));   // 雨粒の中では色ずれを止める（明るい灯りが色の点に割れる）col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
   col+=texture2D(tBloom,suv).rgb*0.42;
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;
@@ -1545,7 +1549,7 @@ function animAircraft(g,t,power,phase){
   ud.lastP=power;ud.ign=Math.max(0,(ud.ign||0)-.012);
   const ab=sat((power-1.02)/.4),lit=power>=.28?1:0,T=sat((power-.2)/1.1),fl=1+Math.sin(t*37+phase)*.06;
   // ノズル奥の色は温度で変わる（暗赤→橙→白）
-  const r=lit*(.5+3.6*T)+ud.ign*3,gc=lit*(.05+1.9*T*T)+ud.ign*1.2,b=lit*(.9*T*T*T+ab*1.6)+ud.ign*.2;
+  const r=lit*(.5+3.6*T)+ud.ign*1.2,gc=lit*(.05+1.9*T*T)+ud.ign*.5,b=lit*(.9*T*T*T+ab*1.6)+ud.ign*.2;
   ud.fires.forEach(f=>f.material.color.setRGB(r*fl,gc*fl,b*fl));
   ud.glows.forEach(s=>{const q=(1.0+T*1.2+ab*1.6+ud.ign*.7)*lit+ud.ign*.5;s.scale.set(q,q,1);s.material.color.setRGB((.25+.8*T+ud.ign)*fl,(.1+.42*T+ud.ign*.4)*fl,(.04+.2*T+ab*.5)*fl);s.visible=q>.05;});
   if(ud.plumeMat){const u=ud.plumeMat.uniforms;u.uPow.value=lit*(.25+.75*T);u.uAB.value=ab;u.uIgn.value=ud.ign*ud.ign;const L=2.2+T*2.5+ab*9+ud.ign*6;ud.plumes.forEach(p=>p.scale.set(1+ud.ign*.5,1+ud.ign*.5,L));}
@@ -1976,7 +1980,7 @@ diffuseColor.rgb=c;`);};
 let spoutMat;
 function buildSpout(){
   if(!spoutMat)spoutMat=new THREE.ShaderMaterial({
-    uniforms:{uTime:U.uTime,tNoise2:U.tNoise2,uLight:{value:1},uFlashI:U.uFlashI},transparent:true,depthWrite:true,side:THREE.DoubleSide,
+    uniforms:{uTime:U.uTime,tNoise2:U.tNoise2,uLight:{value:1},uFlashI:U.uFlashI},transparent:true,depthWrite:false,side:THREE.DoubleSide,
     vertexShader:`uniform float uTime;varying vec2 vUv;varying vec3 vN;varying vec3 vV;
 void main(){vUv=uv;vec3 p=position;float h=uv.y;
   p.x+=sin(h*5.0+uTime*0.7)*26.0*h*(1.0-h)*2.0+h*h*40.0;p.z+=cos(h*4.0+uTime*0.5)*22.0*h*(1.0-h)*2.0;
@@ -1984,13 +1988,16 @@ void main(){vUv=uv;vec3 p=position;float h=uv.y;
     fragmentShader:`uniform float uTime,uLight,uFlashI;uniform sampler2D tNoise2;varying vec2 vUv;varying vec3 vN;varying vec3 vV;
 float sat(float x){return clamp(x,0.0,1.0);}
 void main(){
-  float n=texture2D(tNoise2,vec2(vUv.x*3.0+vUv.y*2.4-uTime*0.8,vUv.y*2.2-uTime*0.22)).b;
-  float n2=texture2D(tNoise2,vec2(vUv.x*8.0-uTime*1.5,vUv.y*6.0-uTime*0.5)).b;
+  // らせん状に巻き上がる筋（上ほど速くねじれる）、ふちは柔らかく、芯は濃い
+  float tw=vUv.x*3.0+vUv.y*(5.0+vUv.y*4.0)-uTime*1.1;
+  float n=texture2D(tNoise2,vec2(tw,vUv.y*1.6-uTime*0.25)).b;
+  float n2=texture2D(tNoise2,vec2(vUv.x*9.0+vUv.y*12.0-uTime*2.2,vUv.y*7.0-uTime*0.6)).b;
+  float streak=smoothstep(0.35,0.75,texture2D(tNoise2,vec2(tw*2.0,vUv.y*0.4)).b);
   float f=abs(dot(normalize(vN),normalize(vV)));
-  float a=smoothstep(0.0,0.85,f)*(0.35+0.65*n)*smoothstep(0.0,0.04,vUv.y);
-  float far=1.0-smoothstep(3200.0,5200.0,length(vV));a*=(1.0-smoothstep(0.94,1.0,vUv.y)*0.9)*far;if(a<0.2)discard;
-  vec3 c=mix(vec3(0.05,0.057,0.068),vec3(0.2,0.22,0.25),n*0.55+n2*0.45)*(uLight+uFlashI*2.0);
-  gl_FragColor=vec4(c*0.8,sat(a*1.7));
+  float a=smoothstep(0.0,0.55,f)*(0.6+0.4*n)*smoothstep(0.0,0.05,vUv.y)*(0.8+0.3*streak);
+  float far=1.0-smoothstep(3200.0,5200.0,length(vV));a*=(1.0-smoothstep(0.9,1.0,vUv.y)*0.85)*far;if(a<0.03)discard;
+  vec3 c=mix(vec3(0.045,0.05,0.06),vec3(0.24,0.26,0.29),n*0.4+n2*0.3+streak*0.3)*(1.0-0.35*smoothstep(0.6,1.0,f))*(uLight+uFlashI*2.0);
+  gl_FragColor=vec4(c*0.8,sat(a*2.2));
 }`});
   const g=new THREE.Group();
   const col=new THREE.Mesh(new THREE.CylinderGeometry(84,17,640,28,48,true),spoutMat);col.position.y=310;g.add(col);
@@ -3896,9 +3903,11 @@ function gearOf(o,on){o.mesh.userData.gear.visible=on;}
 // ───────────────────────── 雷 ─────────────────────────
 function flashAt(x,y,z,I){U.uFlashPos.value.set(x,y,z);G.flash=Math.max(G.flash,I);const d=camera.position.distanceTo(U.uFlashPos.value);if(d<2200)G.scr=Math.max(G.scr,I*.35*(1-d/2200));}
 function boltFromTo(a,b,w){let bo=bolts.find(q=>q.life<=0)||bolts[0];shapeBolt(bo,a,b,w||7);}
+// 落雷が海面に当たったところ：白い蒸気としぶきが噴き上がる（近いときだけ）
+function seaHit(x,z){if(Math.hypot(camera.position.x-x,camera.position.z-z)>3000)return;for(let k=0;k<14;k++){const a=Math.random()*6.283,v=6+Math.random()*16;puff(x+Math.cos(a)*3,3.6,z+Math.sin(a)*3,Math.cos(a)*v,14+Math.random()*26,Math.sin(a)*v,5+Math.random()*7,1.2+Math.random()*1.2);}}
 function strikeAt(x,z,danger){
   const top=rr(900,1700);tA.set(x+rr(-260,260),top,z+rr(-260,260));tB.set(x,0,z);boltFromTo(tA,tB,danger?9:7);
-  flashAt(x,top*.6,z,danger?1.3:1);
+  flashAt(x,top*.6,z,danger?1.3:1);seaHit(x,z);
   if(strikeGlow){strikeGlow.visible=true;strikeGlow.position.set(x,14,z);strikeGlow.userData.t=0;}
   const d=Math.hypot(camera.position.x-x,camera.position.z-z);SFX.thunder(d);
   if(danger&&G.mode==='play'){const pd=Math.hypot(P.pos.x-x,P.pos.z-z);
@@ -3919,7 +3928,7 @@ function ambientLightning(dt){
   const cx=camera.position.x,cz=camera.position.z;
   for(let k=0;k<6;k++){const a=rnd()*6.283,d=rr(1500,7500),x=cx+Math.cos(a)*d,z=cz+Math.sin(a)*d,s=stormAt(x,900,z);
     if(s.c>.55){const y=rr(900,2600);
-      const cg=rnd()<.45;if(cg){tA.set(x,rr(700,1500),z);tB.set(x+rr(-300,300),0,z+rr(-300,300));boltFromTo(tA,tB,10+d*.0012);}
+      const cg=rnd()<.45;if(cg){tA.set(x,rr(700,1500),z);tB.set(x+rr(-300,300),0,z+rr(-300,300));boltFromTo(tA,tB,10+d*.0012);seaHit(tB.x,tB.z);}
       flashAt(x,y,z,rr(.45,1));SFX.thunder(d*1.15,cg?'cg':'ic');break;}}
   G.ambT=rr(.4,2.0)/(0.35+G.gloom*1.4);
 }
@@ -4054,7 +4063,11 @@ function updatePlayer(dt){
   syncAC(P);P.mesh.userData.ctlR=ix;P.mesh.userData.ctlP=iy;
   // 翼端雲
   P.mesh.updateMatrixWorld();
-  const str=sat((s.c*.5+Math.abs(ix)*.5+(boosting?.35:0))*(P.pos.y<s.top+400?1:.4))*.5;
+  const hum=P.pos.y<s.top+400?1:.4,gl=sat((P.g-1.15)/1.2);
+  const str=sat((s.c*.5+Math.abs(ix)*.5+(boosting?.35:0)+gl*.6)*hum)*.5;
+  // 急な引き起こし・旋回では主翼の上に一瞬の水蒸気の幕（湿った空気ほど濃い）
+  if(gl>.15&&Math.random()<dt*40*gl*hum*(.4+s.c)){fwdOf(P.yaw,P.pitch,tA);const tp=P.mesh.userData.tipPos,u=(Math.random()*2-1)*.8;tD.set(tp.x*u,tp.y+.6,tp.z-1.2+Math.random()*1.5);P.mesh.localToWorld(tD);
+    puff(tD.x,tD.y,tD.z,P.vel.x*.85,P.vel.y*.85+1,P.vel.z*.85,1.2+Math.random()*1.4,.35+Math.random()*.25,.55*gl);}
   tC.set(1,0,0).applyQuaternion(P.mesh.quaternion);
   for(let i=0;i<2;i++){const tp=P.mesh.userData.tipPos;tD.set(i?tp.x:-tp.x,tp.y,tp.z);P.mesh.localToWorld(tD);pushTrail(trails[i],tD,tC,str*.3,dt,.3);}
 }
@@ -4275,6 +4288,8 @@ function updatePhase(dt){
   }
   // 竜巻
   if(U.uStorm.value>.5)for(const s of spouts){if(!s.mesh.visible)continue;
+    // 根元で海水が渦を巻いて噴き上がる（近いときだけ）
+    {const q=s.mesh.position;if(camera.position.distanceTo(q)<2500&&Math.random()<dt*22){const a2=Math.random()*6.283,r2=30+Math.random()*60;puff(q.x+Math.cos(a2)*r2,3.6,q.z+Math.sin(a2)*r2,-Math.sin(a2)*30,10+Math.random()*30,Math.cos(a2)*30,10+Math.random()*12,1.6+Math.random(),.7);}}
     const d=Math.hypot(P.pos.x-s.mesh.position.x,P.pos.z-s.mesh.position.z),rad=lerp(26,90,sat(P.pos.y/700));
     if(P.pos.y<800&&d<rad){damage(28,'海上竜巻に巻き込まれた');P.fling.set((P.pos.x-s.mesh.position.x)/d*70,45,(P.pos.z-s.mesh.position.z)/d*70);P.spin=2.2;}
     else if(d<450&&P.pos.y<800){tA.set(s.mesh.position.x-P.pos.x,0,s.mesh.position.z-P.pos.z).normalize();P.pos.addScaledVector(tA,(1-d/450)*26*dt);G.shake=Math.max(G.shake,(1-d/450)*.5);
@@ -5031,7 +5046,7 @@ function updateCommon(dt){
   G.gloom=damp(G.gloom,cp.y<cs.top+300?cs.c:cs.c*.2,1.5,dt);
   G.rain=damp(G.rain,cp.y<lerp(900,500,cs.wall)+200?cs.rain:(cp.y<cs.top?cs.rain*.5:0),1.5,dt);
   cloudMat.uniforms.uGloom.value=G.gloom;cloudMat.uniforms.uHaze.value=lerp(.00004,.00013,G.gloom);
-  const fu=finalMat.uniforms;fu.uGloomF.value=G.gloom*(1-(G.indoor||0));fu.uGoldF.value=G.gold;fu.uLens.value=damp(fu.uLens.value,G.mode==='play'||G.mode==='cut'?sat(G.rain*1.2-.15):0,1.5,dt);
+  const fu=finalMat.uniforms;fu.uGloomF.value=G.gloom*(1-(G.indoor||0));fu.uGoldF.value=G.gold;fu.uLens.value=damp(fu.uLens.value,G.mode==='play'&&!(G.indoor>0)?sat(G.rain*1.2-.15):0,G.mode==='play'?1.5:8,dt);   // レンズの雨粒はプレイ中の追尾カメラだけ（格納庫やカットの寄りでは、粒が明るいエンジンを映して色の点に見える）
   {const cd=camera.position.distanceTo(P.pos),want=G.mode==='cut'&&cd<95?1:0;fu.uDof.value=damp(fu.uDof.value,want,4,dt);fu.uFocus.value=cd;
     compMat.uniforms.uAO.value=fu.uDof.value;const pj=1/Math.tan(camera.fov*Math.PI/360);compMat.uniforms.uProj.value.set(pj*.5/camera.aspect,pj*.5);
     // 排気の陽炎：ノズルの後ろ 2 点を画面に投影し、その間をゆらめかせる
