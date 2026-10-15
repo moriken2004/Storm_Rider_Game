@@ -583,6 +583,8 @@ float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
   vec4 nz=texture(tNoise,q);float n=nz.r;
   float top=sc.w*(0.58+0.62*sat((nz.g-0.28)*2.3));
   base+=(0.42-nz.g)*340.0*(1.0-0.55*wall);
+  // 遠くから見ると雲底が一直線の板に見えるので、大きなうねり（数 km）と垂れ下がり（ちぎれ雲の房）を足す
+  {float bn=texture(tNoise,vec3(p.xz/19000.0,0.61)).r;base+=(bn-0.5)*520.0*(1.0-0.5*wall);base-=smoothstep(0.62,0.85,nz.r)*160.0*(1.0-0.4*wall);}
   float cv=0.0;
   if(p.y>base&&p.y<top){
     hf=(p.y-base)/(top-base);
