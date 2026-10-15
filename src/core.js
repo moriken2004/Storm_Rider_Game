@@ -113,20 +113,35 @@ uniform vec3 uSunDir,uSunCol,uSkyZen,uSkyHor,uFlashPos;
 uniform float uFlashI;
 const float EYE_R=2400.0;const float WALL_OUT=4600.0;const float RO=15000.0;
 float sat(float x){return clamp(x,0.0,1.0);}
+float hh2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vn2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hh2(i),hh2(i+vec2(1.0,0.0)),f.x),mix(hh2(i+vec2(0.0,1.0)),hh2(i+vec2(1.0,1.0)),f.x),f.y);}
+// 対数らせんの帯（ph の周期 2π、中心からの角度のずれでガウス形）
+float spBand(float th,float lr,float k,float off,float w){float d=abs(mod(th+k*lr+off+3.14159,6.28318)-3.14159);return 1.0-smoothstep(w*0.45,w,d);}
 // x:雲量 y:壁雲 z:雨 w:雲頂高度
+// 実際の台風の姿：小さく丸い目と厚い眼の壁雲、中心を覆う一様な厚い雲（CDO）、幅も長さも不ぞろいな 3 本のスパイラルバンド
+// （巻き込み角およそ 15°）、帯と CDO のあいだの雲の薄いすき間、外ほどちぎれる対流雲、片側に偏った濃さ、外周の孤立した積乱雲
 vec4 stormCover(vec3 p){
   float r=length(p.xz);
   float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;
   float life=smoothstep(0.0,1.0,uStorm*1.8-0.8*(1.0-sat(r/RO)));
   float inEye=smoothstep(er-150.0,er+350.0,r);
   float wall=inEye*(1.0-smoothstep(WALL_OUT-500.0,WALL_OUT+1400.0,r));
-  float sp=atan(p.z,p.x)*2.0+8.0*log(max(r,300.0)/EYE_R)+uSpin;
-  float band=smoothstep(-0.15,0.62,cos(sp));
-  float outer=1.0-smoothstep(RO*0.72,RO,r);
-  float cdo=1.0-smoothstep(4400.0,7800.0,r);
-  float c=max(max(wall,cdo*0.86),band*outer*0.97+outer*0.06)*inEye*life;
-  float top=mix(mix(2400.0,3600.0,cdo),4300.0,wall);
-  float rain=max(wall,band*outer*0.8+cdo*0.35)*inEye*life;
+  float th=atan(p.z,p.x)+uSpin,lr=log(max(r,300.0)/EYE_R);
+  float nA=vn2(p.xz/2700.0),nB=vn2(p.xz/950.0+7.3),nC=vn2(p.xz/420.0+3.1);
+  float cdo=1.0-smoothstep(4600.0+900.0*nA,7600.0+1800.0*nA,r);
+  float wb=mix(1.05,0.55,sat(r/RO))*(0.75+0.5*nA);
+  float b1=spBand(th,lr,3.5,0.0,wb)*(1.0-smoothstep(10500.0,15500.0+1500.0*nB,r));
+  float b2=spBand(th,lr,3.9,2.4,wb*0.75)*(1.0-smoothstep(7500.0,12500.0,r))*0.9;
+  float b3=spBand(th,lr,3.2,4.5,wb*0.6)*(1.0-smoothstep(5500.0,10000.0,r))*0.75;
+  float bands=max(b1,max(b2,b3))*smoothstep(4200.0,6000.0,r);
+  float fr=smoothstep(6500.0,13500.0,r);bands*=mix(1.0,0.35+0.65*smoothstep(0.28,0.58,nB*0.7+nC*0.45),fr);   // 外ほど対流雲の列にちぎれる
+  bands*=0.84+0.16*smoothstep(-0.6,1.0,cos(th-0.9));                                                  // 片側に偏る
+  float moat=1.0-0.7*smoothstep(6800.0,8000.0,r)*(1.0-smoothstep(8200.0,9800.0,r))*(1.0-b1);      // 帯と CDO のあいだのすき間
+  float outer=1.0-smoothstep(RO*0.82,RO*1.1,r);
+  float cells=smoothstep(0.70,0.86,vn2(p.xz/700.0+11.0))*outer*0.55*smoothstep(5000.0,9000.0,r);    // 孤立した積乱雲
+  float c=max(max(wall,cdo*0.97*moat),max(bands,cells+outer*0.04))*inEye*life;
+  float top=mix(mix(2200.0,3700.0,max(cdo,bands*0.6)),4300.0,wall);
+  float rain=max(wall,bands*0.8+cdo*0.35)*inEye*life;
   return vec4(c,wall*life,rain,top);
 }
 vec3 skyColor(vec3 d){
@@ -553,18 +568,24 @@ function renderFrame(){
 
 // ───────────────────────── 台風場の CPU 版（シェーダと同じ式） ─────────────────────────
 const _sc={c:0,wall:0,rain:0,top:0};
+const hh2=(x,y)=>{const v=Math.sin(x*127.1+y*311.7)*43758.5453;return v-Math.floor(v);};
+function vn2(x,y){const ix=Math.floor(x),iy=Math.floor(y);let fx=x-ix,fy=y-iy;fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);const a=hh2(ix,iy),b=hh2(ix+1,iy),c=hh2(ix,iy+1),d=hh2(ix+1,iy+1);return lerp(lerp(a,b,fx),lerp(c,d,fx),fy);}
+function spBand(th,lr,k,off,w){let q=(th+k*lr+off+Math.PI)%(2*Math.PI);if(q<0)q+=2*Math.PI;const d=Math.abs(q-Math.PI);return 1-smooth(w*.45,w,d);}
 function stormAt(x,y,z,out){
   out=out||_sc;
   const r=Math.hypot(x,z),er=EYE_R*U.uEye.value+Math.max(y-200,0)*0.45;
   const life=smooth(0,1,U.uStorm.value*1.8-0.8*(1-sat(r/RO)));
   const inEye=smooth(er-150,er+350,r);
   const wall=inEye*(1-smooth(WALL_OUT-500,WALL_OUT+1400,r));
-  const sp=Math.atan2(z,x)*2+8*Math.log(Math.max(r,300)/EYE_R)+U.uSpin.value;
-  const band=smooth(-0.15,0.62,Math.cos(sp));
-  const outer=1-smooth(RO*0.72,RO,r),cdo=1-smooth(4400,7800,r);
-  out.c=Math.max(wall,cdo*0.86,band*outer*0.97+outer*0.06)*inEye*life;
-  out.top=lerp(lerp(2400,3600,cdo),4300,wall);
-  out.rain=Math.max(wall,band*outer*0.8+cdo*0.35)*inEye*life;
+  const th=Math.atan2(z,x)+U.uSpin.value,lr=Math.log(Math.max(r,300)/EYE_R);
+  const nA=vn2(x/2700,z/2700),nB=vn2(x/950+7.3,z/950+7.3),nC=vn2(x/420+3.1,z/420+3.1);
+  const cdo=1-smooth(4600+900*nA,7600+1800*nA,r),wb=lerp(1.05,.55,sat(r/RO))*(.75+.5*nA);
+  const b1=spBand(th,lr,3.5,0,wb)*(1-smooth(10500,15500+1500*nB,r)),b2=spBand(th,lr,3.9,2.4,wb*.75)*(1-smooth(7500,12500,r))*.9,b3=spBand(th,lr,3.2,4.5,wb*.6)*(1-smooth(5500,10000,r))*.75;
+  let bands=Math.max(b1,b2,b3)*smooth(4200,6000,r);const fr=smooth(6500,13500,r);bands*=lerp(1,.35+.65*smooth(.28,.58,nB*.7+nC*.45),fr);bands*=.84+.16*smooth(-.6,1,Math.cos(th-.9));
+  const moat=1-.7*smooth(6800,8000,r)*(1-smooth(8200,9800,r))*(1-b1),outer=1-smooth(RO*.82,RO*1.1,r),cells=smooth(.7,.86,vn2(x/700+11,z/700+11))*outer*.55*smooth(5000,9000,r);
+  out.c=Math.max(wall,cdo*.97*moat,bands,cells+outer*.04)*inEye*life;
+  out.top=lerp(lerp(2200,3700,Math.max(cdo,bands*.6)),4300,wall);
+  out.rain=Math.max(wall,bands*.8+cdo*.35)*inEye*life;
   out.wall=wall*life;out.r=r;
   return out;
 }
