@@ -7,7 +7,11 @@ float harb(vec2 xz){vec2 l=xz-vec2(0.0,21000.0);float u=clamp((l.x-1282.0)/358.0
 float seaState(vec2 xz,float c){return max(c,(1.0-smoothstep(2500.0,14000.0,length(xz)))*0.75*uStorm);}
 `;
 let ocean;
+function shoreTex(){const N=512,d=new Uint8Array(N*N*4);
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){const x=-1900+3800*(i+.5)/N,z=-2100+4200*(j+.5)/N,h=islandH(x,z),v=Math.max(0,Math.min(255,Math.round((h+24)/32*255))),o=(j*N+i)*4;d[o]=d[o+1]=d[o+2]=v;d[o+3]=255;}
+  const t=new THREE.DataTexture(d,N,N,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.LinearFilter;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;t.needsUpdate=true;return t;}
 function buildOcean(){
+  U.tShore.value=shoreTex();
   const RINGS=210,SEG=200,pos=[],idx=[];
   for(let i=0;i<=RINGS;i++){const r=i===0?0:5*Math.pow(1.047,i);
     for(let j=0;j<SEG;j++){const a=j/SEG*Math.PI*2;pos.push(Math.cos(a)*r,0,Math.sin(a)*r);}}
@@ -15,7 +19,8 @@ function buildOcean(){
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);
   const m=new THREE.ShaderMaterial({
     uniforms:Object.assign({uSnap:{value:new THREE.Vector2()}},U),
-    vertexShader:`uniform vec2 uSnap;varying vec3 vW;varying vec2 vP;
+    vertexShader:`uniform vec2 uSnap;uniform sampler2D tShore;varying vec3 vW;varying vec2 vP;
+float shoreHv(vec2 xz){vec2 u=(xz-vec2(0.0,21000.0)+vec2(1900.0,2100.0))/vec2(3800.0,4200.0);if(u.x<0.0||u.y<0.0||u.x>1.0||u.y>1.0)return -24.0;return texture2D(tShore,u).r*32.0-24.0;}
 ${GLSL_COMMON}${GLSL_WAVES}
 void main(){
   vec3 p=position;float R=length(p.xz);p.xz+=uSnap;vP=p.xz;
@@ -23,11 +28,13 @@ void main(){
   vec3 d=vec3(0.0);
   for(int i=0;i<3;i++){vec4 W=WAV[i];float lam=6.2832/W.z;float f=1.0-smoothstep(lam*3.0,lam*5.5,R);
     float ph=W.z*dot(W.xy,p.xz)-sqrt(9.8*W.z)*uTime;d.y+=W.w*sin(ph)*f;}
-  p+=d*sea*(1.0-0.88*harb(p.xz));vW=p;
+  p+=d*sea*(1.0-0.88*harb(p.xz))*mix(0.12,1.0,smoothstep(0.0,9.0,-shoreHv(p.xz)));vW=p;   // 浅瀬ではうねりを小さく（浜に乗り上げない）
   gl_Position=projectionMatrix*viewMatrix*vec4(p,1.0);
 }`,
     fragmentShader:`precision highp sampler3D;
-uniform sampler3D tNoise;uniform sampler2D tNoise2;varying vec3 vW;varying vec2 vP;
+uniform sampler3D tNoise;uniform sampler2D tNoise2,tShore;varying vec3 vW;varying vec2 vP;
+// 地形の高さ（島の外は深い海）
+float shoreH(vec2 xz){vec2 u=(xz-vec2(0.0,21000.0)+vec2(1900.0,2100.0))/vec2(3800.0,4200.0);if(u.x<0.0||u.y<0.0||u.x>1.0||u.y>1.0)return -24.0;return texture2D(tShore,u).r*32.0-24.0;}
 float smN(vec2 uv){uv=uv*256.0+0.5;vec2 i=floor(uv),f=fract(uv);f=f*f*f*(f*(f*6.0-15.0)+10.0);return texture2D(tNoise2,(i+f-0.5)/256.0).b;}
 ${GLSL_COMMON}${GLSL_WAVES}
 // 晴天の積雲が落とす影：雲の層（高度 1700m 付近）まで太陽方向へたどった位置の雲量
@@ -74,8 +81,10 @@ void main(){
   // 島のまわりの浅瀬
   vec2 il=(xz-vec2(0.0,21000.0))/vec2(1500.0,1750.0);float idv=length(il)+(texture2D(tNoise2,xz/2600.0).b-0.5)*0.22;
   float hbm=harb(xz);
-  float shal=(1.0-smoothstep(0.78,1.25,idv))*(1.0-hbm);
-  body=mix(body,vec3(0.035,0.30,0.29)*(E+0.04),shal*shal*0.8);
+  float sh=shoreH(xz),dep=max(-sh,0.0);
+  float shal=(1.0-smoothstep(1.5,20.0,dep))*(1.0-hbm);
+  body=mix(body,vec3(0.035,0.30,0.29)*(E+0.04),shal*0.85);
+  body=mix(body,vec3(0.36,0.33,0.25)*(E+0.06),(1.0-smoothstep(0.0,2.2,dep))*(1.0-hbm)*0.55);
   body=mix(body,vec3(0.012,0.085,0.090)*(E+0.04),hbm*0.85);
   vec3 col=mix(body,refl,F);
   // 太陽のきらめき
@@ -92,11 +101,11 @@ void main(){
   float lace=smoothstep(0.43,0.60,n2*0.62+n3*0.48);
   float foam=cap*lace;
   // 磯波
-  {float ph=uTime*0.55+n1*7.0,w1=0.030*sin(ph),w2=0.030*sin(ph-1.7);
-    float b1=smoothstep(0.050,0.0,abs(idv-0.845-w1))*smoothstep(0.28,0.60,n2*0.7+n3*0.5);
-    float b2=smoothstep(0.038,0.0,abs(idv-0.900-w2))*smoothstep(0.36,0.66,n2*0.6+n3*0.6)*0.75;
-    float lace2=smoothstep(0.50,0.72,n3*0.6+n2*0.5)*smoothstep(0.800,0.835,idv)*(1.0-smoothstep(0.86,0.90,idv))*0.45;
-    foam=max(foam,max(max(b1,b2),lace2)*0.95);}
+  {float sw=texture2D(tNoise2,xz/260.0).b*6.0,ph=dep*0.85+uTime*1.05+sw;
+    float brk=pow(max(sin(ph),0.0),22.0)*smoothstep(7.5,2.0,dep)*smoothstep(0.25,0.9,dep)*smoothstep(0.34,0.6,n3*0.75+n2*0.35);   // 砕け波の列
+    float trail=pow(max(sin(ph-0.45),0.0),5.0)*smoothstep(4.0,1.0,dep)*smoothstep(0.1,0.6,dep)*smoothstep(0.52,0.74,n3*0.7+n2*0.4)*0.5; // 崩れたあとの泡
+    float edge=0.55+0.45*sin(uTime*0.55+sw);float swash=smoothstep(0.0,0.08,dep)*(1.0-smoothstep(0.15+0.55*edge,0.35+0.75*edge,dep))*smoothstep(0.32,0.6,n2*0.5+n3*0.6);  // 波打ち際
+    foam=max(foam,max(max(brk,trail),swash*0.9)*(1.0-hbm));}
   float rr0=length(xz);
   float st=texture2D(tNoise2,vec2(atan(xz.y,xz.x)*35.65+rr0/900.0+uTime*0.004,(rr0+(n1-0.5)*520.0)/52.0)).b;
   foam=max(foam,smoothstep(0.52,0.74,st)*smoothstep(0.40,0.66,n2*0.5+n3*0.6)*sat(sc.x*2.2-0.8)*0.7*(1.0-sat(dist/6000.0)));
@@ -502,6 +511,8 @@ function islandH(x,z){
   return lerp(lerp(h,RWY_Y-.5,Math.max(w,ap)),4.2,pm);
 }
 const inPort=(x,z)=>x>1070&&x<1310&&z>-215&&z<515;
+const ROAD_PTS=[[210,300],[470,300],[560,312],[640,326],[800,300],[960,240],[1060,200],[1112,190]];
+function nearRoad(x,z,r){r=r||15;for(let i=0;i<ROAD_PTS.length-1;i++){const[a,b]=[ROAD_PTS[i],ROAD_PTS[i+1]],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz)));if(Math.hypot(a[0]+dx*t-x,a[1]+dz*t-z)<r)return true;}return false;}
 // 継ぎ目なく並ぶ地表テクスチャを作る。rgb=色（ガンマ2で格納）a=高さ。別に勾配テクスチャ（凹凸用）
 const GT={};
 function buildGroundTex(){
@@ -540,9 +551,9 @@ function buildBase(){
     col[i*3+1]=forestMask(x,z);}
   tg.setAttribute('color',new THREE.BufferAttribute(col,3));tg.computeVertexNormals();
   const tm=std({vertexColors:true,roughness:.95,metalness:0});
-  tm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;Object.assign(sh.uniforms,{tN3:U.tNoise,uSunDir:U.uSunDir,uStorm:U.uStorm,tGr:GT.grass,tGrN:GT.grassN,tRk:GT.rock,tRkN:GT.rockN,tSd:GT.sand,tSdN:GT.sandN});
+  tm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;Object.assign(sh.uniforms,{uT:U.uTime,tN3:U.tNoise,uSunDir:U.uSunDir,uStorm:U.uStorm,tGr:GT.grass,tGrN:GT.grassN,tRk:GT.rock,tRkN:GT.rockN,tSd:GT.sand,tSdN:GT.sandN});
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying vec3 vNw;').replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(position,1.0)).xyz;vNw=normal;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nprecision highp sampler3D;\nvarying vec3 vWP;varying vec3 vNw;uniform sampler2D tN2,tGr,tGrN,tRk,tRkN,tSd,tSdN;uniform sampler3D tN3;uniform vec3 uSunDir;uniform float uStorm;').replace('#include <color_fragment>',`
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nprecision highp sampler3D;\nvarying vec3 vWP;varying vec3 vNw;uniform sampler2D tN2,tGr,tGrN,tRk,tRkN,tSd,tSdN;uniform sampler3D tN3;uniform vec3 uSunDir;uniform float uStorm,uT;').replace('#include <color_fragment>',`
 float hgt=vWP.y,slope=1.0-normalize(vNw).y;
 if(hgt<-1.2)discard;
 float n1=texture2D(tN2,vWP.xz/41.0).b,n2=texture2D(tN2,vWP.xz/263.0).b,n3=texture2D(tN2,vWP.xz/6.7).b,n4=texture2D(tN2,vWP.xz/900.0+0.3).b;
@@ -565,14 +576,19 @@ tc=mix(tc,rock,mRock);tc=mix(tc,sand,mSand);
 float bf=1.0/(1.0+length(vViewPosition)/260.0);
 vec2 bmp=(texture2D(tGrN,uA).rg-0.5)*1.5*(1.0-mRock)*(1.0-mSand)*(1.0-vColor.r)+(texture2D(tRkN,uR).rg-0.5)*3.2*mRock+(texture2D(tSdN,vWP.xz/9.0).rg-0.5)*1.0*mSand;bmp*=bf;
 tc=mix(tc,tc*0.42,1.0-smoothstep(0.1,1.7,hgt));
-tc=mix(tc,vec3(0.19,0.195,0.19)*(0.8+0.4*n3),vColor.r);
+{vec2 sl=vWP.xz/7.5,fi=floor(sl),fr=fract(sl);float hs=fract(sin(dot(fi,vec2(12.9898,78.233)))*43758.5453);
+  vec3 pv=vec3(0.30,0.305,0.30)*(0.82+0.2*hs)*(0.8+0.4*n3);float jt=max(smoothstep(0.035,0.0,min(fr.x,1.0-fr.x)),smoothstep(0.035,0.0,min(fr.y,1.0-fr.y)));pv*=1.0-0.45*jt;
+  float st=texture2D(tN2,vWP.xz/37.0).b;pv*=1.0-0.35*smoothstep(0.62,0.8,st);pv*=1.0-0.18*smoothstep(0.55,0.75,texture2D(tN2,vec2(vWP.x/3.0,vWP.z/90.0)).b);
+  tc=mix(tc,pv,vColor.r);}
 {vec2 q=vWP.xz+uSunDir.xz/max(uSunDir.y,0.12)*(1700.0-vWP.y);float fn=texture(tN3,vec3(q*0.000037,0.37)).g;tc*=1.0-0.5*smoothstep(0.52,0.66,fn)*mix(1.0,smoothstep(12300.0,16500.0,length(q)),clamp(uStorm*4.0,0.0,1.0));}
+{float sw=texture2D(tN2,vWP.xz/260.0).b*6.0,edge=0.55+0.45*sin(uT*0.55+sw),lv=-0.05+0.55*edge;float wetS=1.0-smoothstep(lv,lv+0.9,hgt);tc=mix(tc,tc*0.5,wetS*mSand*0.8);
+  tc=mix(tc,vec3(0.82,0.84,0.84),smoothstep(0.10,0.0,abs(hgt-lv-0.05))*smoothstep(0.35,0.65,texture2D(tN2,vWP.xz/9.0).b)*mSand*0.6);}
 diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(0.95,0.55,1.0-smoothstep(0.1,1.7,vWP.y));').replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize(normal-(viewMatrix*vec4(bmp.x,0.0,bmp.y,0.0)).xyz);');};
   const terr=new THREE.Mesh(tg,tm);terr.receiveShadow=true;B.add(terr);
   // 森：ごつごつした樹冠を森のマスクに沿って密に植える
   {const tgm=crownGeo(22,7),tmat=leafMat();
     const N=9000,im=new THREE.InstancedMesh(tgm,tmat,N),d=new THREE.Object3D(),rd=mulberry(5),tc=new THREE.Color();let n=0,g=0;
-    while(n<N&&g++<120000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z))continue;
+    while(n<N&&g++<120000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,16))continue;
       if(h<6||h>235||(Math.abs(x-30)<270&&Math.abs(z-130)<1420)||(Math.abs(x-250)<330&&Math.abs(z-150)<440))continue;
       if(rd()>forestMask(x,z)*.95+.05)continue;
       if(Math.abs(islandH(x+10,z)-h)+Math.abs(islandH(x,z+10)-h)>9)continue;
@@ -581,7 +597,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
     im.count=n;im.instanceColor.needsUpdate=true;im.frustumCulled=false;B.userData.trees=im;B.add(im);}
   // 低木の茂み：森の縁に多く、草地にもまばらに（のっぺりした草地を崩す）
   {const sg=crownGeo(8,23),sm=leafMat(),N=13000,im=new THREE.InstancedMesh(sg,sm,N),d=new THREE.Object3D(),rd=mulberry(29),tc=new THREE.Color();let n=0,g=0;
-    while(n<N&&g++<160000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z))continue;
+    while(n<N&&g++<160000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,9))continue;
       if(h<4||h>240||(Math.abs(x-30)<200&&Math.abs(z-130)<1400)||(Math.abs(x-250)<300&&Math.abs(z-150)<420))continue;
       const fm=forestMask(x,z),p=.12+.88*Math.max(0,1-Math.abs(fm-.45)*2.2);if(rd()>p)continue;
       const sc=1.6+rd()*rd()*3.2;d.position.set(x,h+sc*.25,z);d.scale.set(sc*(.9+rd()*.5),sc*(.6+rd()*.35),sc*(.9+rd()*.5));d.rotation.y=rd()*6;d.updateMatrix();im.setMatrixAt(n,d.matrix);
@@ -1185,9 +1201,11 @@ function hullGeo(o){
   const mk=(sd)=>{const P=[],UV=[],I=[],n=S[0].pts.length;
     S.forEach(s=>s.pts.forEach(([x,y])=>{P.push(sd*x,y,zOf(s.u,y,s));UV.push(sd>0?1-s.u:s.u,(y+T)/(Dm+T));}));
     for(let i=0;i<S.length-1;i++)for(let j=0;j<n-1;j++){const a=i*n+j,b=a+1,c=a+n,d=c+1;if(sd>0)I.push(a,b,c,b,d,c);else I.push(a,c,b,b,c,d);}
-    // 船尾の鏡板（トランサム）
-    const l=(S.length-1)*n,cx=P.length/3;let cy=0;for(let j=0;j<n;j++)cy+=P[(l+j)*3+1];cy/=n;P.push(0,cy,zOf(1,cy,S[S.length-1]));UV.push(sd>0?0:1,(cy+T)/(Dm+T));
-    for(let j=0;j<n-1;j++){if(sd>0)I.push(cx,l+j,l+j+1);else I.push(cx,l+j+1,l+j);}
+    // 船尾の鏡板（トランサム）：甲板の中心を頂点に、断面の輪郭（竜骨の中心→舷縁）へ扇形に張って中心線まで閉じる。
+    // 頂点は外板と分けて、絵柄の文字や喫水標が載らない列の uv を使う
+    const l=(S.length-1)*n,sl=S[S.length-1],c0=P.length/3;P.push(0,sl.dk,zOf(1,sl.dk,sl));UV.push(.3,(sl.dk+T)/(Dm+T));
+    for(let j=0;j<n;j++){P.push(P[(l+j)*3],P[(l+j)*3+1],P[(l+j)*3+2]);UV.push(.3,(P[(l+j)*3+1]+T)/(Dm+T));}
+    for(let j=0;j<n-1;j++){if(sd>0)I.push(c0,c0+1+j,c0+2+j);else I.push(c0,c0+2+j,c0+1+j);}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));g.setIndex(I);g.computeVertexNormals();return g;};
   // 甲板：左右の舷縁を結ぶ帯
   const DP=[],DU=[],DI=[];S.forEach((s,i)=>{const z=zOf(s.u,s.dk,s);DP.push(-s.dW,s.dk,z,s.dW,s.dk,z);DU.push(0,s.u*L/8,1,s.u*L/8);if(i<S.length-1){const a=i*2;DI.push(a,a+2,a+1,a+1,a+2,a+3);}});
@@ -1789,15 +1807,48 @@ function buildPort(B,M){
       if(k!==2){const c=new THREE.Mesh(new THREE.BoxGeometry(2.44,2.59,12.19),cm);c.position.set(0,2.6,.6);t.add(c);}
       t.userData.s=k*240;t.userData.dyn=1;B.add(t);B.userData.trucks.push(t);}}
   B.userData.cranes=cranes;
-  // 基地から港への道（地形に沿わせる）
-  {const pts=[[470,300],[620,330],[800,300],[960,240],[1060,200],[1112,190]],P=[],U=[],I=[];let acc=0;const N=90;
-    const at=t=>{const f=t*(pts.length-1),i=Math.min(pts.length-2,Math.floor(f)),u=f-i;return[lerp(pts[i][0],pts[i+1][0],u),lerp(pts[i][1],pts[i+1][1],u)];};
-    for(let i=0;i<=N;i++){const[x,z]=at(i/N),[x2,z2]=at(Math.min(1,(i+1)/N)),[x1,z1]=at(Math.max(0,(i-1)/N)),dx=x2-x1,dz=z2-z1,l=Math.hypot(dx,dz)||1,nx=-dz/l*4.5,nz=dx/l*4.5;
-      const y=Math.max(islandH(x,z),islandH(x+nx,z+nz),islandH(x-nx,z-nz))+.35;P.push(x+nx,y,z+nz,x-nx,y,z-nz);acc+=l/2;U.push(0,acc/12,1,acc/12);if(i<N){const a=i*2;I.push(a,a+1,a+2,a+1,a+3,a+2);}}
-    const rc=document.createElement('canvas');rc.width=64;rc.height=64;const x=rc.getContext('2d');x.fillStyle='#3a3c3f';x.fillRect(0,0,64,64);x.fillStyle='#e9e6dc';x.fillRect(2,0,2,64);x.fillRect(60,0,2,64);x.fillStyle='#d9a21b';x.fillRect(31,0,2,36);
+  // 基地から港への道：中心線をなめらかにつなぎ、高さは地形をならして決める。路面・路肩・法面（地面まで）・ガードレール・街灯・標識・走る車
+  {const smp=[];{const P=ROAD_PTS,cr=(p0,p1,p2,p3,t)=>{const t2=t*t,t3=t2*t;return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);};
+      for(let i=0;i<P.length-1;i++){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)],L=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.ceil(L/4);
+        for(let k=0;k<n;k++){const t=k/n;smp.push([cr(p0[0],p1[0],p2[0],p3[0],t),cr(p0[1],p1[1],p2[1],p3[1],t)]);}}smp.push(P[P.length-1]);}
+    const N=smp.length,tg=[],hh=[];for(let i=0;i<N;i++){const p=smp[Math.min(N-1,i+1)],q=smp[Math.max(0,i-1)],dx=p[0]-q[0],dz=p[1]-q[1],l=Math.hypot(dx,dz)||1;tg.push([dx/l,dz/l]);const nx=-dz/l,nz=dx/l,[x,z]=smp[i];
+      hh.push(Math.max(islandH(x,z),islandH(x+nx*4,z+nz*4),islandH(x-nx*4,z-nz*4),QY));}
+    const hs=hh.map((_,i)=>{let a2=0,w=0;for(let k=-6;k<=6;k++){const j=Math.min(N-1,Math.max(0,i+k));a2+=hh[j];w++;}return Math.max(a2/w,hh[i]-.2)+.3;});
+    const path=[];let acc=0;for(let i=0;i<N;i++){if(i)acc+=Math.hypot(smp[i][0]-smp[i-1][0],smp[i][1]-smp[i-1][1]);path.push({x:smp[i][0],y:hs[i],z:smp[i][1],d:acc,tx:tg[i][0],tz:tg[i][1]});}
+    B.userData.roadPath=path;
+    // 帯状の面を作る：オフセット o0〜o1、高さは関数で
+    const strip=(o0,o1,y0f,y1f,mat,uw)=>{const P=[],U=[],I=[];path.forEach((q,i)=>{const nx=-q.tz,nz=q.tx;for(const[o,yf,u]of[[o0,y0f,0],[o1,y1f,1]]){const x=q.x+nx*o,z=q.z+nz*o;P.push(x,yf(q,x,z),z);U.push(u*(uw||1),q.d/12);}if(i<N-1){const a2=i*2;I.push(a2,a2+1,a2+2,a2+1,a2+3,a2+2);}});
+      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();const m=new THREE.Mesh(g,mat);m.receiveShadow=true;B.add(m);return m;};
+    const rc=document.createElement('canvas');rc.width=128;rc.height=256;const x=rc.getContext('2d'),rr=mulberry(66);x.fillStyle='#38393c';x.fillRect(0,0,128,256);
+    for(let i=0;i<500;i++){const g2=44+rr()*26|0;x.fillStyle='rgba('+g2+','+g2+','+(g2+2)+',.18)';x.fillRect(rr()*128,rr()*256,1+rr()*4,2+rr()*16);}
+    for(let i=0;i<6;i++){x.fillStyle='rgba(20,20,22,.18)';x.fillRect(26+rr()*6,0,10,256);x.fillRect(90+rr()*6,0,10,256);}   // 轍
+    x.fillStyle='#e7e4da';x.fillRect(5,0,3,256);x.fillRect(120,0,3,256);x.fillStyle='#d9a21b';x.fillRect(62,0,4,150);
     const rt=new THREE.CanvasTexture(rc);rt.encoding=THREE.sRGBEncoding;rt.wrapT=THREE.RepeatWrapping;rt.anisotropy=8;
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();
-    const m=new THREE.Mesh(g,std({map:rt,roughness:.9,metalness:0,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2}));m.receiveShadow=true;B.add(m);}
+    const flat=q=>q.y,po={polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2};
+    strip(-4,4,flat,flat,std(Object.assign({map:rt,roughness:.88,metalness:0},po)));
+    const gravel=std(Object.assign({color:lin(0x7c7a72),roughness:.95,metalness:0},po));strip(4,5.4,flat,q=>q.y-.05,gravel);strip(-5.4,-4,q=>q.y-.05,flat,gravel);
+    const bank=std(Object.assign({color:lin(0x56603a),roughness:1,metalness:0,side:THREE.DoubleSide},po)),gy=(q,x,z)=>Math.max(islandH(x,z),QY-1)-.15;
+    strip(5.4,10,q=>q.y-.05,gy,bank);strip(-10,-5.4,gy,q=>q.y-.05,bank);
+    // ガードレール：路面と地面の差が 1.2m を超える区間の両側（支柱と波形の板を一括描画）
+    {const pm=std({color:lin(0xb8bcbe),roughness:.4,metalness:.8}),pg=new THREE.BoxGeometry(.16,1.1,.16),bg=new THREE.BoxGeometry(1,1,1),posts=new THREE.InstancedMesh(pg,pm,900),rails=new THREE.InstancedMesh(bg,pm,900),d=new THREE.Object3D();let np=0,nr=0;
+      for(const sd of[-1,1]){let prev=null;for(let i=0;i<N;i+=1){const q=path[i],nx=-q.tz*sd,nz=q.tx*sd,x2=q.x+nx*5,z2=q.z+nz*5,drop=q.y-islandH(q.x+nx*8,q.z+nz*8);
+          if(drop>1.2&&np<900){d.position.set(x2,q.y+.45,z2);d.rotation.set(0,0,0);d.scale.set(1,1,1);d.updateMatrix();posts.setMatrixAt(np++,d.matrix);
+            const cur=new V3(x2,q.y+.75,z2);if(prev&&prev.distanceTo(cur)<9&&nr<900){const v=new V3().subVectors(cur,prev),L=v.length();d.position.copy(prev).add(cur).multiplyScalar(.5);d.quaternion.setFromUnitVectors(new V3(1,0,0),v.normalize());d.scale.set(L+.1,.32,.06);d.updateMatrix();rails.setMatrixAt(nr++,d.matrix);d.quaternion.identity();}prev=cur;}else prev=null;}}
+      posts.count=np;rails.count=nr;posts.castShadow=rails.castShadow=true;B.add(posts);B.add(rails);}
+    // 街灯：60m ごとに左右交互
+    {const pm=std({color:lin(0x8e9599),roughness:.45,metalness:.7});let k=0;for(let i=4;i<N;i+=15){const q=path[i],sd=k++%2?1:-1,nx=-q.tz*sd,nz=q.tx*sd,x2=q.x+nx*6,z2=q.z+nz*6;
+        const pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.18,9,8),pm);pole.position.set(x2,q.y+4.5,z2);B.add(pole);beam(B,new V3(x2,q.y+8.8,z2),new V3(q.x+nx*3.6,q.y+9.1,q.z+nz*3.6),.14,pm);
+        const head=new THREE.Mesh(new THREE.BoxGeometry(.9,.22,.45),pm);head.position.set(q.x+nx*3.4,q.y+9.0,q.z+nz*3.4);head.rotation.y=Math.atan2(nx,nz);B.add(head);
+        const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.4,2.1,1.5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(q.x+nx*3.4,q.y+8.75,q.z+nz*3.4);sp.scale.set(3,3,1);B.add(glowLOD(sp,80,.25));}}
+    // 案内標識（青地に白字）
+    {const sign=(i,sd,t1,t2)=>{const q=path[i],nx=-q.tz*sd,nz=q.tx*sd,x2=q.x+nx*7,z2=q.z+nz*7,c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');g.fillStyle='#1f4f8f';g.fillRect(0,0,512,256);g.strokeStyle='#eef';g.lineWidth=8;g.strokeRect(10,10,492,236);
+        g.fillStyle='#fff';g.font='bold 72px "Hiragino Sans","Yu Gothic",sans-serif';g.fillText(t1,40,110);g.font='bold 44px Arial';g.fillText(t2,40,190);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;
+        const bd=new THREE.Mesh(new THREE.PlaneGeometry(4,2),new THREE.MeshStandardMaterial({map:t,roughness:.6,side:THREE.DoubleSide}));bd.position.set(x2,q.y+3.6,z2);bd.rotation.y=Math.atan2(-q.tx*sd,-q.tz*sd);B.add(bd);
+        for(const o of[-1.5,1.5]){const p2=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,3.6,6),std({color:lin(0x9aa0a4),roughness:.5,metalness:.7}));p2.position.set(x2+q.tz*o,q.y+1.8,z2-q.tx*o);B.add(p2);}};
+      sign(Math.floor(N*.12),1,'ミズハ港','MIZUHA PORT  1.5km');sign(Math.floor(N*.9),-1,'気象基地','WEATHER STATION  1.4km');}
+    // 走る車（左側通行）
+    {B.userData.roadCars=[];const cols=[0xc9ced2,0x23272b,0x7a1f1a,0x2c4f7a,0xe6e6e0,0x3a5a40];for(let k=0;k<5;k++){const c=buildVehicle(k===2?'fuel':'car',cols[k]);c.userData.dyn=1;c.userData.s=k*acc/5;c.userData.dir=k%2?1:-1;B.add(c);B.userData.roadCars.push(c);}}
+  }
 }
 // 格納庫の内装の作り込み：天井の内張りと明かり取り、光の筋、奥壁の管制室と換気扇、区画の表示板、
 // 整備機材（作業台・牽引車・ディフューザーの台車・予備エンジン・部品棚）、整備員、扉の内側
@@ -2102,7 +2153,11 @@ function detailBase(B0,M){
       const cc=buildVehicle('car',cols[i%cols.length]);c.add(cc);c.position.y=RWY_Y;c.rotation.y=i<6?0:Math.PI;B.add(c);}}
   // 外周フェンス（支柱は一括描画）
   {const pts=[[150,-260],[470,-260],[470,560],[150,560]],pg=new THREE.CylinderGeometry(.07,.07,2.6,5),im=new THREE.InstancedMesh(pg,darkM,400),d=new THREE.Object3D();let n=0;
-    for(let k=0;k<4;k++){const[a,b]=[pts[k],pts[(k+1)%4]],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(k===3)continue;
+    const segs2=[[pts[0],pts[1]],[[470,-260],[470,291]],[[470,309],[470,560]],[pts[2],pts[3]]];
+    {const gm=std({color:lin(0xb8b0a0),roughness:.7}),rw=std({color:lin(0xd9d9d0),roughness:.6});for(const gz of[291,309]){const gp=new THREE.Mesh(new THREE.BoxGeometry(.8,3,.8),gm);gp.position.set(470,RWY_Y+1.5,gz);B.add(gp);}
+      const arm=new THREE.Mesh(new THREE.BoxGeometry(.14,.14,15),std({color:lin(0xd23a2a),roughness:.6}));arm.position.set(470,RWY_Y+1.1,300);B.add(arm);for(let i=0;i<5;i++){const w=new THREE.Mesh(new THREE.BoxGeometry(.16,.16,1.4),rw);w.position.set(470,RWY_Y+1.1,293.5+i*3);B.add(w);}
+      const booth=new THREE.Mesh(new THREE.BoxGeometry(3.4,2.8,3.4),wallB);booth.position.set(463,RWY_Y+1.4,288);B.add(booth);const br=new THREE.Mesh(new THREE.BoxGeometry(4,.3,4),roof);br.position.set(463,RWY_Y+2.95,288);B.add(br);}
+    for(let k=0;k<4;k++){const[a,b]=segs2[k],L=Math.hypot(b[0]-a[0],b[1]-a[1]);
       for(let s=0;s<=L;s+=6){d.position.set(a[0]+(b[0]-a[0])*s/L,RWY_Y+1.3,a[1]+(b[1]-a[1])*s/L);d.updateMatrix();im.setMatrixAt(n++,d.matrix);}
       const rail=new THREE.Mesh(new THREE.BoxGeometry(L,1.9,.04),new THREE.MeshStandardMaterial({color:0x7a8288,transparent:true,opacity:.28,roughness:.6,metalness:.6,side:THREE.DoubleSide}));rail.position.set((a[0]+b[0])/2,RWY_Y+1.45,(a[1]+b[1])/2);rail.rotation.y=-Math.atan2(b[1]-a[1],b[0]-a[0]);B.add(rail);}
     im.count=n;B.add(im);}

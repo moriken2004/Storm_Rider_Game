@@ -35,7 +35,7 @@ const U={
   uSunDir:{value:new V3(-0.45,0.55,0.70).normalize()},uSunCol:{value:new V3(6.2,5.6,4.7)},
   uSkyZen:{value:new V3(0.085,0.21,0.52)},uSkyHor:{value:new V3(0.46,0.60,0.78)},
   uFlashPos:{value:new V3(0,1500,0)},uFlashI:{value:0},
-  tNoise:{value:null},tDetail:{value:null},tNoise2:{value:null},tDepth:{value:null},uRes:{value:new THREE.Vector2(1,1)},
+  tNoise:{value:null},tDetail:{value:null},tNoise2:{value:null},tShore:{value:null},tDepth:{value:null},uRes:{value:new THREE.Vector2(1,1)},
 };
 
 // ───────────────────────── ノイズテクスチャ ─────────────────────────

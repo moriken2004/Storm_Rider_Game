@@ -1297,6 +1297,10 @@ function animPort(dt){const B=baseGroup.userData.lodPort;if(!B)return;if(camera.
     const s0=seg[i],s1=seg[i+1],u=ease(sat((T-s0[0])/(s1[0]-s0[0])));a.tro.position.x=lerp(s0[1],s1[1],u);const sy=lerp(s0[2],s1[2],u);a.sp.position.y=sy;a.bx.visible=T>.2&&T<.62;
     for(const r of a.r){const top=35,bot=sy+.4;r.scale.y=top-bot;r.position.y=(top+bot)/2;}}
   for(const g of B.userData.rtgs||[])g.position.z=g.userData.z0+Math.sin(t*.05+g.userData.z0)*14;
+  // 港と基地を結ぶ道の車：端で折り返し、左側の車線を走る
+  {const path=B.userData.roadPath;if(path)for(const c of B.userData.roadCars||[]){const L=path[path.length-1].d;let s=c.userData.s+dt*13*c.userData.dir;if(s>L-8){s=L-8;c.userData.dir=-1;}if(s<8){s=8;c.userData.dir=1;}c.userData.s=s;
+    let i=0,j=path.length-1;while(j-i>1){const m=(i+j)>>1;if(path[m].d<s)i=m;else j=m;}const a=path[i],b=path[j],u=(s-a.d)/Math.max(.01,b.d-a.d),dir=c.userData.dir,tx=lerp(a.tx,b.tx,u)*dir,tz=lerp(a.tz,b.tz,u)*dir;
+    c.position.set(lerp(a.x,b.x,u)+tz*2,lerp(a.y,b.y,u),lerp(a.z,b.z,u)-tx*2);c.rotation.y=Math.atan2(-tx,-tz);}}
   for(const tr of B.userData.trucks||[]){tr.userData.s=(tr.userData.s+dt*7)%1244;const d=tr.userData.s;let x,z,yaw;
     if(d<580){x=1276;z=-140+d;yaw=Math.PI;}else if(d<622){x=1276-(d-580);z=440;yaw=-Math.PI/2;}else if(d<1202){x=1234;z=440-(d-622);yaw=0;}else{x=1234+(d-1202);z=-140;yaw=Math.PI/2;}
     tr.position.set(x,4.65,z);let dy=yaw-tr.rotation.y;while(dy>Math.PI)dy-=6.2832;while(dy<-Math.PI)dy+=6.2832;tr.rotation.y+=dy*Math.min(1,dt*3);}}
