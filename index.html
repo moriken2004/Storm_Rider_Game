@@ -1798,20 +1798,23 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
     wd.count=nw;wd.castShadow=true;B.add(wd);}
   // 沖の岩礁と北岬の灯台
   {const rm=std({color:lin(0x4a443c),roughness:.92,metalness:0});rm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;
-      sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nattribute float aCav;varying float vCav;varying vec3 vRP;varying vec3 vRN;").replace("#include <begin_vertex>","#include <begin_vertex>\nvCav=aCav;vRP=(modelMatrix*vec4(position,1.0)).xyz;vRN=normalize(mat3(modelMatrix)*normal);");
-      sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\nvarying float vCav;varying vec3 vRP;varying vec3 vRN;uniform sampler2D tN2;float gRockH=0.0,gRockWet=0.0;").replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n{vec3 rkP=-vViewPosition,rkX=dFdx(rkP),rkY=dFdy(rkP);float rkHx=dFdx(gRockH),rkHy=dFdy(gRockH);vec3 rkA=cross(rkY,normal),rkB=cross(normal,rkX);float rkD=dot(rkX,rkA);vec3 rkG=sign(rkD)*(rkHx*rkA+rkHy*rkB);normal=normalize(abs(rkD)*normal-rkG*0.9);}").replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,0.55,gRockWet);").replace("#include <color_fragment>",`#include <color_fragment>
+      sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nattribute float aCav;varying float vCav;varying vec3 vRP;varying vec3 vRN;").replace("#include <begin_vertex>","#include <begin_vertex>\nvCav=aCav;{mat4 rkM=modelMatrix;\n#ifdef USE_INSTANCING\nrkM=modelMatrix*instanceMatrix;\n#endif\nvRP=(rkM*vec4(position,1.0)).xyz;vRN=normalize(mat3(rkM)*normal);}");
+      sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\nvarying float vCav;varying vec3 vRP;varying vec3 vRN;uniform sampler2D tN2;float gRockH=0.0,gRockWet=0.0;").replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n{vec3 rkP=-vViewPosition,rkX=dFdx(rkP),rkY=dFdy(rkP);float rkHx=dFdx(gRockH),rkHy=dFdy(gRockH);vec3 rkA=cross(rkY,normal),rkB=cross(normal,rkX);float rkD=dot(rkX,rkA);vec3 rkG=sign(rkD)*(clamp(rkHx,-0.08,0.08)*rkA+clamp(rkHy,-0.08,0.08)*rkB);normal=normalize(abs(rkD)*normal-rkG*0.9);}").replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,0.55,gRockWet);").replace("#include <color_fragment>",`#include <color_fragment>
 // 3 方向から投影したノイズ（斜めの面で引き伸びない）
 vec3 bw=pow(abs(vRN),vec3(4.0));bw/=bw.x+bw.y+bw.z;
 #define TRI(S,O) (texture2D(tN2,vRP.zy/S+O).b*bw.x+texture2D(tN2,vRP.xz/S+O).b*bw.y+texture2D(tN2,vRP.xy/S+O).b*bw.z)
 float ra=TRI(23.0,0.11),rb=TRI(7.0,0.37),rc=TRI(2.2,0.71),rd=TRI(0.7,0.53);
 // 地層：わずかに傾き、ノイズで波打つ横縞。縞の境は段になって陰る
-float sy=vRP.y*0.32+vRP.x*0.03+(ra-0.5)*2.5;float strata=smoothstep(0.0,0.25,fract(sy))*(0.7+0.3*rb);   /* 地層：段の上は張り出し、下は陰 */
+float sy=vRP.y*(0.26+0.14*TRI(53.0,0.29))+vRP.x*0.03-vRP.z*0.02+(ra-0.5)*3.2+(rb-0.5)*0.9;float lay=fract(sy),lid=floor(sy);
+  float lv=fract(sin(lid*12.9898)*43758.5453);   /* 層ごとの硬さ（目立つ層・溶けて消えかけた層） */
+  float strata=mix(1.0,smoothstep(0.0,0.18+0.25*lv,lay)*(1.0-smoothstep(0.82,1.0,lay))+smoothstep(0.82,1.0,lay)*0.0,smoothstep(0.25,0.6,TRI(29.0,0.83)+lv*0.3))*(0.7+0.3*rb);
+  float layc=0.85+0.3*lv;   /* 地層：段の上は張り出し、下は陰 */
 // 割れ目：縦に走る細い筋
 float crk=(1.0-smoothstep(0.0,0.02,abs(TRI(17.0,0.9)-0.5)))*smoothstep(0.6,0.75,TRI(41.0,0.47))*(1.0-bw.y);   /* 割れ目はまばらに、縦の面だけ */
 float rH=ra*0.9+rb*0.3+rc*0.06+strata*0.35-crk*0.15;
 vec3 c=0.32*mix(vec3(0.20,0.19,0.18),vec3(0.42,0.38,0.32),smoothstep(0.25,0.8,ra*0.7+rb*0.5));      // 玄武岩の灰と砂岩の茶
 c=mix(c,0.32*vec3(0.47,0.31,0.18),smoothstep(0.62,0.82,TRI(31.0,0.23))*0.55);                        // 鉄さびの赤茶
-c*=0.8+0.35*rc;c*=0.8+0.2*strata;c*=1.0-0.55*crk;
+c*=0.8+0.35*rc;c*=0.8+0.2*strata;c*=layc;c*=1.0-0.55*crk;
 // 上から流れた黒い筋（雨だれ）
 c*=1.0-0.35*smoothstep(0.55,0.8,texture2D(tN2,vec2(vRP.x*0.09+vRP.z*0.07,vRP.y*0.006)).b)*(1.0-bw.y);
 c*=mix(0.4,1.1,smoothstep(0.0,0.75,vCav));                                                       // くぼみの暗がり
