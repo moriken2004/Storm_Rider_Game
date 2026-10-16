@@ -171,14 +171,14 @@ function buildEnv(){
 function weatherMat(m){if(m.userData.wx||m.hasOwnProperty('onBeforeCompile')||!m.isMeshStandardMaterial)return;if(m.metalness>.9&&m.roughness<.15)return;m.userData.wx=1;
   const pat=(m.color&&m.color.r>m.color.g*1.6&&m.metalness>.6)?1:0;   // 銅らしい色の金属
   const rib=(!m.map&&m.metalness>.35&&m.metalness<.9)?1:0;            // 金属の外壁は波板の縦リブ
-  m.onBeforeCompile=sh=>{sh.uniforms.tWN=U.tNoise2;sh.uniforms.tWS=U.tShore;
+  m.onBeforeCompile=sh=>{sh.uniforms.tWN=U.tNoise2;sh.uniforms.tWS=U.tShore;sh.uniforms.uScA=U.uScA;sh.uniforms.uScB=U.uScB;sh.uniforms.uScN=U.uScN;
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;').replace('#include <project_vertex>',`#include <project_vertex>
 {vec4 wq=vec4(transformed,1.0);vec3 nq=objectNormal;
 #ifdef USE_INSTANCING
 wq=instanceMatrix*wq;nq=mat3(instanceMatrix)*nq;
 #endif
 vWxP=(modelMatrix*wq).xyz;vWxN=normalize(mat3(modelMatrix)*nq);}`);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;uniform sampler2D tWN,tWS;').replace('#include <color_fragment>',`#include <color_fragment>
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;uniform sampler2D tWN,tWS;uniform vec4 uScA[24],uScB[24];uniform int uScN;').replace('#include <color_fragment>',`#include <color_fragment>
 {vec3 n=normalize(vWxN);float vt=1.0-abs(n.y),up=smoothstep(0.6,0.95,n.y);
  float bl=texture2D(tWN,vWxP.xz/23.0+vWxP.y/31.0).b,bl2=texture2D(tWN,vWxP.xz/5.3-vWxP.y/7.0).b;
  float st=texture2D(tWN,vec2((vWxP.x+vWxP.z)*0.085,vWxP.y*0.011)).b;
@@ -190,6 +190,8 @@ vWxP=(modelMatrix*wq).xyz;vWxN=normalize(mat3(modelMatrix)*nq);}`);
  k*=1.0-0.38*up*smoothstep(0.66,0.84,texture2D(tWN,vWxP.xz/11.0+3.7).b);                                       // 上向きの面の油の染み
  ${rib?'k*=1.0-0.16*vt*pow(abs(sin((abs(n.x)>abs(n.z)?vWxP.z:vWxP.x)*10.5)),3.0);':''}
  diffuseColor.rgb*=k;
+ // 壊れた建物の焼け焦げ（すすの濃さにむら、上ほど濃い）
+ for(int i=0;i<24;i++){if(i>=uScN)break;vec3 a=uScA[i].xyz-1.5,b=uScB[i].xyz+1.5;if(all(greaterThan(vWxP,a))&&all(lessThan(vWxP,b))){float sn=texture2D(tWN,vWxP.xz/7.0+vWxP.y/5.0).b;diffuseColor.rgb*=mix(1.0,0.16+0.3*sn,uScA[i].w*smoothstep(0.25,0.75,sn*0.7+0.45));}}
  ${pat?'diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.16,0.34,0.28)*(0.7+0.5*bl2),smoothstep(0.55,0.8,bl*0.6+bl2*0.6)*0.55);':''}}`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor*(0.85+0.3*texture2D(tWN,vWxP.xz/9.0+vWxP.y/13.0).b),0.04,1.0);');};
   m.needsUpdate=true;}
 function weatherize(root){root.traverse(o=>{if(o.userData.noWeather)return;if(!o.isMesh)return;for(let q=o;q;q=q.parent)if(q.userData.noWeather)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(weatherMat);});}
@@ -959,7 +961,10 @@ diffuseColor.rgb=c;`);};
   {B.updateMatrixWorld(true);const cols=[],bx=new THREE.Box3(),skip=o=>{for(let q=o;q&&q!==B;q=q.parent)if(q===HG)return true;return false;};
     B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o))return;const m=Array.isArray(o.material)?o.material[0]:o.material;if(m.transparent||m.depthWrite===false||m.blending===THREE.AdditiveBlending)return;   // 面ごとに材質が違う建物（bld）も当たり判定に入れるif(o.geometry.attributes.position.count>20000)return;
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
-      if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz);cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,wd<11&&hy>wd*2.2?1:0,o.userData.rock?1:0]);});
+      if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz),tall=wd<11&&hy>wd*2.2?1:0,gt=o.geometry.type||'';
+      // 壊れ方の種類：0 コンクリート（崩れ落ちる）・1 塔（倒れる）・2 倉庫（屋根が抜ける）・3 タンク（裂けて潰れる）
+      const kind=tall?1:(/Cylinder/.test(gt)&&Math.abs(sx-sz)<.25*wd&&hy<wd*1.6&&hy>wd*.3&&wd>4?3:(wd>28&&hy<wd*.55?2:0));
+      cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,tall,o.userData.rock?1:0,kind]);});
     B.userData.colliders=cols;}
   weatherize(B);
   for(const o of B.userData.spin||[])o.userData.dyn=1;for(const o of(B.userData.detail&&B.userData.detail.userData.flags)||[])o.userData.dyn=1;
@@ -1033,8 +1038,10 @@ function shapeBolt(b,from,to,width){
 function makeRing(radius,color,tube){
   const m=new THREE.Mesh(new THREE.TorusGeometry(radius,tube||3,8,56),glowMat(color,0));m.frustumCulled=false;m.visible=false;overlay.add(m);return m;
 }
+// 粒の板は全部で 1 枚を共有する（1 粒ずつ別の形状だと、初めて使われた粒が出るたびに GPU へ送る形状が増えていく）
+let QUAD1=null;const quad1=()=>QUAD1||(QUAD1=new THREE.PlaneGeometry(1,1));
 function makeBillboard(color){
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),glowMat(color,3));m.frustumCulled=false;m.visible=false;overlay.add(m);return m;
+  const m=new THREE.Mesh(quad1(),glowMat(color,3));m.frustumCulled=false;m.visible=false;overlay.add(m);return m;
 }
 function makeColumn(){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,28,1,true),glowMat(new V3(.8,.085,.05),4));m.frustumCulled=false;m.visible=false;overlay.add(m);return m;
