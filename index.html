@@ -4640,7 +4640,7 @@ const CUT_INTRO={
     [18.8,'C','格納庫ゲートを開放します。進路上、障害なし',3.2],
     [22.6,'G','2番機ゴウ。この旧式に発射装置は無い。予備の運び屋だ、撃つのは隊長の仕事だぞ',4.2],[27,'H','3番機ハル、初出撃です…！　よ、よろしくお願いします！',3.4],
     [30.8,'C','ストームライダー1、発進どうぞ。…必ず、帰ってきてください',5]],
-  begin(){U.uStorm.value=1;U.uEye.value=1;applyEnv(0);setMood('intro');P.hasPod=true;G.spareGiven=false;syncPods();P.hull=100;resetArmor();
+  begin(){U.uStorm.value=1;U.uEye.value=1;G.eyeSun=0;applyEnv(0);setMood('intro');P.hasPod=true;G.spareGiven=false;syncPods();P.hull=100;resetArmor();
     W.forEach(w=>{w.state='form';w.mesh.visible=true;});trails.forEach(resetTrail);
     const y=GH(P);P.pos.set(0,y,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.power=.05;
     W[0].pos.set(-24,GH(W[0]),RZ0()+45);W[1].pos.set(24,GH(W[1]),RZ0()+80);W.forEach(w=>{w.yaw=0;w.pitch=0;w.roll=0;gearOf(w,true);});gearOf(P,true);
@@ -4673,39 +4673,67 @@ function projSetup(){
   coreShell.visible=false;
 }
 // 被雷して壊れたディフューザーの落下：回転しながら放物線で落ち、黒煙と火花を引く
-function projFall(dt){const p=proj.g.position;proj.fv.y-=14*dt;proj.fv.multiplyScalar(Math.exp(-dt*.25));p.addScaledVector(proj.fv,dt);proj.g.rotation.x+=dt*3.1;proj.g.rotation.z+=dt*2.3;
-  proj.st=(proj.st||0)-dt;if(proj.st<=0){proj.st=.035;bpart(BOOM.smoke,p.x,p.y,p.z,0,2,0,brn(3,4.5),2.2,13,{g:1.5,dr:1,a:.9,c:_bc.setRGB(.05,.045,.04)});if(Math.random()<.7)bpart(BOOM.fire,p.x,p.y,p.z,brn(-3,3),brn(-1,3),brn(-3,3),brn(.3,.5),2,5,{dr:3});}}
+function projFall(dt,hard){const p=proj.g.position;proj.fv.y-=(hard?34:14)*dt;proj.fv.multiplyScalar(Math.exp(-dt*.2));p.addScaledVector(proj.fv,dt);proj.g.rotation.x+=dt*(hard?4.2:3.1);proj.g.rotation.z+=dt*(hard?2.9:2.3);
+  proj.st=(proj.st||0)-dt;if(proj.st<=0){proj.st=.03;const vl=Math.max(1,proj.fv.length()),bx=p.x-proj.fv.x/vl*3,by=p.y-proj.fv.y/vl*3+1.2,bz=p.z-proj.fv.z/vl*3;bpart(BOOM.dust,bx,by,bz,brn(-1,1),3,brn(-1,1),brn(2.6,3.8),.5,brn(4,7),{g:2,dr:1.2,a:.8,c:_bc.setRGB(.05,.045,.042)});   /* 煙は進む向きの後ろから（自分の煙に埋もれない） */if(Math.random()<.15)bpart(BOOM.fire,p.x,p.y,p.z,brn(-2,2),brn(-1,2),brn(-2,2),brn(.1,.22),.5,1.3,{dr:4});}}
 function projMove(dt,T){
   proj.T+=dt;const u=sat(proj.T/T),e=u*u;proj.g.position.copy(proj.from).addScaledVector(proj.v0,proj.T);proj.g.position.y-=3.5*sat(proj.T/.5)*(1-e);proj.g.position.lerp(CORE,e);proj.g.lookAt(CORE);proj.d.userData.flame.visible=proj.T>.35;for(const q of proj.trail.pts)q.p.addScaledVector(proj.v0,dt);
   proj.glow.position.copy(proj.g.position);proj.glow.quaternion.copy(camera.quaternion);const s=5.5+Math.sin(G.t*40)*1.2;proj.glow.scale.set(s,s,1);
   tC.set(1,0,0).applyQuaternion(proj.g.quaternion);pushTrail(proj.trail,proj.g.position,tC,.55,dt,.5);
 }
+// 嵐のコア（カット用の姿）：青白く脈打つ電気の塊と、まわりを這う放電
+const CFX={g:null,t:0,arcT:0};
+function coreFxInit(){if(CFX.g)return;const g=new THREE.Group();g.position.copy(CORE);
+  const shell=new THREE.Mesh(new THREE.SphereGeometry(1,40,24),glowMat(new V3(.9,1.6,3.2),2));shell.frustumCulled=false;g.add(shell);
+  const inner=makeBillboard(new V3(1.6,2.4,4.2));overlay.remove(inner);g.add(inner);
+  const halo=makeBillboard(new V3(.25,.45,.9));overlay.remove(halo);g.add(halo);
+  g.visible=false;overlay.add(g);CFX.g=g;CFX.shell=shell;CFX.inner=inner;CFX.halo=halo;}
+function coreFxUpdate(dt,on){coreFxInit();CFX.g.visible=on;if(!on)return;CFX.t+=dt;const t=CFX.t,pu=.8+.2*Math.sin(t*7)+.1*Math.sin(t*23);
+  CFX.shell.scale.setScalar(120*pu);CFX.shell.material.uniforms.uAlpha.value=.3*pu;
+  for(const[b,s,a]of[[CFX.inner,260,1],[CFX.halo,620,.4]]){b.scale.set(s*pu,s*pu,1);b.quaternion.copy(camera.quaternion);b.material.uniforms.uAlpha.value=a*pu;}
+  CFX.arcT-=dt;if(CFX.arcT<=0){CFX.arcT=.07+Math.random()*.14;const a=Math.random()*6.283,e=(Math.random()-.5)*2.2,r=180+Math.random()*320;
+    tB.set(CORE.x+Math.cos(a)*Math.cos(e)*40,CORE.y+Math.sin(e)*40,CORE.z+Math.sin(a)*Math.cos(e)*40);tC.set(CORE.x+Math.cos(a)*Math.cos(e)*r,CORE.y+Math.sin(e)*r,CORE.z+Math.sin(a)*Math.cos(e)*r);boltFromTo(tB,tC,4+Math.random()*3);if(Math.random()<.3)SFX.zap();}}
+// ディフューザーの焼け焦げ（被雷）と、元の色への戻し
+function projChar(k){proj.d.traverse(o=>{if(!o.isMesh||!o.material||!o.material.color)return;const m=o.material;
+  if(m.isMeshBasicMaterial){/* 放射リングは消灯（毎コマ色を戻すカット用の減光表にも反映） */const ent=CUTDIM.find(q=>q[0]===m);if(ent){if(!m.userData.c0)m.userData.c0=ent[1].clone();ent[1].copy(m.userData.c0).multiplyScalar(1-.92*k);m.color.copy(ent[1]).multiplyScalar(G.mode==='cut'?.4:1);}return;}
+  if(!m.userData.c0){m.userData.c0=m.color.clone();m.userData.mr=[m.metalness,m.roughness];m.userData.env=m.envMap;}m.color.copy(m.userData.c0).multiplyScalar(1-.93*k);m.metalness=lerp(m.userData.mr[0],0,k);m.roughness=lerp(m.userData.mr[1],.9,k);
+  // 空の映り込みを外す（地色を黒くしても、明るい空の反射で白っぽく見えていた）
+  const ne=k>0?null:m.userData.env;if(m.envMap!==ne){m.envMap=ne;m.needsUpdate=true;}});}
 const CUT_FIRE1={
   blendIn:.9,blendOut:1.3,
-  subs:[[.3,'C','ディフューザーの発射を確認'],[4.3,'H','ら、落雷…！？　ディフューザーが！',2.5],
-    [6.9,'C','直撃です。ディフューザーの反応、消失……海へ落ちていきます',3.4],[10.5,'G','くそっ、コアは無傷だ……まだ生きてるぞ！',2.8],
-    [13.4,'C','攻撃は失敗です。コアの電位差が雷を引き寄せました。衝撃で目が閉じ始めています',5.0],
-    [18.7,'C','予備は2番機にあります。空中で1番機へ受け渡してください',3.8],
-    [22.6,'G','発射装置さえあれば俺が撃つんだがな。横に付く、受け取れ隊長',2.7]],
-  begin(){setMood('storm');MUS.intensity=2;},
+  subs:[[.3,'C','ディフューザーの発射を確認'],[4.2,'H','か、雷が…！　コアから伸びてきた！',2.8],
+    [7.9,'C','直撃です。ディフューザーの反応、消失……海へ落ちていきます',3.3],[11.5,'G','くそっ、コアは無傷だ……まだ生きてるぞ！',2.7],
+    [14.4,'C','攻撃は失敗です。コアの電位差が雷を引き寄せました。衝撃で目が閉じ始めています',5.0],
+    [19.6,'C','予備は2番機にあります。空中で1番機へ受け渡してください',3.6],
+    [23.4,'G','発射装置さえあれば俺が撃つんだがな。横に付く、受け取れ隊長',2.7]],
+  begin(){setMood('storm');MUS.intensity=2;projChar(0);coreFxInit();CFX.t=0;},
   shots:[
-    {dur:2.6,setup(){projSetup();},update(t,u,dt){cutFly(dt,130);projMove(dt,5);fwdOf(P.yaw,P.pitch,tA);
-      setCam(P.pos.x-tA.x*44+tA.z*10,P.pos.y+10,P.pos.z-tA.z*44-tA.x*10,proj.g.position.x,proj.g.position.y,proj.g.position.z,55);}},
-    {dur:2.6,setup(){proj.hit=false;},update(t,u,dt){cutFly(dt,130);if(!proj.hit)projMove(dt,5);const p=proj.g.position;tA.copy(CORE).sub(proj.from).normalize();
-      setCam(p.x-tA.x*38+tA.z*20,p.y+6,p.z-tA.z*38-tA.x*20,p.x,p.y,p.z,46);
-      if(!proj.hit)proj.fv=(proj.fv||new V3()).copy(tA).multiplyScalar(70);else projFall(dt);
-      if(t>2&&!proj.hit){proj.hit=true;proj.glow.visible=false;proj.d.userData.flame.visible=false;proj.fv.y+=14;explode(p.clone(),.35,'air');tB.set(p.x+900,p.y+1700,p.z+500);boltFromTo(tB,p,16);bolts.forEach(b=>{if(b.life>0)b.life=.7;});
-        flashAt(p.x,p.y,p.z,2.2);G.white=.8;SFX.boom();SFX.zap();SFX.thunder(300);boomFx.visible=true;boomFx.position.copy(p);boomFx.userData.t=0;G.shake=1;}}},
-    // 壊れたディフューザーが煙と火花を引いて落ちていく
-    {dur:3.4,update(t,u,dt){cutFly(dt,130);projFall(dt);const p=proj.g.position;fwdOf(P.yaw,0,tA);setCam(p.x+tA.z*22+tA.x*9,p.y+7-t*1.5,p.z-tA.x*22+tA.z*9,p.x,p.y-2,p.z,36);}},
-    // コアは無傷のまま、放電を続けている
-    {dur:3.0,setup(){coreShell.visible=true;coreGlow.visible=true;proj.g.visible=false;proj.ct=0;},update(t,u,dt){cutFly(dt,130);fwdOf(P.yaw,P.pitch,tA);
-      proj.ct-=dt;if(proj.ct<=0){proj.ct=.35+Math.random()*.3;const a=Math.random()*6.283,b=Math.random()*6.283;tB.set(CORE.x+Math.cos(a)*260,CORE.y+Math.sin(b)*200,CORE.z+Math.sin(a)*260);tC.set(CORE.x+Math.cos(a+2)*120,CORE.y-Math.sin(b)*150,CORE.z+Math.sin(a+2)*120);boltFromTo(tB,tC,6);SFX.zap();}
-      setCam(P.pos.x-tA.x*20+tA.z*6,P.pos.y+4,P.pos.z-tA.z*20-tA.x*6,CORE.x,CORE.y,CORE.z,22-u*4);}},
-    {dur:14,setup(){setMood('climax');setAlarm(true);},update(t,u,dt){cutFly(dt,130);P.roll=Math.sin(t*3)*.12*(1-u);G.shake=Math.max(G.shake,.25*(1-u));
+    // 1 機体の横、少し下から：腹の下でディフューザーが外れ、点火して飛び出す
+    {dur:2.8,setup(){projSetup();coreShell.visible=false;},update(t,u,dt){cutFly(dt,130);projMove(dt,5);fwdOf(P.yaw,P.pitch,tA);const rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
+      const q=proj.g.position;tB.copy(q).sub(P.pos);const dq=tB.length();tB.normalize();const k=ease(sat(t/2.2));
+      tC.copy(P.pos).addScaledVector(tB,Math.min(dq,90)*.24*k);tC.y-=1.5*(1-k);setCam(P.pos.x+rx*34-tA.x*30,P.pos.y-9,P.pos.z+rz*34-tA.z*30,tC.x,tC.y,tC.z,lerp(38,52,k));}},
+    // 2 後ろから追う：前方に脈打つコア。コアから伸びた雷がディフューザーを撃ち抜く
+    {dur:3.4,setup(){proj.hit=false;},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,true);if(!proj.hit)projMove(dt,5);const p=proj.g.position;tA.copy(CORE).sub(p).normalize();
+      if(!proj.hit){proj.fv=(proj.fv||new V3()).copy(tA).multiplyScalar(60);setCam(p.x-tA.x*30+tA.z*9,p.y-tA.y*30+7,p.z-tA.z*30-tA.x*9,lerp(p.x,CORE.x,.35),lerp(p.y,CORE.y,.35),lerp(p.z,CORE.z,.35),40);}
+      else{projFall(dt,1);setCam(p.x-tA.x*16+tA.z*52,p.y+18,p.z-tA.z*16-tA.x*52,p.x,p.y-2,p.z,26);}
+      // 雷の前ぶれ：コアの放電がディフューザーへ向かって伸びる
+      if(!proj.hit&&t>.5&&t<1.3&&Math.random()<dt*14){tB.copy(CORE).addScaledVector(tA,-60);tC.copy(CORE).lerp(p,.3+Math.random()*.4);boltFromTo(tB,tC,5);}
+      if(t>1.3&&!proj.hit){proj.hit=true;proj.glow.visible=false;proj.d.userData.flame.visible=false;proj.fv.y+=10;tB.copy(CORE).addScaledVector(tA,-55);boltFromTo(tB,p,5);
+        flashAt(p.x,p.y,p.z,1.2);G.white=.22;SFX.zap();SFX.thunder(250);explode(p.clone(),.16,'air');G.shake=.35;projChar(1);}}},
+    // 3 寄り：焼け焦げて火花を散らし、制御を失って回り始める
+    {dur:1.6,setup(){G.shake=0;},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,true);projFall(dt,1);G.shake=0;const p=proj.g.position;fwdOf(P.yaw,0,tA);
+      if(Math.random()<dt*10)bpart(BOOM.fire,p.x+brn(-1,1),p.y,p.z+brn(-1,1),brn(-6,6),brn(-2,6),brn(-6,6),brn(.12,.25),.6,1.6,{dr:4});
+      setCam(p.x+tA.z*12+tA.x*4,p.y+11,p.z-tA.x*12+tA.z*4,p.x,p.y,p.z,36);}},
+    // 4 真上から：黒煙を引き、回りながら遥か下の海へ落ちていく
+    {dur:3.5,setup(){proj.cam=proj.g.position.clone().add(tD.set(8,34,5));},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,false);projFall(dt,1);G.shake=0;const p=proj.g.position;
+      const d=proj.cam.distanceTo(p);setCam(proj.cam.x,proj.cam.y,proj.cam.z,p.x,p.y,p.z,clamp(2*Math.atan(9/d)*57.3,6,48));}},
+    // 5 無傷のコア：脈打ちながら放電を続ける
+    {dur:3.0,setup(){proj.g.visible=false;},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,true);fwdOf(P.yaw,P.pitch,tA);
+      setCam(P.pos.x-tA.x*20+tA.z*6,P.pos.y+4,P.pos.z-tA.z*20-tA.x*6,CORE.x,CORE.y,CORE.z,16-u*4);}},
+    // 6 編隊：衝撃で揺れ、目が閉じ始める
+    {dur:12,setup(){setMood('climax');setAlarm(true);coreFxUpdate(0,false);},update(t,u,dt){cutFly(dt,130);P.roll=Math.sin(t*3)*.12*(1-u);G.shake=Math.max(G.shake,.25*(1-u));
       U.uEye.value=1-.08*u;if(t>3)setAlarm(false);
       fwdOf(P.yaw,P.pitch,tA);const a=.5+u*2.4;setCam(P.pos.x+tA.x*46*Math.cos(a)+tA.z*46*Math.sin(a),P.pos.y+5+u*6,P.pos.z+tA.z*46*Math.cos(a)-tA.x*46*Math.sin(a),P.pos.x,P.pos.y+1,P.pos.z,46);}}],
-  end(){startRunKeep('spare');}
+  end(){coreFxUpdate(0,false);projChar(0);startRunKeep('spare');}
 };
 // 予備弾の受け渡し：2番機が横に並び、腹の下からアームを伸ばして、予備弾を 1番機の腹の下へ滑らせて装着する
 const HAND={init:false,A:new V3(),B:new V3(),q:new THREE.Quaternion()};
@@ -4811,7 +4839,7 @@ function showTitle(){
   view.scale=.72;cloudMat.uniforms.uSteps.value=84;resize();
   G.mode='title';ICP.seen=0;strReset();P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
   ['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');
-  U.uStorm.value=1;U.uEye.value=1;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
+  U.uStorm.value=1;U.uEye.value=1;G.eyeSun=0;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
   P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.br=null;P.brA=0;P.brCD=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);gateRings.forEach(g=>g.visible=false);P.hasPod=true;G.spareGiven=false;syncPods();
 }
@@ -5533,6 +5561,8 @@ function step(dt){
   if(window.__PCAM)window.__PCAM(camera,dt);
   updateCommon(dt);
   {let dmin=camera.position.distanceTo(P.pos);for(const w of W)if(w.mesh.visible)dmin=Math.min(dmin,camera.position.distanceTo(w.pos));
+    // カットで寄って撮る物（ディフューザー・受け渡しの予備弾・迎撃機）も、手前で切れないよう含める
+    if(proj&&proj.g.visible)dmin=Math.min(dmin,camera.position.distanceTo(proj.g.position));if(HAND.pod&&HAND.pod.visible)dmin=Math.min(dmin,camera.position.distanceTo(HAND.pod.position));for(const f of ICP.f)if(f.mesh.visible)dmin=Math.min(dmin,camera.position.distanceTo(f.pos));
     const bx=camera.position.x-BASE.x,bz=camera.position.z-BASE.z,gnd=Math.abs(bx)<2400&&Math.abs(bz)<2700?Math.max(islandH(bx,bz),0):0,alt=camera.position.y-gnd;
     let nr=(G.indoor>0||G.mode==='title'||G.mode==='boot')?1.5:Math.max(1.5,Math.min(20,dmin-19,alt*.45));if(nr>2&&Math.abs(bx)<2400&&Math.abs(bz)<2700&&camera.position.y<200){const c0=camera.position;let db=1e9;for(const c of baseGroup.userData.colliders){const dx=Math.max(c[0]-c0.x,0,c0.x-c[3]),dy=Math.max(c[1]-c0.y,0,c0.y-c[4]),dz=Math.max(c[2]-c0.z,0,c0.z-c[5]),d=dx*dx+dy*dy+dz*dz;if(d<db)db=d;}const hx=Math.max(Math.abs(bx)-53,0),hzz=Math.max(Math.abs(bz-HANGAR_Z)-92,0);db=Math.min(Math.sqrt(db),Math.hypot(hx,hzz));nr=Math.max(1.5,Math.min(nr,db*.6));}
     if(Math.abs(camera.near-nr)>.2){camera.near=nr;camera.updateProjectionMatrix();}}
