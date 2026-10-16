@@ -548,6 +548,7 @@ function setDoors(o){G.doorO=o;const d=baseGroup.userData.doors;d[0].position.x=
 const _cl=new V3(),_cw=new V3();
 // 重さの段階：0 通常、1 解像度の下限 50%・木 60%・低木 50%、2 下限 42%・木 40%・低木なし
 // （雲の歩数を減らすと、残り歩数で届かないときの粗い歩みに早く切り替わってかえって重くなるので、雲は解像度で軽くする）
+function cloudSteps(){cloudMat.uniforms.uSteps.value=Math.round((IS_TOUCH?[64,90,120]:[96,120,150])[opts.q]*(view.cs||1));}
 function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
   if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();renderFrame();}   // 大きさを変えると画面が消えるので、同じコマのうちに描き直す
   for(const[im,k]of[[B.trees,[1,.6,.4][t]],[B.shrubs,[1,.5,0][t]]]){if(!im)continue;if(im.userData.n0===undefined)im.userData.n0=im.count;im.count=Math.floor(im.userData.n0*k);}}
@@ -1022,7 +1023,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize();$('title').hidden=true;startCut(CUT_INTRO);});
+  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;startCut(CUT_INTRO);});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -1043,12 +1044,12 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
   const ap=()=>{opts.mus=+$('oMus').value;opts.sfx=+$('oSfx').value;opts.inv=$('oInv').checked;opts.q=+$('oQ').value;AU.musVol=opts.mus/100;AU.sfxVol=opts.sfx/100;setVolumes();
-    if(view.q!==opts.q){view.q=opts.q;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize(true);}saveOpts();};
+    if(view.q!==opts.q){view.q=opts.q;view.cs=1;cloudSteps();resize(true);}saveOpts();};
   ['oMus','oSfx','oInv','oQ'].forEach(i=>$(i).addEventListener('input',ap));ap();
   G.armed=false;try{localStorage.removeItem('stormrider_armed');}catch(e){}applyArmed();   // 武装モードは保存しない（読み込み直すと解除）
   {let n=0,t0=0;$('dial').addEventListener('pointerdown',e=>{const t=performance.now();if(t-t0>2500)n=0;t0=t;n++;if(n>=7){n=0;toggleArmed();}});$('dial').style.pointerEvents='auto';}
@@ -1585,11 +1586,14 @@ function frame(now){
   fpsAcc+=dt;fpsN++;
   if(G.mode==='title'){fpsAcc=0;fpsN=0;}   // タイトルの重い俯瞰で下がった解像度を本編へ持ち込まない
   if(fpsAcc>1.5){const fps=fpsN/fpsAcc;fpsAcc=0;fpsN=0;
-    if(fps<36&&view.scale>(view.minScale||.6)+.001){view.scale=Math.max(view.minScale||.6,view.scale*.85);view.upT=-8;resize();renderFrame();}
+    // 重いときは、まず雲の歩数を減らす（機体や景色の解像度は落とさない）。それでも重ければ解像度を下げる
+    if(fps<36&&(view.cs||1)>.66&&G.mode!=='title'){view.cs=Math.max(.65,(view.cs||1)*.85);cloudSteps();view.upT=-4;}
+    else if(fps<36&&view.scale>(view.minScale||.6)+.001){view.scale=Math.max(view.minScale||.6,view.scale*.85);view.upT=-8;resize();renderFrame();}
     // 解像度を最低まで下げてもまだ重いときは、雲の細かさと木・低木の本数を段階的に減らす（軽くなれば戻す）
     else if(fps<30&&view.scale<=(view.minScale||.6)+.01&&(view.tier||0)<2&&G.mode==='play'){view.tierT=0;setTier((view.tier||0)+1);}
     else if(fps>55&&view.tier>0&&view.scale>=.99){view.tierT=(view.tierT||0)+1;if(view.tierT>=4){view.tierT=0;setTier(view.tier-1);}}
     else if(fps>58&&view.scale<1){view.upT=(view.upT||0)+1;if(view.upT>=3){view.upT=0;view.scale=Math.min(1,view.scale*1.1);resize();renderFrame();}}
+    else if(fps>58&&(view.cs||1)<1){view.upT=(view.upT||0)+1;if(view.upT>=3){view.upT=0;view.cs=Math.min(1,(view.cs||1)*1.1);cloudSteps();}}
     else{view.upT=0;view.tierT=0;}}
 }
 

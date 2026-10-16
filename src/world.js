@@ -772,14 +772,27 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   // 沖の岩礁と北岬の灯台
   {const rm=std({color:lin(0x4a443c),roughness:.92,metalness:0});rm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;
       sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nattribute float aCav;varying float vCav;varying vec3 vRP;varying vec3 vRN;").replace("#include <begin_vertex>","#include <begin_vertex>\nvCav=aCav;vRP=(modelMatrix*vec4(position,1.0)).xyz;vRN=normalize(mat3(modelMatrix)*normal);");
-      sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\nvarying float vCav;varying vec3 vRP;varying vec3 vRN;uniform sampler2D tN2;").replace("#include <color_fragment>",`#include <color_fragment>
-float ra=texture2D(tN2,vRP.xy/19.0+vRP.z*0.031).b,rb=texture2D(tN2,vRP.zy/6.0+vRP.x*0.02).b,rc=texture2D(tN2,vRP.xz/3.1).b;
-vec3 c=diffuseColor.rgb*(0.55+0.9*ra)*(0.75+0.5*rb)*(0.9+0.2*sin(vRP.y*0.9+ra*7.0));
-c*=mix(0.35,1.15,smoothstep(0.0,0.75,vCav));                                              // くぼみの暗がり
-float up=smoothstep(0.55,0.9,vRN.y);c=mix(c,vec3(0.36,0.38,0.22)*(0.7+0.6*rc),up*smoothstep(0.45,0.7,rb)*0.6);   // 上向きの面の地衣類
-c=mix(c,vec3(0.78,0.77,0.72),smoothstep(0.62,0.8,rc)*up*smoothstep(8.0,20.0,vRP.y)*0.75);  // 鳥のふん
-float wet=1.0-smoothstep(1.0,4.2,vRP.y+(ra-0.5)*1.5);c=mix(c,c*0.32,wet);c=mix(c,vec3(0.06,0.10,0.05),wet*smoothstep(0.4,0.7,rb)*0.7);  // 水際の濡れと海藻
-c=mix(c,vec3(0.55,0.53,0.48),(1.0-smoothstep(0.5,1.6,abs(vRP.y-1.7)))*smoothstep(0.55,0.75,rc)*0.5);   // フジツボの帯
+      sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\nvarying float vCav;varying vec3 vRP;varying vec3 vRN;uniform sampler2D tN2;float gRockH=0.0,gRockWet=0.0;").replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n{vec3 rkP=-vViewPosition,rkX=dFdx(rkP),rkY=dFdy(rkP);float rkHx=dFdx(gRockH),rkHy=dFdy(gRockH);vec3 rkA=cross(rkY,normal),rkB=cross(normal,rkX);float rkD=dot(rkX,rkA);vec3 rkG=sign(rkD)*(rkHx*rkA+rkHy*rkB);normal=normalize(abs(rkD)*normal-rkG*0.9);}").replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,0.55,gRockWet);").replace("#include <color_fragment>",`#include <color_fragment>
+// 3 方向から投影したノイズ（斜めの面で引き伸びない）
+vec3 bw=pow(abs(vRN),vec3(4.0));bw/=bw.x+bw.y+bw.z;
+#define TRI(S,O) (texture2D(tN2,vRP.zy/S+O).b*bw.x+texture2D(tN2,vRP.xz/S+O).b*bw.y+texture2D(tN2,vRP.xy/S+O).b*bw.z)
+float ra=TRI(23.0,0.11),rb=TRI(7.0,0.37),rc=TRI(2.2,0.71),rd=TRI(0.7,0.53);
+// 地層：わずかに傾き、ノイズで波打つ横縞。縞の境は段になって陰る
+float sy=vRP.y*0.32+vRP.x*0.03+(ra-0.5)*2.5;float strata=smoothstep(0.0,0.25,fract(sy))*(0.7+0.3*rb);   /* 地層：段の上は張り出し、下は陰 */
+// 割れ目：縦に走る細い筋
+float crk=(1.0-smoothstep(0.0,0.02,abs(TRI(17.0,0.9)-0.5)))*smoothstep(0.6,0.75,TRI(41.0,0.47))*(1.0-bw.y);   /* 割れ目はまばらに、縦の面だけ */
+float rH=ra*0.9+rb*0.3+rc*0.06+strata*0.35-crk*0.15;
+vec3 c=0.32*mix(vec3(0.20,0.19,0.18),vec3(0.42,0.38,0.32),smoothstep(0.25,0.8,ra*0.7+rb*0.5));      // 玄武岩の灰と砂岩の茶
+c=mix(c,0.32*vec3(0.47,0.31,0.18),smoothstep(0.62,0.82,TRI(31.0,0.23))*0.55);                        // 鉄さびの赤茶
+c*=0.8+0.35*rc;c*=0.8+0.2*strata;c*=1.0-0.55*crk;
+// 上から流れた黒い筋（雨だれ）
+c*=1.0-0.35*smoothstep(0.55,0.8,texture2D(tN2,vec2(vRP.x*0.09+vRP.z*0.07,vRP.y*0.006)).b)*(1.0-bw.y);
+c*=mix(0.4,1.1,smoothstep(0.0,0.75,vCav));                                                       // くぼみの暗がり
+float up=smoothstep(0.5,0.9,vRN.y);c=mix(c,0.4*vec3(0.34,0.37,0.2)*(0.7+0.6*rc),up*smoothstep(0.45,0.7,rb)*0.65);   // 上向きの面の地衣類
+c=mix(c,0.55*vec3(0.8,0.79,0.74),smoothstep(0.64,0.8,rc)*up*smoothstep(8.0,20.0,vRP.y)*0.7);          // 鳥のふん
+float wet=1.0-smoothstep(1.0,4.5,vRP.y+(ra-0.5)*1.6);c=mix(c,c*0.35,wet);c=mix(c,vec3(0.05,0.09,0.05),wet*smoothstep(0.4,0.7,rb)*0.7);  // 水際の濡れと海藻
+c=mix(c,0.35*vec3(0.56,0.54,0.49),(1.0-smoothstep(0.5,1.6,abs(vRP.y-1.7)))*smoothstep(0.55,0.75,rc)*0.5);   // フジツボの帯
+gRockH=rH;gRockWet=wet;
 diffuseColor.rgb=c;`);};
     // 岩の形：頂点をつなげて滑らかにし、尾根のある起伏・地層の縞・平らな底を付ける。くぼみの度合いは aCav に残す
     const rockGeo=(seed,det)=>{const src=new THREE.IcosahedronGeometry(1,det||5),sp=src.attributes.position,map=new Map(),P=[],I=[],cav=[];
