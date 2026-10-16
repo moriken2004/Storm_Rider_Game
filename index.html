@@ -4712,7 +4712,7 @@ const HAND={init:false,A:new V3(),B:new V3(),q:new THREE.Quaternion()};
 function handInit(){if(HAND.init)return;HAND.init=true;
   const pd=buildDiffuser();if(pd.userData.flame)pd.userData.flame.visible=false;pd.visible=false;scene.add(pd);HAND.pod=pd;
   const arm=new THREE.Mesh(new THREE.CylinderGeometry(.07,.11,1,10).rotateX(Math.PI/2),std({color:lin(0x3b4148),metalness:.75,roughness:.35}));arm.visible=false;arm.frustumCulled=false;scene.add(arm);HAND.arm=arm;
-  const gl=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,1,6).rotateX(Math.PI/2),glowMat(new V3(.4,2.2,3.0),0));gl.visible=false;gl.frustumCulled=false;overlay.add(gl);HAND.glow=gl;
+  const gl=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,1,6).rotateX(Math.PI/2),glowMat(new V3(.12,.6,.85),0));gl.visible=false;gl.frustumCulled=false;overlay.add(gl);HAND.glow=gl;
   const lp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(.3,2.6,.8),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));lp.scale.set(.75,.75,1);lp.visible=false;scene.add(lp);HAND.lamp=lp;}
 // 受け渡し中の 2 機の位置：2番機は右 20m、少し前、わずかに上
 function handFly(dt,peel){fwdOf(P.yaw,0,tA);P.pitch=damp(P.pitch,0,2,dt);P.roll=damp(P.roll,0,2,dt);P.pos.addScaledVector(tA,130*dt);P.power=.8;const rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
@@ -4722,7 +4722,7 @@ function handFly(dt,peel){fwdOf(P.yaw,0,tA);P.pitch=damp(P.pitch,0,2,dt);P.roll=
 function handArm(ext){const w=W[0];syncAC(w);syncAC(P);w.mesh.updateMatrixWorld(true);P.mesh.updateMatrixWorld(true);w.mesh.userData.pod.getWorldPosition(HAND.A);P.mesh.userData.pod.getWorldPosition(HAND.B);
   const L=HAND.A.distanceTo(HAND.B)*ext;HAND.arm.visible=HAND.glow.visible=ext>.01;if(ext<=.01)return;tC.copy(HAND.B).sub(HAND.A).normalize();
   for(const m of[HAND.arm,HAND.glow]){m.position.copy(HAND.A).addScaledVector(tC,L/2);m.lookAt(tD.copy(HAND.A).addScaledVector(tC,L+1));m.scale.set(1,1,Math.max(.01,L));}
-  HAND.glow.material.uniforms.uAlpha.value=.35+.25*Math.sin(G.t*18);}
+  HAND.glow.material.uniforms.uAlpha.value=.12+.08*Math.sin(G.t*18);}
 const CUT_HAND={mid:true,blendIn:.6,blendOut:1.0,
   subs:[[.2,'G','受け渡しアームを伸ばす。速度を合わせろ…そのままだ',3.0],[3.4,'G','予備弾を送る。揺らすなよ',2.4],[6.3,'C','接続を確認。予備のディフューザー、1番機に装着しました',3.0],[9.5,'G','受け渡し完了だ。…外すなよ、隊長',2.6]],
   begin(){handInit();W[0].state='dockfly';W[0].mesh.visible=true;HAND.pod.visible=false;HAND.lamp.visible=false;HAND.locked=false;tether.visible=false;carrierRing.visible=false;
@@ -4794,7 +4794,9 @@ const CUT_LAND={
       setCam(-48+u*14,RWY_Y+6,P.pos.z+70-u*20,P.pos.x,P.pos.y+2,P.pos.z+10,40);}},
     {dur:8,setup(){card('MISSION COMPLETE','任務完了');},update(t,u){W.forEach((w,i)=>{w.pos.set((i?-1:1)*(300+u*200),320+u*90,BASE.z+600+i*200+t*150);w.yaw=Math.PI+(i?-.3:.3);w.roll=0;});
       setCam(-190-u*60,RWY_Y+40+u*150,BASE.z-760-u*260,60,RWY_Y+10,BASE.z+500,46);}}],
-  end(){showResult();}
+  // 途中で飛ばしたときも、機体は滑走路の上で止まった状態にする（結果画面の背景で空に浮かない）
+  end(){if(P.pos.y>RWY_Y+8||Math.abs(P.pos.x)>30||P.pos.z<BASE.z-900||P.pos.z>BASE.z+300){P.pos.set(0,RWY_Y+3.6,BASE.z-420);}P.yaw=Math.PI;P.pitch=0;P.roll=0;P.power=.2;gearOf(P,true);P.pos.y=RWY_Y+3.6+GP(P,0);syncAC(P);
+    W.forEach((w,i)=>{if(w.state!=='gone'){w.pos.set(i?-300:300,420,BASE.z+800+i*200);w.yaw=Math.PI;syncAC(w);}});showResult();}
 };
 function startRunKeep(ph){ // カットシーン後、機体の状態を保って次のフェーズへ
   resetHaz();G.mode='play';$('hud').hidden=false;P.roll=0;
