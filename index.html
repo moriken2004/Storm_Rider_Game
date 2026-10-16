@@ -3871,7 +3871,11 @@ const DIFFS=[
   {name:'実戦',desc:'受けるダメージと風が強くなり、着氷・計器故障・風向の急変・脚の油圧故障が起こります。',dmg:1.35,strk:.78,warnT:1.75,rad:72,turb:1.3,wind:1.2,eyeT:78,heal:20,floor:60,spouts:9,stallT:25},
   {name:'極限',desc:'さらに雹とエンジン火災が起こります。着陸では進入ゲートをすべて通過しなければなりません。',dmg:1.8,strk:.6,warnT:1.45,rad:84,turb:1.6,wind:1.4,eyeT:64,heal:10,floor:45,spouts:12,stallT:21}];
 const DF=()=>DIFFS[opts.diff||0];
-const opts=(()=>{let o={mus:70,sfx:80,inv:false,q:1,diff:0,color:0,shape:0};try{Object.assign(o,JSON.parse(localStorage.getItem('stormrider_opts')||'{}'));}catch(e){}return o;})();
+// 保存した設定：壊れた値や古い版の範囲外の番号でも起動できるよう、型と範囲をそろえる（色と形の個数は読み込み後に fixOpts で確かめる）
+const opts=(()=>{const d={mus:70,sfx:80,inv:false,q:1,diff:0,color:0,shape:0};let s={};try{s=JSON.parse(localStorage.getItem('stormrider_opts')||'{}');}catch(e){}if(!s||typeof s!=='object'||Array.isArray(s))s={};
+  const num=(v,lo,hi,def,int)=>{v=Number(v);if(!Number.isFinite(v))return def;v=Math.min(hi,Math.max(lo,v));return int?Math.round(v):v;};
+  return{mus:num(s.mus,0,100,d.mus),sfx:num(s.sfx,0,100,d.sfx),inv:!!s.inv,q:num(s.q,0,2,d.q,1),diff:num(s.diff,0,2,d.diff,1),color:num(s.color,0,99,0,1),shape:num(s.shape,0,99,0,1)};})();
+function fixOpts(){if(typeof SCHEMES!=='undefined'&&!(opts.color<SCHEMES.length))opts.color=0;if(typeof SHAPES!=='undefined'&&!(opts.shape<SHAPES.length))opts.shape=0;}fixOpts();
 const saveOpts=()=>{try{localStorage.setItem('stormrider_opts',JSON.stringify(opts));}catch(e){}};
 const G={mode:'boot',phase:'',t:0,pt:0,missionT:0,retries:0,flags:{},flash:0,scr:0,hurt:0,shake:0,gust:0,down:0,gloom:0,rain:0,gold:0,
   target:null,targetLabel:'',lock:0,ringIdx:0,eyeT:0,dock:0,strikeT:4,ambT:1,ckpt:null,stats:{dmg:0,saved:null},fade:0,white:0,prompt:null,warnT:0,hintT:0,gate:0};
@@ -4482,7 +4486,8 @@ function animCrew(dt){
     let hy=0,hx=T.look||0;if(eng||moving){hy=toP-c.ry;while(hy>Math.PI)hy-=6.2832;while(hy<-Math.PI)hy+=6.2832;hy=clamp(hy,-1.1,1.1);hx=0;}D(c.head,'y',hy);D(c.head,'x',-hx);
   }
 }
-function hangarLight(k){baseGroup.userData.hlight.intensity=2.2*k;{const c=baseGroup.userData.cones;c.coneM.opacity=.55*k;c.poolM.opacity=.1*k;}baseGroup.userData.strip.color.setRGB(2.6*k+.02,2.7*k+.02,3*k+.03);}
+function hangarLight(k){if(G.hgDead)k=0;   // 壊れた格納庫の天井照明は点けない（落ちた屋根の上に浮いて見える）
+baseGroup.userData.hlight.intensity=2.2*k;{const c=baseGroup.userData.cones;c.coneM.opacity=.55*k;c.poolM.opacity=.1*k;}baseGroup.userData.strip.color.setRGB(2.6*k+.02,2.7*k+.02,3*k+.03);}
 const CUT_INTRO={
   subs:[[.8,'C','台風13号〈オロチ〉、中心気圧890ヘクトパスカル。18時間後に本土へ上陸する見込みです',6.2],
     [8.6,'C','ストームライダー隊に発進を許可します。目標は台風の中心、コア',4.2],[13.2,'C','ディフューザーは1番機に1発、2番機に予備が1発。コアへ撃ち込み、嵐を内側から消してください',5],
@@ -4856,7 +4861,7 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
@@ -5205,19 +5210,29 @@ function boomReset(){BOOM.q.length=0;if(!BOOM.init)return;for(const a of[BOOM.fi
   BOOM.sparks.forEach(s=>s.pt.visible=false);BOOM.deb.forEach(d=>{d.life=0;d.m.visible=false;});BOOM.ring.forEach(r=>r.m.visible=false);BOOM.lt=9;BOOM.lk=0;BOOM.light.intensity=0;}
 
 // ── 建物の崩壊：まとめた形状の中から、壊れた建物の箱に入る頂点を集めて動かす（種類ごとに崩れ方が違う）
-const BRK={meshes:null,list:[],sc:0};
+const BRK={meshes:null,list:[],sc:0,claim:new Map()};   // claim：頂点ごとの持ち主（先に崩れ始めた建物）。2 つの崩壊が同じ頂点を取り合って引き伸ばさない
 function brkMeshes(){if(BRK.meshes)return BRK.meshes;const ref=new Map(),all=[];
   baseGroup.updateMatrixWorld(true);baseGroup.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.geometry||!o.geometry.attributes.position)return;ref.set(o.geometry,(ref.get(o.geometry)||0)+1);all.push(o);});
   BRK.meshes=all.filter(o=>{const e=o.matrixWorld.elements;return ref.get(o.geometry)===1&&Math.abs(e[0]-1)<1e-4&&Math.abs(e[5]-1)<1e-4&&Math.abs(e[10]-1)<1e-4&&Math.abs(e[1])<1e-4&&Math.abs(e[2])<1e-4&&Math.abs(e[4])<1e-4;}).map(o=>({o,a:o.geometry.attributes.position,ox:o.matrixWorld.elements[12],oy:o.matrixWorld.elements[13],oz:o.matrixWorld.elements[14]}));
   return BRK.meshes;}
 const bhash=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
-function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];
-  for(const m of brkMeshes()){const a=m.a,arr=a.array,x0=c[0]-M-m.ox,x1=c[3]+M-m.ox,y0=c[1]-M-m.oy,y1=c[4]+M-m.oy,z0=c[2]-M-m.oz,z1=c[5]+M-m.oz,idx=[];
-    for(let i=0,n=a.count;i<n;i++){const x=arr[i*3];if(x<x0||x>x1)continue;const z=arr[i*3+2];if(z<z0||z>z1)continue;const y=arr[i*3+1];if(y<y0||y>y1)continue;idx.push(i);}
+function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.cols[0]){G.hgDead=true;hangarLight(0);}
+  const topM=kind===1?Math.max(3,(c[3]-c[0])*1.2):M;   // 倒れる塔は上に載った照明の頭なども一緒に倒す
+  for(const m of brkMeshes()){const a=m.a,arr=a.array,x0=c[0]-M-m.ox,x1=c[3]+M-m.ox,y0=c[1]-M-m.oy,y1=c[4]+topM-m.oy,z0=c[2]-M-m.oz,z1=c[5]+M-m.oz,idx=[];
+    const inb=i=>{const x=arr[i*3];if(x<x0||x>x1)return false;const z=arr[i*3+2];if(z<z0||z>z1)return false;const y=arr[i*3+1];return y>=y0&&y<=y1;};
+    // 三角形の 3 頂点がすべて箱の中にあるときだけ動かす（道路・電線・クレーンのように箱をまたぐ三角形を引き伸ばさない）
+    const ix=m.o.geometry.index;
+    if(!ix){for(let t=0,n=a.count-2;t<n;t+=3){if(inb(t)&&inb(t+1)&&inb(t+2))idx.push(t,t+1,t+2);}}
+    else{const ia=ix.array,ok=new Uint8Array(a.count),bad=new Uint8Array(a.count);for(let t=0;t<ia.length;t+=3){const p=ia[t],q=ia[t+1],r=ia[t+2],ip=inb(p),iq=inb(q),ir=inb(r);if(ip&&iq&&ir){ok[p]=ok[q]=ok[r]=1;}else{if(ip)bad[p]=1;if(iq)bad[q]=1;if(ir)bad[r]=1;}}for(let i=0;i<a.count;i++)if(ok[i]&&!bad[i])idx.push(i);}
+    {let cl=BRK.claim.get(m.a);if(!cl){cl=new Uint8Array(a.count);BRK.claim.set(m.a,cl);}let w=0;for(const i of idx)if(!cl[i]){cl[i]=1;idx[w++]=i;}idx.length=w;}
     if(!idx.length)continue;const I=new Int32Array(idx),O=new Float32Array(idx.length*3);for(let j=0;j<idx.length;j++){O[j*3]=arr[idx[j]*3];O[j*3+1]=arr[idx[j]*3+1];O[j*3+2]=arr[idx[j]*3+2];}
     parts.push({m,I,O,lo:idx[0],hi:idx[idx.length-1]});}
-  const a=Math.random()*6.283;
-  const b={o,c,kind,u:0,dur:[2.3,2.8,1.9,1.3][kind],parts,y1:c[4],dx:Math.cos(a),dz:Math.sin(a),done:false,sc:-1,hit:false};
+  const a=Math.random()*6.283,gy=groundAt((c[0]+c[3])/2,(c[2]+c[5])/2),fl=Math.max(gy,3.5);
+  // 地面から浮いた部品（クレーンの梁など）はその場で崩さず、傾きながら地面へ落とす
+  // ただし真下に別の建物があって支えられている部品（屋上のドームなど）は、その場で崩す
+  const sup=c[1]-fl>6&&STR.cols.some(q=>q!==o&&!q.c[7]&&q.c[0]<c[3]&&q.c[3]>c[0]&&q.c[2]<c[5]&&q.c[5]>c[2]&&q.c[1]<c[1]-.5&&q.c[4]>=c[1]-3);
+  const kd=c[1]-fl>6?(sup?(kind===1?0:kind):4):kind;   // 高い位置の細長い部材は倒さない（空中で横へ突き出して旗のように見える）
+  const b={o,c,kind:kd,u:0,dur:[2.3,2.8,1.9,1.3,1.7][kd],parts,y1:c[4],fl,dx:Math.cos(a),dz:Math.sin(a),done:false,sc:-1,hit:false};
   // 焼け焦げの範囲を登録（24 棟まで）
   if(BRK.sc<24){const i=BRK.sc++;b.sc=i;U.uScA.value[i].set(c[0],c[1],c[2],0);U.uScB.value[i].set(c[3],c[4],c[5],0);U.uScN.value=BRK.sc;}
   BRK.list.push(b);return b;}
@@ -5227,8 +5242,11 @@ function brkPos(b,X,Y,Z,u,out){const c=b.c,x0=c[0],x1=c[3],z0=c[2],z1=c[5],y0=c[
     const th=1.48*Math.min(1,u*u),px=cx+b.dx*w*.5,pz=cz+b.dz*d*.5,kx=b.dz,kz=-b.dx,vx=X-px,vy=Y-y0,vz=Z-pz,cs=Math.cos(th),sn=Math.sin(th),kd=kx*vx+kz*vz;
     // v cos + (k×v) sin + k(k·v)(1-cos)　k=(kx,0,kz)
     out.set(px+vx*cs+(-kz*vy)*sn+kx*kd*(1-cs),y0+vy*cs+(kz*vx-kx*vz)*sn,pz+vz*cs+(kx*vy)*sn+kz*kd*(1-cs));if(out.y<y0+.3*ny)out.y=y0+.3*ny;return out;}
-  const n=bhash(Math.floor(X/2.6),Math.floor(Z/2.6)),n2=bhash(Math.floor(X/1.3)+7,Math.floor(Z/1.3)+3);
-  const ed=1-Math.min(Math.min(X-x0,x1-X),Math.min(Z-z0,z1-Z))/Math.max(.5,.5*Math.min(w,d));
+  if(b.kind===4){// 落下：重力で落ち、少し傾き、地面で止まる
+    const drop=(y0-b.fl)*Math.min(1,u*u*1.15),tl=.35*ease(sat(u)),dxv=X-cx,dzv=Z-cz,dyv=Y-y0;out.set(X+dyv*Math.sin(tl)*b.dx*.6,Math.max(b.fl+.2,Y-drop-dxv*Math.sin(tl)*b.dx*.5-dzv*Math.sin(tl)*b.dz*.5),Z+dyv*Math.sin(tl)*b.dz*.6);return out;}
+  const n=vn2(X/7.3+b.dx*9,Z/7.3+b.dz*9),n2=vn2(X/3.1+17,Z/3.1+5);
+  // 縁への近さ 0〜1（判定の余白で箱の外にある頂点だと 1 を超え、4 乗で高さが何倍にも伸びていた）
+  const ed=sat(1-Math.min(Math.min(X-x0,x1-X),Math.min(Z-z0,z1-Z))/Math.max(.5,.5*Math.min(w,d)));
   if(b.kind===2){// 倉庫：屋根が中央から落ち込み、壁は少し外へはらむ
     const uu=ease(sat(u*1.2-(1-ny)*.2)),cen=sat(1-ed);let Yn=Y;if(ny>.45)Yn=Y-(ny-.3)*h*(.5+.45*cen)*uu*(.8+.4*n);
     out.set(X+(X-cx)/Math.max(1,w*.5)*.06*h*ny*uu,Math.max(y0,Yn-(ny<.45?ny*h*.25*uu*n2:0)),Z+(Z-cz)/Math.max(1,d*.5)*.06*h*ny*uu);return out;}
@@ -5236,7 +5254,7 @@ function brkPos(b,X,Y,Z,u,out){const c=b.c,x0=c[0],x1=c[3],z0=c[2],z1=c[5],y0=c[
     const uu=ease(sat(u)),f=.22+.25*n;out.set(X+(X-cx)*.28*uu*ny,y0+(Y-y0)*lerp(1,f,uu),Z+(Z-cz)*.28*uu*ny);return out;}
   // コンクリート：上の階から崩れ、外壁の一部がぎざぎざに残る。瓦礫は外へ広がる
   const uu=ease(sat(u*1.25-(1-ny)*.25)),f=.06+.3*n*n+.5*Math.pow(Math.max(0,ed),4)*n2;
-  const Yn=y0+(Y-y0)*lerp(1,f,uu),sp=.12*uu*(1-f)*(1-ny*.4);out.set(X+(X-cx)*sp,Yn-(X-cx)*.03*uu*ny,Z+(Z-cz)*sp);return out;}
+  const Yn=Math.min(Y,y0+(Y-y0)*lerp(1,Math.min(1,f),uu)),sp=.12*uu*(1-Math.min(1,f))*(1-ny*.4);out.set(X+(X-cx)*sp,Yn-(X-cx)*.03*uu*ny,Z+(Z-cz)*sp);return out;}
 const _bp=new V3();
 function brkUpdate(dt){if(!BRK.list.length)return;const rng=new Map();
   for(const b of BRK.list){if(b.done)continue;b.u=Math.min(1,b.u+dt/b.dur);const u=b.u;
@@ -5248,7 +5266,7 @@ function brkUpdate(dt){if(!BRK.list.length)return;const rng=new Map();
     if(u>=1){b.done=true;const c=b.c;c[4]=b.kind===1?c[1]+2:c[1]+(b.y1-c[1])*(b.kind===2?.5:.32);}}
   for(const[a,r]of rng){a.updateRange.offset=r[0]*3;a.updateRange.count=(r[1]-r[0]+1)*3;a.needsUpdate=true;}}
 function brkReset(){for(const b of BRK.list){for(const P0 of b.parts){const arr=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j];arr[i*3]=P0.O[j*3];arr[i*3+1]=P0.O[j*3+1];arr[i*3+2]=P0.O[j*3+2];}P0.m.a.updateRange.offset=0;P0.m.a.updateRange.count=-1;P0.m.a.needsUpdate=true;}b.c[4]=b.y1;}
-  BRK.list.length=0;BRK.sc=0;U.uScN.value=0;}
+  BRK.list.length=0;BRK.sc=0;U.uScN.value=0;BRK.claim.clear();if(G.hgDead){G.hgDead=false;hangarLight(1);}}
 function updateCommon(dt){
   {const ip=G.mode==='play';if(ip!==G.inplayCls){G.inplayCls=ip;document.body.classList.toggle('inplay',ip);if(!ip){input.tx=input.ty=0;input.tAct=input.tBoost=input.tGun=input.tMsl=false;}}}
   updateExplosion(dt);
@@ -5390,7 +5408,7 @@ function initSeaLife(){
 // ── 機銃で撃てる船と施設（武装モード）
 const STR={init:false,cols:[],burn:[],smoke:[],fire:[],said:{}},_sq=new V3();
 function strInit(){STR.init=true;
-  STR.cols.push({c:[BASE.x-53,RWY_Y,BASE.z+HANGAR_Z-92,BASE.x+53,RWY_Y+41,BASE.z+HANGAR_Z+92,0,0,2],hp:56,dead:false});   // 格納庫（当たり判定は別扱いなので足す）
+  STR.cols.push({c:[BASE.x-58,RWY_Y-1,BASE.z+HANGAR_Z-97,BASE.x+58,RWY_Y+44,BASE.z+HANGAR_Z+97,0,0,2],hp:56,dead:false});   // 屋根のはみ出しまで含める（3 頂点とも箱の中の三角形だけ崩すため）   // 格納庫（当たり判定は別扱いなので足す）
   for(const c of baseGroup.userData.colliders)STR.cols.push({c,hp:Math.max(8,Math.min(56,Math.round((c[3]-c[0])*(c[5]-c[2])/90))),dead:false});
   const dm={blendSrc:THREE.ZeroFactor,blendDst:THREE.OneMinusSrcColorFactor};   // 黒煙は背景を暗くする合成
   for(let i=0;i<70;i++){const m=new THREE.Mesh(quad1(),glowMat(new V3(.5,.5,.52),3,dm));m.frustumCulled=false;m.visible=false;overlay.add(m);STR.smoke.push({m,life:0,max:1,vel:new V3(),s:1});}
