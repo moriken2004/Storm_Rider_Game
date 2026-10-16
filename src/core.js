@@ -132,6 +132,8 @@ float spBand(float th,float lr,float k,float off,float w){float d=abs(mod(th+k*l
 vec4 stormCover(vec3 p){
   float r=length(p.xz);
   float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;
+  // 目の壁は「スタジアム」：上へ行くほど外へ開き、ところどころ内側へ張り出す棚（雲の段）がある
+  {float ang=atan(p.z,p.x);er-=(260.0*exp(-pow((p.y-1900.0)/380.0,2.0))*(0.6+0.4*sin(ang*3.0+1.0))+340.0*exp(-pow((p.y-3900.0)/520.0,2.0))*(0.6+0.4*sin(ang*2.0+4.0)))*sat(uStorm*2.0-1.0);}
   float life=smoothstep(0.0,1.0,uStorm*1.8-0.8*(1.0-sat(r/RO)));
   float inEye=smoothstep(er-150.0,er+350.0,r);
   float wall=inEye*(1.0-smoothstep(WALL_OUT-500.0,WALL_OUT+1400.0,r));
@@ -149,7 +151,7 @@ vec4 stormCover(vec3 p){
   float outer=1.0-smoothstep(RO*0.82,RO*1.1,r);
   float cells=smoothstep(0.70,0.86,vn2(p.xz/700.0+11.0))*outer*0.55*smoothstep(5000.0,9000.0,r);    // 孤立した積乱雲
   float c=max(max(wall,cdo*0.97*moat),max(bands,cells+outer*0.04))*inEye*life;
-  float top=mix(mix(2200.0,3700.0,max(cdo,bands*0.6)),4300.0,wall);
+  float top=mix(mix(2200.0,3700.0,max(cdo,bands*0.6)),4300.0+3600.0*(1.0-smoothstep(er+300.0,WALL_OUT+600.0,r)),wall);   // 内側の壁ほど高くそびえる
   float rain=max(wall,bands*0.8+cdo*0.35)*inEye*life;
   return vec4(c,wall*life,rain,top);
 }
@@ -189,7 +191,7 @@ uniform sampler3D tNoise,tDetail;uniform sampler2D tDepth;
 uniform mat4 uInvPV;uniform vec3 uCam;uniform float uSteps,uFrame,uGloom,uHaze,uBud;
 varying vec2 vUv;
 ${GLSL_COMMON}
-const float SLAB=5600.0;
+const float SLAB=9000.0;
 const float DENSE=0.0016;
 // 消散係数（1/m）。hi=true で縁の細部まで計算
 float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
@@ -271,7 +273,7 @@ void main(){
     if(e>1e-6){
       float colm=max(sc.w-p.y,0.0)*sc.x;
       // 目に面した壁雲の内側は、開いた目から横向きに光を受ける（真上の雲の厚さで暗くしない）
-      {float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;colm*=1.0-0.85*(1.0-smoothstep(er+80.0,er+900.0,length(p.xz)))*sat(uStorm*2.0-1.0);}
+      {float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;colm*=1.0-0.88*(1.0-smoothstep(er+80.0,er+1500.0,length(p.xz)))*sat(uStorm*2.0-1.0);}
       float sunT=exp(-colm*0.0024);
       vec3 S;
       if(e>DENSE){
@@ -602,7 +604,7 @@ function stormAt(x,y,z,out){
   let bands=Math.max(b1,b2,b3)*smooth(4200,6000,r);const fr=smooth(6500,13500,r);bands*=lerp(1,.35+.65*smooth(.28,.58,nB*.7+nC*.45),fr);bands*=.84+.16*smooth(-.6,1,Math.cos(th-.9));
   const moat=1-.7*smooth(6800,8000,r)*(1-smooth(8200,9800,r))*(1-b1),outer=1-smooth(RO*.82,RO*1.1,r),cells=smooth(.7,.86,vn2(x/700+11,z/700+11))*outer*.55*smooth(5000,9000,r);
   out.c=Math.max(wall,cdo*.97*moat,bands,cells+outer*.04)*inEye*life;
-  out.top=lerp(lerp(2200,3700,Math.max(cdo,bands*.6)),4300,wall);
+  out.top=lerp(lerp(2200,3700,Math.max(cdo,bands*.6)),4300+3600*(1-smooth(er+300,WALL_OUT+600,r)),wall);
   out.rain=Math.max(wall,bands*.8+cdo*.35)*inEye*life;
   out.wall=wall*life;out.r=r;
   return out;

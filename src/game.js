@@ -27,8 +27,18 @@ const ENV_A={dir:new V3(-0.45,0.42,0.78).normalize(),sun:new V3(5.2,4.5,3.6),zen
 const ENV_B={dir:new V3(-0.20,0.20,0.95).normalize(),sun:new V3(7.8,4.7,2.4),zen:new V3(0.075,0.185,0.46),hor:new V3(0.60,0.60,0.68)};
 // 台風の目の中では太陽を高くして、壁雲に囲まれた海に日が差すようにする（壁雲の中を通る間に切り替わるので、外の景色の変化は見えない）
 const SUN_BASE=ENV_A.dir.clone(),SUN_EYE=new V3(-0.45*.5,0.86,0.78*.5).normalize();
+// 夕暮れの奥：日がさらに傾き、空は藍色、灯りが映える
+const ENV_C={dir:new V3(-0.16,0.075,0.98).normalize(),sun:new V3(6.4,2.5,.9),zen:new V3(0.035,0.07,0.2),hor:new V3(0.5,0.38,0.36)};
+function applyDusk(k){if(Math.abs(k-(G.duskK||0))<.002&&G.duskK!==undefined)return;G.duskK=k;if(k<=0){applyEnv(G.gold||0);G.duskK=0;duskLights(0);return;}
+  const g0=G.gold;applyEnv(g0);G.duskK=k;U.uSunDir.value.lerp(ENV_C.dir,k).normalize();U.uSunCol.value.lerp(ENV_C.sun,k);U.uSkyZen.value.lerp(ENV_C.zen,k);U.uSkyHor.value.lerp(ENV_C.hor,k);duskLights(k);}
+// 基地の灯り（滑走路灯・窓明かり・街灯・標識灯）を夕暮れの深さで明るくする
+const DL={init:false,spr:[],win:[]};
+function duskLights(k){if(!DL.init){DL.init=true;baseGroup.traverse(o=>{const m=o.material;if(!m||Array.isArray(m))return;if(o.isSprite&&m.blending===THREE.AdditiveBlending&&!DL.spr.some(q=>q[0]===m))DL.spr.push([m,m.color.clone(),o]);else if(m.isMeshStandardMaterial&&m.emissiveMap&&!DL.win.some(q=>q[0]===m))DL.win.push([m,m.emissiveIntensity]);});}
+  for(const[m,c0]of DL.spr)m.color.copy(c0).multiplyScalar(1+1.6*k);for(const[m,e0]of DL.win)m.emissiveIntensity=e0*(1+2.6*k);
+  if(runwayLights){runwayLights.material.size=2.6*(1+.9*k);}
+  if(DL.lpts===undefined){DL.lpts=[];baseGroup.traverse(o=>{if(o.isPoints&&o!==runwayLights)DL.lpts.push([o.material,o.material.size]);});}for(const[m,s0]of DL.lpts)m.size=s0*(1+.9*k);}
 function applyEnv(g){
-  G.gold=g;SUN_BASE.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,G.eyeSun||0).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
+  G.duskK=undefined;G.gold=g;SUN_BASE.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,G.eyeSun||0).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
   U.uSkyZen.value.copy(ENV_A.zen).lerp(ENV_B.zen,g);U.uSkyHor.value.copy(ENV_A.hor).lerp(ENV_B.hor,g);
 }
 
@@ -1490,17 +1500,18 @@ function updateCommon(dt){
   fu.uRain.value=Math.min(1.6,G.rain*1.6);fu.uRainAng.value=.32+P.roll*.5;fu.uExp.value=lerp(.64,.60,G.gloom)*lerp(1,1.12,G.gold)*(1+.5*(G.indoor||0));
   fu.uScr.value=G.scr;fu.uHurt.value=G.hurt+(P.hull<=30&&G.mode==='play'?.18+.1*Math.sin(G.t*5):0);fu.uWhite.value=G.white;
   {const wet=smooth(.15,.7,G.rain)*(1-(G.indoor||0));if(Math.abs(wet-(G.wet||0))>.01||G.wet===undefined){G.wet=wet;for(const m of WETM){m.roughness=lerp(m.userData.r0,m.userData.r0*.4,wet);m.color.copy(m.userData.c0).multiplyScalar(1-.2*wet);}}}
+  {const inR=(G.mode==='play'&&G.phase==='ret')||(G.mode==='cut'&&CUT&&CUT.def===CUT_LAND)||G.mode==='result';const d=Math.hypot(P.pos.x-BASE.x,P.pos.z-BASE.z);applyDusk(inR&&U.uStorm.value<.2?.85*(1-smooth(2500,15000,d)):0);}
   const vis=sunVisAt(P.pos),sd=U.uSunDir.value,scol=U.uSunCol.value;
   // 海面に落ちる自機の影（低空ほど濃くくっきり、高いほど淡くぼやける。島の上は地面が影を受けるので出さない）
   {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying';[P,W[0],W[1]].forEach((o,i)=>{const S=U.uPSh.value[i],h=o.pos.y-3.5;let k=0;
     if(inG&&o.mesh&&o.mesh.visible&&o.state!=='gone'&&sd.y>.12&&h>-1){const t=h/sd.y,sx=o.pos.x-sd.x*t,sz=o.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;S.set(sx,sz,o.yaw,k);U.uPSh2.value[i].set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(o.roll||0))));}else S.w=0;});}
   sunL.position.copy(P.pos).addScaledVector(sd,300);sunL.target.position.copy(P.pos);sunL.target.updateMatrixWorld();
-  sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis;
+  sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis*(1-.45*(G.duskK||0));
   {const c=baseGroup.userData.cones,o=G.doorO===undefined?1:G.doorO,day=1-sat((G.gloom||0)*.9);c.spillM.opacity=.2*o*day;c.hazeM.opacity=.05*o*day;
     [P,W[0],W[1]].forEach((a,i)=>{const b=c.blobs[i],lx=a.pos.x-BASE.x,lz=a.pos.z-BASE.z-HANGAR_Z,inH=Math.abs(lx)<46&&Math.abs(lz)<88&&a.pos.y<RWY_Y+9&&a.mesh.visible;b.visible=inH;if(inH){b.position.set(lx,.09,lz);b.rotation.y=a.yaw;}});}
   finalMat.uniforms.uIndoorF.value=G.indoor||0;
-  const ind=G.indoor||0;hemiL.intensity=(lerp(.8,.2,G.gloom)+G.flash*2.5)*(1-.82*ind);hemiL.color.setRGB(.62+G.gold*.3,.74,.95-G.gold*.3);
-  ENVMATS.forEach(m=>{if(m.envMapIntensity!==1.8)m.envMapIntensity=(.25+.75*vis)*(1-.8*ind);});
+  const ind=G.indoor||0;hemiL.intensity=(lerp(.8,.2,G.gloom)*(1-.6*(G.duskK||0))+G.flash*2.5)*(1-.82*ind);hemiL.groundColor&&hemiL.groundColor.setRGB(.11-.06*(G.duskK||0),.16-.08*(G.duskK||0),.21-.08*(G.duskK||0));hemiL.color.setRGB(.62+G.gold*.3,.74,.95-G.gold*.3);
+  ENVMATS.forEach(m=>{if(m.envMapIntensity!==1.8)m.envMapIntensity=(.25+.75*vis)*(1-.8*ind)*(1-.45*(G.duskK||0));});
   spoutMat.uniforms.uLight.value=lerp(1.6,.8,G.gloom);
   // 海をカメラに追従
   ocean.material.uniforms.uSnap.value.set(cp.x,cp.z);
