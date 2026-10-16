@@ -566,6 +566,40 @@ function initScud(){const c=document.createElement('canvas');c.width=c.height=12
       vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
       fragmentShader:'uniform sampler2D map,tDepth;uniform vec3 uCol;uniform vec2 uRes;uniform float uOp;varying vec2 vUv;void main(){float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;gl_FragColor=vec4(uCol,texture2D(map,vUv).a*uOp);}'});
     const m=new THREE.Mesh(quad1(),mat);m.frustumCulled=false;m.visible=false;m.renderOrder=-2;overlay.add(m);SCUD.list.push({m,s:1,rot:r()*6.283});}}
+// ── 宇宙から見た台風（高度 14km 以上でだけ見せる）：渦に沿って流れる雲頂、外へ流れ出す巻雲、深い目。雲の厚みの勾配で太陽の陰影を付ける
+const SAT={m:null};
+function initSat(){const m=new THREE.Mesh(new THREE.PlaneGeometry(48000,48000),new THREE.ShaderMaterial({uniforms:{tN:U.tNoise2,uSpin:U.uSpin,uSunDir:U.uSunDir,uEye:U.uEye,uA:{value:0},tDepth:U.tDepth,uRes:U.uRes},
+  vertexShader:'varying vec2 vXZ;void main(){vec4 w=modelMatrix*vec4(position,1.0);vXZ=w.xz;gl_Position=projectionMatrix*viewMatrix*w;}',
+  fragmentShader:`uniform sampler2D tN,tDepth;uniform float uSpin,uEye,uA;uniform vec3 uSunDir;uniform vec2 uRes;varying vec2 vXZ;
+float n2(vec2 p){return texture2D(tN,p).b;}
+float fbm(vec2 p){float s=0.0,a=0.5;for(int i=0;i<5;i++){s+=a*n2(p);p=p*2.03+vec2(0.13,0.37);a*=0.5;}return s;}
+float dens(vec2 xz){float r=length(xz),th=atan(xz.y,xz.x)+uSpin,er=2400.0*uEye,lr=log(max(r,300.0)/er);
+  float sw=th+lr*1.15;vec2 sp=vec2(cos(sw),sin(sw))*r;
+  float nA=fbm(sp/9000.0+0.3),nB=fbm(sp/2600.0+1.7),nC=fbm(sp/650.0+3.1);
+  float core=1.0-smoothstep(4500.0,10500.0+2600.0*nA,r);
+  float band=pow(0.5+0.5*sin(th*2.0-lr*3.4+nA*3.2),3.0)*(1.0-smoothstep(9000.0,17500.0,r))*smoothstep(3500.0,6500.0,r);
+  float outf=(1.0-smoothstep(12500.0,19500.0+2400.0*nA,r))*smoothstep(7500.0,11500.0,r)*smoothstep(0.42,0.72,fbm(vec2(lr*2.6,(th-lr*1.6)*1.1)+0.2))*0.6;
+  float d=max(max(core,band*0.95),outf);d*=(0.72+0.5*nB)*(0.86+0.28*nC);
+  d*=smoothstep(er*1.15,er*1.75,r+(nB-0.5)*700.0);
+  return clamp(d,0.0,1.2);}
+// 雲頂の高さ（陰影用）：厚い雲でも、突き出す積乱雲の頭や波打つ雲頂の凹凸を残す
+float hgt(vec2 xz,float d){float r=length(xz),th=atan(xz.y,xz.x)+uSpin,sw=th+log(max(r,300.0)/2400.0)*1.15;vec2 sp=vec2(cos(sw),sin(sw))*r;
+  float bump=pow(fbm(xz/26000.0+5.3),2.0)*1.1+fbm(sp/7000.0+7.7)*0.45;   /* 雲頂のこぶは数百 m 規模（宇宙からでも見える大きさ） */return min(d,1.0)*0.75+bump*smoothstep(0.2,0.9,d)*0.6;}
+void main(){float zd=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>zd)discard;
+  float d=dens(vXZ);if(d<0.015)discard;
+  float e=220.0,h0=hgt(vXZ,d),dx=hgt(vXZ+vec2(e,0.0),dens(vXZ+vec2(e,0.0)))-h0,dz=hgt(vXZ+vec2(0.0,e),dens(vXZ+vec2(0.0,e)))-h0;
+  vec3 N=normalize(vec3(-dx*9.0,1.0,-dz*9.0)),L=normalize(uSunDir);
+  float lam=clamp(dot(N,L),0.0,1.0),r=length(vXZ),er=2400.0*uEye;
+  vec3 c=mix(vec3(0.42,0.5,0.64),vec3(0.97,0.99,1.03),0.15+0.85*lam)*(0.72+0.38*clamp(h0,0.0,1.0));   /* 低い雲頂の谷は陰る */
+  // 目の壁：太陽に向いた側は明るく、反対側は陰に
+  float wall=smoothstep(er*0.9,er*1.35,r)*(1.0-smoothstep(er*1.35,er*2.2,r));float sd=dot(normalize(vXZ),normalize(L.xz));
+  c*=1.0-wall*0.45*smoothstep(-0.2,0.8,sd);
+  // 外縁の薄い巻雲は青みがかる
+  c=mix(c,vec3(0.78,0.84,0.93),(1.0-smoothstep(0.25,0.7,d))*0.5);
+  gl_FragColor=vec4(c*vec3(1.2,1.25,1.36),clamp(d*1.9,0.0,1.0)*uA);}`,
+  transparent:true,depthTest:false,depthWrite:false}));
+  m.rotation.x=-Math.PI/2;m.position.y=4700;m.frustumCulled=false;m.visible=false;m.renderOrder=2;overlay.add(m);SAT.m=m;}   // 遠景用の嵐の円盤（world.js）より後に描く
+function updateSat(){const k=sat((camera.position.y-14000)/8000);if(k<=0){if(SAT.m)SAT.m.visible=false;return;}if(!SAT.m)initSat();SAT.m.visible=U.uStorm.value>.5;SAT.m.material.uniforms.uA.value=k;}
 function updateScud(){if(!SCUD.list.length)initScud();const cam=camera.position,sc=stormAt(cam.x,cam.y,cam.z,_scS);
   const inC=(G.mode==='title'||G.indoor>0)?0:sat(sc.c*1.5-.35)*(cam.y<sc.top*.95?1:0)*sat(cam.y/150);
   if(inC<=.01&&!SCUD.on)return;
@@ -1455,7 +1489,8 @@ function updateCommon(dt){
   {const wet=smooth(.15,.7,G.rain)*(1-(G.indoor||0));if(Math.abs(wet-(G.wet||0))>.01||G.wet===undefined){G.wet=wet;for(const m of WETM){m.roughness=lerp(m.userData.r0,m.userData.r0*.4,wet);m.color.copy(m.userData.c0).multiplyScalar(1-.2*wet);}}}
   const vis=sunVisAt(P.pos),sd=U.uSunDir.value,scol=U.uSunCol.value;
   // 海面に落ちる自機の影（低空ほど濃くくっきり、高いほど淡くぼやける。島の上は地面が影を受けるので出さない）
-  {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying',h=P.pos.y-3.5;let k=0;if(inG&&P.mesh&&P.mesh.visible&&sd.y>.12&&h>-1){const t=h/sd.y,sx=P.pos.x-sd.x*t,sz=P.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;U.uPSh.value.set(sx,sz,P.yaw,k);U.uPSh2.value.set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(P.roll))));}else U.uPSh.value.w=0;}
+  {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying';[P,W[0],W[1]].forEach((o,i)=>{const S=U.uPSh.value[i],h=o.pos.y-3.5;let k=0;
+    if(inG&&o.mesh&&o.mesh.visible&&o.state!=='gone'&&sd.y>.12&&h>-1){const t=h/sd.y,sx=o.pos.x-sd.x*t,sz=o.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;S.set(sx,sz,o.yaw,k);U.uPSh2.value[i].set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(o.roll||0))));}else S.w=0;});}
   sunL.position.copy(P.pos).addScaledVector(sd,300);sunL.target.position.copy(P.pos);sunL.target.updateMatrixWorld();
   sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis;
   {const c=baseGroup.userData.cones,o=G.doorO===undefined?1:G.doorO,day=1-sat((G.gloom||0)*.9);c.spillM.opacity=.2*o*day;c.hazeM.opacity=.05*o*day;
@@ -1471,7 +1506,7 @@ function updateCommon(dt){
   if(coreShell.visible){const d=camera.position.distanceTo(CORE),s=clamp(d*.07,34,460);coreShell.position.copy(CORE);coreShell.scale.setScalar(s);coreShell.quaternion.copy(camera.quaternion);coreShell.userData.inner.rotation.z+=dt*(G.lock>0?2.4:.5);
     const lk=G.lock>=1,pu=.75+.25*Math.sin(G.t*(lk?16:3));coreShell.traverse(o=>{if(o.isMesh){o.material.uniforms.uAlpha.value=pu;o.material.uniforms.uColor.value.set(lk?3.4:2.4,lk?.5:1.5,lk?.3:.5);}});}
   if(boomFx.visible){boomFx.userData.t+=dt;const u=boomFx.userData.t/1.4,s=boomFx.userData.t>=1.05&&G.mode!=='cut'?14*(1.5-u):80+u*520;boomFx.scale.set(s,s,1);boomFx.quaternion.copy(camera.quaternion);boomFx.material.uniforms.uAlpha.value=Math.max(0,1-u)*2;if(u>=1)boomFx.visible=false;}
-  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();updateScud();updateRefl();
+  updateSeaLife(dt);strUpdate(dt);animCrew(dt);animFlags();updateScud();updateSat();updateRefl();
   if(strikeGlow&&strikeGlow.visible){const g=strikeGlow;g.userData.t+=dt;const u=g.userData.t/.45,s=260+u*520;g.scale.set(s,s*.5,1);g.quaternion.copy(camera.quaternion);g.material.uniforms.uAlpha.value=Math.max(0,1-u)*(0.6+0.4*Math.sin(G.t*90));if(u>=1)g.visible=false;}
   rings.forEach((r,i)=>{if(r.visible)r.rotation.z+=dt*.6;});
   gateRings.forEach(r=>{if(r.visible)r.material.uniforms.uAlpha.value=.7+.3*Math.sin(G.t*4);});

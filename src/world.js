@@ -62,7 +62,7 @@ void main(){
   gl_Position=projectionMatrix*viewMatrix*vec4(p,1.0);
 }`,
     fragmentShader:`precision highp sampler3D;
-uniform sampler3D tNoise;uniform sampler2D tNoise2,tShore;uniform vec4 uPSh;uniform vec2 uPSh2;varying vec3 vW;varying vec2 vP;
+uniform sampler3D tNoise;uniform sampler2D tNoise2,tShore;uniform vec4 uPSh[3];uniform vec2 uPSh2[3];varying vec3 vW;varying vec2 vP;
 // 地形の高さ（島の外は深い海）
 float shoreH(vec2 xz){vec2 u=(xz-vec2(0.0,21000.0)+vec2(3200.0,3400.0))/vec2(6400.0,6800.0);float e=smoothstep(0.0,0.06,min(min(u.x,1.0-u.x),min(u.y,1.0-u.y)));return mix(-64.0,texture2D(tShore,clamp(u,0.0,1.0)).r*72.0-64.0,e);}
 float smN(vec2 uv){uv=uv*256.0+0.5;vec2 i=floor(uv),f=fract(uv);f=f*f*f*(f*(f*6.0-15.0)+10.0);return texture2D(tNoise2,(i+f-0.5)/256.0).b;}
@@ -72,11 +72,12 @@ float cumShadow(vec2 xz,float y){vec2 q=xz+uSunDir.xz/max(uSunDir.y,0.12)*(1700.
   return smoothstep(0.47,0.72,fn)*mix(1.0,smoothstep(12300.0,16500.0,length(q)),clamp(uStorm*4.0,0.0,1.0));}
 vec2 rot(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}
 // 自機の影の形（胴体・後退翼・尾翼。機首は -z）。b はぼけの幅
-float planeShadow(vec2 xz){if(uPSh.w<0.003)return 0.0;vec2 d=xz-uPSh.xy;float c=cos(uPSh.z),s=sin(uPSh.z);vec2 l=vec2(c*d.x-s*d.y,s*d.x+c*d.y);l.x/=max(uPSh2.y,0.2);float b=uPSh2.x;
+float planeShadow1(vec2 xz,vec4 S,vec2 S2){if(S.w<0.003)return 0.0;vec2 d=xz-S.xy;if(dot(d,d)>900.0)return 0.0;float c=cos(S.z),s=sin(S.z);vec2 l=vec2(c*d.x-s*d.y,s*d.x+c*d.y);l.x/=max(S2.y,0.2);float b=S2.x;
   float fus=1.0-smoothstep(-b,b,length(vec2(l.x/1.3,l.y/9.0))*9.0-9.0);
   float hw=8.6*clamp((l.y+2.0)/5.5,0.0,1.0);float wing=(1.0-smoothstep(-b,b,abs(l.x)-hw))*smoothstep(-b-0.2,b+0.2,l.y+2.0)*(1.0-smoothstep(-b,b,l.y-3.6));
   float tw=3.4*clamp((l.y-6.0)/3.0,0.0,1.0);float tail=(1.0-smoothstep(-b,b,abs(l.x)-tw))*smoothstep(-b,b,l.y-6.0)*(1.0-smoothstep(-b,b,l.y-9.2));
-  return clamp(max(fus,max(wing,tail)),0.0,1.0)*uPSh.w;}
+  return clamp(max(fus,max(wing,tail)),0.0,1.0)*S.w;}
+float planeShadow(vec2 xz){return max(planeShadow1(xz,uPSh[0],uPSh2[0]),max(planeShadow1(xz,uPSh[1],uPSh2[1]),planeShadow1(xz,uPSh[2],uPSh2[2])));}
 void main(){
   vec2 xz=vP;float dist=length(vW-cameraPosition);
   vec4 sc=stormCover(vec3(xz.x,0.0,xz.y));

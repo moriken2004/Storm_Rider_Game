@@ -41,7 +41,7 @@ const U={
   uSkyZen:{value:new V3(0.085,0.21,0.52)},uSkyHor:{value:new V3(0.46,0.60,0.78)},
   uFlashPos:{value:new V3(0,1500,0)},uFlashI:{value:0},
   // 海面に落ちる自機の影：uPSh=(x, z, 機首方位, 濃さ)、uPSh2=(ぼけ, 横の縮み)
-  uPSh:{value:new THREE.Vector4(0,0,0,0)},uPSh2:{value:new THREE.Vector2(.5,1)},
+  uPSh:{value:[0,1,2].map(()=>new THREE.Vector4(0,0,0,0))},uPSh2:{value:[0,1,2].map(()=>new THREE.Vector2(.5,1))},
   // 焼け焦げた建物の範囲（最大 24 棟）：uScA=最小角＋進み具合、uScB=最大角
   uScA:{value:Array.from({length:24},()=>new THREE.Vector4(0,-1e5,0,0))},uScB:{value:Array.from({length:24},()=>new THREE.Vector4(0,-1e5,0,0))},uScN:{value:0},
   tNoise:{value:null},tDetail:{value:null},tNoise2:{value:null},tShore:{value:null},tDepth:{value:null},uRes:{value:new THREE.Vector2(1,1)},
