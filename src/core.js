@@ -248,8 +248,8 @@ void main(){
   float T=1.0;vec3 L=vec3(0.0);
   float mu=dot(rd,uSunDir);
   float ph1=mix(hg(mu,-0.22),min(hg(mu,0.78),7.0),0.55),ph2=mix(hg(mu,-0.1),hg(mu,0.36),0.5);
-  vec3 ambHi=uSkyZen*1.05+uSkyHor*0.50,ambLo=mix(uSkyHor*0.22,vec3(0.022,0.026,0.033),0.85);
-  vec3 haze=mix(uSkyHor,vec3(0.050,0.057,0.068),uGloom);
+  vec3 ambHi=uSkyZen*1.05+uSkyHor*0.50,ambLo=mix(uSkyHor*0.22,vec3(0.032,0.037,0.046),0.85);   // 嵐の雲の陰：真っ黒に沈めず、暗い灰色に
+  vec3 haze=mix(uSkyHor,vec3(0.066,0.073,0.086),uGloom);
   float t=t0+jit*max(130.0,t0*0.045);
   bool coarse=true;int zero=0;
   int N=int(uSteps);
@@ -326,7 +326,7 @@ void main(){
     }
   }else{
     vec4 w0=uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0);float d=length(w0.xyz/w0.w-uCam);
-    vec3 hz=mix(skyColor(normalize(vec3(rd.x,0.03,rd.z))),vec3(0.050,0.057,0.068),uGloom);
+    vec3 hz=mix(skyColor(normalize(vec3(rd.x,0.03,rd.z))),vec3(0.066,0.073,0.086),uGloom);
     vec3 sc0=texture2D(tScene,vUv).rgb;
     if(uAO>0.01){float zc=lz(dep);if(zc<160.0){float occ=0.0;float rot=mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y)*2.0,4.0)*0.19635;
         for(int i=0;i<4;i++){float a=rot+float(i)*0.7854;vec2 dv=vec2(cos(a),sin(a))*uProj*(0.55+0.3*float(i))/zc;

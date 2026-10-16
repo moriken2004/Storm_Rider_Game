@@ -640,8 +640,8 @@ void main(){
   float T=1.0;vec3 L=vec3(0.0);
   float mu=dot(rd,uSunDir);
   float ph1=mix(hg(mu,-0.22),min(hg(mu,0.78),7.0),0.55),ph2=mix(hg(mu,-0.1),hg(mu,0.36),0.5);
-  vec3 ambHi=uSkyZen*1.05+uSkyHor*0.50,ambLo=mix(uSkyHor*0.22,vec3(0.022,0.026,0.033),0.85);
-  vec3 haze=mix(uSkyHor,vec3(0.050,0.057,0.068),uGloom);
+  vec3 ambHi=uSkyZen*1.05+uSkyHor*0.50,ambLo=mix(uSkyHor*0.22,vec3(0.032,0.037,0.046),0.85);   // 嵐の雲の陰：真っ黒に沈めず、暗い灰色に
+  vec3 haze=mix(uSkyHor,vec3(0.066,0.073,0.086),uGloom);
   float t=t0+jit*max(130.0,t0*0.045);
   bool coarse=true;int zero=0;
   int N=int(uSteps);
@@ -718,7 +718,7 @@ void main(){
     }
   }else{
     vec4 w0=uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0);float d=length(w0.xyz/w0.w-uCam);
-    vec3 hz=mix(skyColor(normalize(vec3(rd.x,0.03,rd.z))),vec3(0.050,0.057,0.068),uGloom);
+    vec3 hz=mix(skyColor(normalize(vec3(rd.x,0.03,rd.z))),vec3(0.066,0.073,0.086),uGloom);
     vec3 sc0=texture2D(tScene,vUv).rgb;
     if(uAO>0.01){float zc=lz(dep);if(zc<160.0){float occ=0.0;float rot=mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y)*2.0,4.0)*0.19635;
         for(int i=0;i<4;i++){float a=rot+float(i)*0.7854;vec2 dv=vec2(cos(a),sin(a))*uProj*(0.55+0.3*float(i))/zc;
@@ -4513,14 +4513,15 @@ function updateScud(){if(!SCUD.list.length)initScud();const cam=camera.position,
   const inC=(G.mode==='title'||G.indoor>0)?0:sat(sc.c*1.5-.35)*(cam.y<sc.top*.95?1:0)*sat(cam.y/150);
   if(inC<=.01&&!SCUD.on)return;
   camera.getWorldDirection(SCUD._f);SCUD._r.crossVectors(SCUD._f,camera.up).normalize();SCUD._u.crossVectors(SCUD._r,SCUD._f);
-  const fl=U.uFlashI.value||0,base=.06+.1*(1-(G.gloom||0));SCUD.col.set(base+fl*.9,base*1.06+fl*.9,base*1.15+fl);   // 暗い灰色、稲光で白く
+  const fl=U.uFlashI.value||0,base=.11+.08*(1-(G.gloom||0));/* 雲の中を流れるちぎれ雲は背景より明るい灰色に（速度感）。稲光で白く */SCUD.col.set(base+fl*.9,base*1.06+fl*.9,base*1.15+fl);
   let any=false;
   for(const q of SCUD.list){const m=q.m,rel=_scV.subVectors(m.position,cam),dz=rel.dot(SCUD._f),d=rel.length();
     if(!m.visible||dz<-40||d>620){if(inC<.05){m.visible=false;continue;}
       m.position.copy(cam).addScaledVector(SCUD._f,180+Math.random()*420).addScaledVector(SCUD._r,(Math.random()-.5)*360).addScaledVector(SCUD._u,(Math.random()-.5)*170);
       q.s=50+Math.random()*90;q.rot=Math.random()*6.283;m.visible=true;m.material.uniforms.uOp.value=0;continue;}
-    m.quaternion.copy(camera.quaternion);m.rotateZ(q.rot);m.scale.set(q.s,q.s*.7,1);
-    m.material.uniforms.uOp.value=inC*.55*sat((d-20)/70)*(1-sat((d-430)/170));any=true;}
+    // 画面の中心から外へ流れて見える向きに、近くて速いほど長く引き伸ばす
+    {const sx=rel.dot(SCUD._r),sy=rel.dot(SCUD._u),st=1+1.1*sat(P.speed/180)*sat(1-(dz-40)/260);m.quaternion.copy(camera.quaternion);m.rotateZ(Math.atan2(sy,sx));m.scale.set(q.s*st,q.s*.62,1);}
+    m.material.uniforms.uOp.value=inC*.68*sat((d-20)/70)*(1-sat((d-430)/170));any=true;}
   SCUD.on=any;}
 // 本棟の前の旗：根元から先へ行くほど大きく波打つ
 function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if(!fl)return;if(camera.position.distanceTo(_cw.set(BASE.x+330,RWY_Y,BASE.z+335))>900)return;const t=G.t;

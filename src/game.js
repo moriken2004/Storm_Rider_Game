@@ -570,14 +570,15 @@ function updateScud(){if(!SCUD.list.length)initScud();const cam=camera.position,
   const inC=(G.mode==='title'||G.indoor>0)?0:sat(sc.c*1.5-.35)*(cam.y<sc.top*.95?1:0)*sat(cam.y/150);
   if(inC<=.01&&!SCUD.on)return;
   camera.getWorldDirection(SCUD._f);SCUD._r.crossVectors(SCUD._f,camera.up).normalize();SCUD._u.crossVectors(SCUD._r,SCUD._f);
-  const fl=U.uFlashI.value||0,base=.06+.1*(1-(G.gloom||0));SCUD.col.set(base+fl*.9,base*1.06+fl*.9,base*1.15+fl);   // 暗い灰色、稲光で白く
+  const fl=U.uFlashI.value||0,base=.11+.08*(1-(G.gloom||0));/* 雲の中を流れるちぎれ雲は背景より明るい灰色に（速度感）。稲光で白く */SCUD.col.set(base+fl*.9,base*1.06+fl*.9,base*1.15+fl);
   let any=false;
   for(const q of SCUD.list){const m=q.m,rel=_scV.subVectors(m.position,cam),dz=rel.dot(SCUD._f),d=rel.length();
     if(!m.visible||dz<-40||d>620){if(inC<.05){m.visible=false;continue;}
       m.position.copy(cam).addScaledVector(SCUD._f,180+Math.random()*420).addScaledVector(SCUD._r,(Math.random()-.5)*360).addScaledVector(SCUD._u,(Math.random()-.5)*170);
       q.s=50+Math.random()*90;q.rot=Math.random()*6.283;m.visible=true;m.material.uniforms.uOp.value=0;continue;}
-    m.quaternion.copy(camera.quaternion);m.rotateZ(q.rot);m.scale.set(q.s,q.s*.7,1);
-    m.material.uniforms.uOp.value=inC*.55*sat((d-20)/70)*(1-sat((d-430)/170));any=true;}
+    // 画面の中心から外へ流れて見える向きに、近くて速いほど長く引き伸ばす
+    {const sx=rel.dot(SCUD._r),sy=rel.dot(SCUD._u),st=1+1.1*sat(P.speed/180)*sat(1-(dz-40)/260);m.quaternion.copy(camera.quaternion);m.rotateZ(Math.atan2(sy,sx));m.scale.set(q.s*st,q.s*.62,1);}
+    m.material.uniforms.uOp.value=inC*.68*sat((d-20)/70)*(1-sat((d-430)/170));any=true;}
   SCUD.on=any;}
 // 本棟の前の旗：根元から先へ行くほど大きく波打つ
 function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if(!fl)return;if(camera.position.distanceTo(_cw.set(BASE.x+330,RWY_Y,BASE.z+335))>900)return;const t=G.t;
