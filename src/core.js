@@ -199,7 +199,8 @@ float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
   float wall=sc.y;
   float base=mix(720.0,210.0,wall);
   vec3 q=p*vec3(1.0,1.3,1.0)/6200.0+vec3(uTime*0.0011,0.0,uTime*0.0006);
-  vec4 nz=texture(tNoise,q);float n=nz.r;
+  // 形のノイズは 8 bit なので、しきい値で切ると等高線のような縞（段々）になる。標本ごとに 1 段ぶん揺らして縞を消す（時間方向の平均でならされる）
+  vec4 nz=texture(tNoise,q);float n=nz.r+(fract(sin(dot(p.xz+p.y*vec2(0.37,0.61)+uFrame*13.7,vec2(12.9898,78.233)))*43758.5453)-0.5)*(1.6/255.0);
   float top=sc.w*(0.58+0.62*sat((nz.g-0.28)*2.3));
   base+=(0.42-nz.g)*340.0*(1.0-0.55*wall);
   // 遠くから見ると雲底が一直線の板に見えるので、大きなうねり（数 km）と垂れ下がり（ちぎれ雲の房）を足す
@@ -212,18 +213,19 @@ float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
   // 晴天の積雲
   if(sc.x<0.5&&p.y>900.0&&p.y<2700.0){
     float fn=texture(tNoise,vec3(p.xz*0.000037,0.37)).g;
-    float ft=1500.0+fn*1300.0;
+    float ft=1500.0+fn*1300.0+(n-0.5)*700.0;   // 雲頂の高さを形のノイズでも揺らす（平らな箱にしない）
     float fc=smoothstep(0.50,0.70,fn)*0.55*(1.0-sat(sc.x*2.4))*mix(1.0,smoothstep(RO*0.82,RO*1.1,length(p.xz)),sat(uStorm*4.0));
     float fh=(p.y-900.0)/(ft-900.0);
     float f2=fc*smoothstep(0.0,0.10,fh)*(1.0-smoothstep(0.35,1.0,fh));
-    if(f2>cv){cv=f2;hf=fh;}
+    if(f2>0.0){float wq=f2/(f2+cv+1e-4);hf=mix(hf,fh,wq);cv=max(cv,f2);}   // 2 種類の雲の境で高さの割合が飛ばないよう混ぜる（輪郭に線が出ていた）
   }
   float e=0.0;
   if(cv>0.01){
     float d=sat((n-(1.0-cv))/0.30);
     if(hi&&d>0.0&&d<0.999){
       vec4 g=texture(tDetail,p/760.0+vec3(0.0,-uTime*0.004,0.0));
-      float er=(1.0-g.r)*0.62+(1.0-g.g)*0.16*(1.0-d);
+      // 細かい削りは歩幅より細かいと標本の位置しだいでちらつくので、遠い（歩幅の大きい）所ほど弱める
+      float er=((1.0-g.r)*0.62+(1.0-g.g)*0.16*(1.0-d))*(1.0-0.85*smoothstep(1800.0,7000.0,length(p-uCam)));
       d=sat((d-er*(1.0-d*0.75))/(1.0-er*0.55));
     }
     e=d*0.030;
@@ -246,7 +248,7 @@ void main(){
   float t0=max(min(ta,tb),0.0),t1=min(max(ta,tb),sd);
   t1=min(t1,t0+42000.0);
   if(t1<=t0){gl_FragColor=vec4(0.0,0.0,0.0,1.0);return;}
-  float jit=fract(52.9829189*fract(dot(gl_FragCoord.xy+uFrame*vec2(5.588,3.167),vec2(0.06711056,0.00583715))));
+  float jit=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(0.06711056,0.00583715)))+uFrame*0.61803399);   // 画素ごとの模様は固定し、コマごとに黄金比で回す（どの画素も 16 コマで均等にずれ、平均すると縞が残らない）
   float T=1.0;vec3 L=vec3(0.0);
   float mu=dot(rd,uSunDir);
   float ph1=mix(hg(mu,-0.22),min(hg(mu,0.78),7.0),0.55),ph2=mix(hg(mu,-0.1),hg(mu,0.36),0.5);
@@ -269,26 +271,28 @@ void main(){
     float ds=coarse?dsC:fs;
     if(forced)ds=max(dsC,dsNeed);
     else if(!coarse&&uBud>0.5&&e<DENSE*0.2)ds=fs*1.8;   // ごく薄い縁は少し大股で（歩数の節約）
-    if(coarse&&!forced&&ec>2e-5){t=max(t0,t-dsC*0.92);coarse=false;zero=0;continue;}
+    if(coarse&&!forced&&ec>2e-5){t=max(t0,t-dsC*1.08+jit*fs);coarse=false;zero=0;continue;}   // 細かい歩みに切り替えるときも位置をずらし直す（雲の表面に年輪のような縞が出ないように）
     if(e>1e-6){
       float colm=max(sc.w-p.y,0.0)*sc.x;
       // 目に面した壁雲の内側は、開いた目から横向きに光を受ける（真上の雲の厚さで暗くしない）
       {float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;colm*=1.0-0.88*(1.0-smoothstep(er+80.0,er+1500.0,length(p.xz)))*sat(uStorm*2.0-1.0);}
       float sunT=exp(-colm*0.0024);
       vec3 S;
-      if(e>DENSE){
-        // 太陽方向へ光学的厚さを積む
-        float od=0.0,st=50.0;vec3 q=p;vec4 s2;float h2,r2;
+      // 薄い所は簡易な光、濃い所は太陽方向へ厚さを積む。境目で明るさが段差にならないよう、あいだはなめらかに混ぜる
+      vec3 ambL=mix(ambLo,ambHi,exp(-colm*0.0016)*0.5);vec3 Sl=uSunCol*sunT*0.55*ph2+ambL;
+      float wD=smoothstep(DENSE*0.35,DENSE*1.6,e);
+      if(wD>0.0){
+        // 光の標本点も画素ごとにずらす（一定の間隔だと雲の表面に年輪のような縞が出る）
+        float od=0.0,st=50.0*(0.6+0.8*fract(jit+float(i)*0.618));vec3 q=p;vec4 s2;float h2,r2;
         for(int k=0;k<3;k++){q+=uSunDir*st;od+=ext(q,false,s2,h2,r2)*st;st*=2.7;}
         float tr=exp(-od)*ph1+0.42*exp(-od*0.28)*ph2+0.16*exp(-od*0.07);
         float pw=1.0-0.7*exp(-e*90.0-od*2.0);
-        sunT*=farShadow(p);
+        float sT=sunT*farShadow(p);
         vec3 amb=mix(ambLo,ambHi,exp(-colm*0.0016)*(0.30+0.70*hf));
-        S=uSunCol*sunT*tr*pw+amb;
+        S=mix(Sl,uSunCol*sT*tr*pw+amb,wD);
         zero=0;
       }else{
-        vec3 amb=mix(ambLo,ambHi,exp(-colm*0.0016)*0.5);
-        S=uSunCol*sunT*0.55*ph2+amb;
+        S=Sl;
         if(!coarse&&!forced){if(ec<2e-5)zero++;else zero=0;if(zero>4)coarse=true;}
       }
       vec3 fq=(p-uFlashPos)/700.0;S+=vec3(8.0,9.5,13.5)*uFlashI/(1.0+dot(fq,fq));
@@ -340,9 +344,10 @@ void main(){
   {float vd=dep>=0.999999?1e9:length((uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).xyz/(uInvPV*vec4(vUv*2.0-1.0,dep*2.0-1.0,1.0)).w-uCam);
    float k=uGloom*smoothstep(4000.0,12000.0,vd)*(1.0-smoothstep(0.02,0.35,rd.y))*(1.0-smoothstep(1500.0,3500.0,uCam.y));
    col=mix(col,vec3(0.048,0.054,0.064)*(0.9+0.2*texture2D(tNoise2,vec2(atan(rd.z,rd.x)*0.6,rd.y*3.0)+uTime*0.002).b),k*0.85);}
-  vec2 o=0.5/uCRes;
-  vec4 cb=0.25*(texture2D(tCloud,vUv+o*2.0)+texture2D(tCloud,vUv-o*2.0)+texture2D(tCloud,vUv+vec2(o.x,-o.y)*2.0)+texture2D(tCloud,vUv+vec2(-o.x,o.y)*2.0));
-  vec4 c=cb;if(uSharp>0.01){vec4 cc=texture2D(tCloud,vUv);c=cc+(cc-cb)*uSharp;c.rgb=max(c.rgb,vec3(0.0));c.a=clamp(c.a,0.0,1.0);}
+  vec4 c;{vec2 sp=vUv*uCRes-0.5,f=fract(sp),tc=floor(sp)+0.5;vec2 w0=f*(-0.5+f*(1.0-0.5*f)),w1=1.0+f*f*(-2.5+1.5*f),w2=f*(0.5+f*(2.0-1.5*f)),w3=f*f*(-0.5+0.5*f);
+    vec2 w12=w1+w2,t0=(tc-1.0)/uCRes,t3=(tc+2.0)/uCRes,t12=(tc+w2/w12)/uCRes;
+    c=(texture2D(tCloud,vec2(t12.x,t0.y))*w12.x*w0.y+texture2D(tCloud,vec2(t0.x,t12.y))*w0.x*w12.y+texture2D(tCloud,t12)*w12.x*w12.y+texture2D(tCloud,vec2(t3.x,t12.y))*w3.x*w12.y+texture2D(tCloud,vec2(t12.x,t3.y))*w12.x*w3.y)/(w12.x*w0.y+w0.x*w12.y+w12.x*w12.y+w3.x*w12.y+w12.x*w3.y);
+    c.rgb=max(c.rgb,vec3(0.0));c.a=clamp(c.a,0.0,1.0);}
   gl_FragColor=vec4(col*c.a+c.rgb,1.0);
 }`});
 const brightMat=new THREE.ShaderMaterial({uniforms:{tSrc:{value:null}},vertexShader:FS_VERT,depthTest:false,depthWrite:false,
@@ -524,11 +529,10 @@ void main(){vec4 cur=texture2D(tCur,vUv);
   vec4 w1=uInvPV*vec4(vUv*2.0-1.0,1.0,1.0);vec3 rd=normalize(w1.xyz/w1.w-uCam);
   vec4 pp=uPrevPV*vec4(uCam+rd*12000.0,1.0);vec2 puv=pp.xy/pp.w*0.5+0.5;
   float a=uBlend;if(pp.w<=0.0||puv.x<0.0||puv.x>1.0||puv.y<0.0||puv.y>1.0)a=1.0;
-  vec2 o=1.0/uCRes;vec4 n1=texture2D(tCur,vUv+vec2(o.x,0.0)),n2=texture2D(tCur,vUv-vec2(o.x,0.0)),n3=texture2D(tCur,vUv+vec2(0.0,o.y)),n4=texture2D(tCur,vUv-vec2(0.0,o.y));
-  vec4 mn=min(cur,min(min(n1,n2),min(n3,n4))),mx=max(cur,max(max(n1,n2),max(n3,n4)));vec4 pad=(mx-mn)*1.3+0.06;
-  vec4 h=clamp(texture2D(tHist,puv),mn-pad,mx+pad);
+  vec2 o=1.0/uCRes;vec4 m1=vec4(0.0),m2=vec4(0.0);for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec4 s=texture2D(tCur,vUv+vec2(float(i),float(j))*o);m1+=s;m2+=s*s;}
+  m1/=9.0;vec4 sg=sqrt(max(m2/9.0-m1*m1,vec4(0.0)));vec4 h=clamp(texture2D(tHist,puv),m1-sg*1.6-0.02,m1+sg*1.6+0.02);
   gl_FragColor=mix(h,cur,a);}`});
-const _prevPV=new THREE.Matrix4(),_prevCam=new V3(),_prevDir=new V3(),_dir=new V3();let cloudReset=true;
+const _prevPV0=0;const _prevPV=new THREE.Matrix4(),_prevCam=new V3(),_prevDir=new V3(),_dir=new V3();let cloudReset=true;
 const view={scale:1,q:1,cssW:1,cssH:1};
 function makeRT(w,h,depth){
   const o={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,type:THREE.HalfFloatType,depthBuffer:!!depth,stencilBuffer:false};
@@ -566,7 +570,7 @@ function renderFrame(){
   quad.material=cloudMat;renderer.setRenderTarget(rtCloud);renderer.render(fsScene,fsCam);
   // 視点が飛んだとき（場面転換）は履歴を捨てる
   camera.getWorldDirection(_dir);if(camera.position.distanceTo(_prevCam)>350||_dir.dot(_prevDir)<.9)cloudReset=true;
-  resolveMat.uniforms.tCur.value=rtCloud.texture;resolveMat.uniforms.tHist.value=rtCH[chI].texture;resolveMat.uniforms.uPrevPV.value.copy(_prevPV);resolveMat.uniforms.uBlend.value=cloudReset?1:.16;
+  resolveMat.uniforms.tCur.value=rtCloud.texture;resolveMat.uniforms.tHist.value=rtCH[chI].texture;resolveMat.uniforms.uPrevPV.value.copy(_prevPV);resolveMat.uniforms.uBlend.value=cloudReset?1:.11;
   quad.material=resolveMat;renderer.setRenderTarget(rtCH[1-chI]);renderer.render(fsScene,fsCam);chI=1-chI;cloudReset=false;
   _prevPV.copy(_pv);_prevCam.copy(camera.position);_prevDir.copy(_dir);
   compMat.uniforms.tScene.value=rtScene.texture;compMat.uniforms.tCloud.value=rtCH[chI].texture;

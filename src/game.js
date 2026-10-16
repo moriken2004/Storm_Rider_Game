@@ -839,7 +839,7 @@ function startRunKeep(ph){ // カットシーン後、機体の状態を保っ�
 
 // ───────────────────────── 画面 ─────────────────────────
 function showTitle(){
-  view.scale=.72;cloudMat.uniforms.uSteps.value=64;resize();
+  view.scale=.72;cloudMat.uniforms.uSteps.value=84;resize();
   G.mode='title';ICP.seen=0;strReset();P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
   ['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');
   U.uStorm.value=1;U.uEye.value=1;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
@@ -1022,7 +1022,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('title').hidden=true;startCut(CUT_INTRO);});
+  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize();$('title').hidden=true;startCut(CUT_INTRO);});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -1043,12 +1043,12 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
   const ap=()=>{opts.mus=+$('oMus').value;opts.sfx=+$('oSfx').value;opts.inv=$('oInv').checked;opts.q=+$('oQ').value;AU.musVol=opts.mus/100;AU.sfxVol=opts.sfx/100;setVolumes();
-    if(view.q!==opts.q){view.q=opts.q;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize(true);}saveOpts();};
+    if(view.q!==opts.q){view.q=opts.q;cloudMat.uniforms.uSteps.value=(IS_TOUCH?[64,90,120]:[96,120,150])[opts.q];resize(true);}saveOpts();};
   ['oMus','oSfx','oInv','oQ'].forEach(i=>$(i).addEventListener('input',ap));ap();
   G.armed=false;try{localStorage.removeItem('stormrider_armed');}catch(e){}applyArmed();   // 武装モードは保存しない（読み込み直すと解除）
   {let n=0,t0=0;$('dial').addEventListener('pointerdown',e=>{const t=performance.now();if(t-t0>2500)n=0;t0=t;n++;if(n>=7){n=0;toggleArmed();}});$('dial').style.pointerEvents='auto';}
@@ -1823,7 +1823,7 @@ function fighterHit(f,dmg){if(f.dead)return;f.hp-=dmg;if(f.hp>0){if(Math.random(
   if(ICP.f.every(q=>q.dead||!q.mesh.visible)){setAlarm(false);G.prompt=null;say('C','迎撃機、2 機とも撃墜を確認…。隊長、これは国際問題になりますよ',4);ICP.cleared=true;ICP.st=5;ICP.t=0;G.lockF=null;}}
 function boot(){
   const steps=[
-    ()=>{view.q=opts.q;resize(true);U.tNoise.value=makeNoise3D(96);},
+    ()=>{view.q=opts.q;resize(true);U.tNoise.value=makeNoise3D(IS_TOUCH?96:128);},   /* 雲の形の解像度（タッチ端末は読み込み時間を優先） */
     ()=>{U.tDetail.value=makeDetail3D(32);},
     ()=>{buildGroundTex();},
     ()=>{U.tNoise2.value=makeNoise2D(256);GLOWTEX=glowTexture();buildEnv();buildOcean();},
