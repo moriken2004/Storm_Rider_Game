@@ -62,15 +62,21 @@ void main(){
   gl_Position=projectionMatrix*viewMatrix*vec4(p,1.0);
 }`,
     fragmentShader:`precision highp sampler3D;
-uniform sampler3D tNoise;uniform sampler2D tNoise2,tShore;varying vec3 vW;varying vec2 vP;
+uniform sampler3D tNoise;uniform sampler2D tNoise2,tShore;uniform vec4 uPSh;uniform vec2 uPSh2;varying vec3 vW;varying vec2 vP;
 // 地形の高さ（島の外は深い海）
 float shoreH(vec2 xz){vec2 u=(xz-vec2(0.0,21000.0)+vec2(3200.0,3400.0))/vec2(6400.0,6800.0);float e=smoothstep(0.0,0.06,min(min(u.x,1.0-u.x),min(u.y,1.0-u.y)));return mix(-64.0,texture2D(tShore,clamp(u,0.0,1.0)).r*72.0-64.0,e);}
 float smN(vec2 uv){uv=uv*256.0+0.5;vec2 i=floor(uv),f=fract(uv);f=f*f*f*(f*(f*6.0-15.0)+10.0);return texture2D(tNoise2,(i+f-0.5)/256.0).b;}
 ${GLSL_COMMON}${GLSL_WAVES}
 // 晴天の積雲が落とす影：雲の層（高度 1700m 付近）まで太陽方向へたどった位置の雲量
 float cumShadow(vec2 xz,float y){vec2 q=xz+uSunDir.xz/max(uSunDir.y,0.12)*(1700.0-y);float fn=texture(tNoise,vec3(q*0.000037,0.37)).g;
-  return smoothstep(0.52,0.66,fn)*mix(1.0,smoothstep(12300.0,16500.0,length(q)),clamp(uStorm*4.0,0.0,1.0));}
+  return smoothstep(0.47,0.72,fn)*mix(1.0,smoothstep(12300.0,16500.0,length(q)),clamp(uStorm*4.0,0.0,1.0));}
 vec2 rot(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}
+// 自機の影の形（胴体・後退翼・尾翼。機首は -z）。b はぼけの幅
+float planeShadow(vec2 xz){if(uPSh.w<0.003)return 0.0;vec2 d=xz-uPSh.xy;float c=cos(uPSh.z),s=sin(uPSh.z);vec2 l=vec2(c*d.x-s*d.y,s*d.x+c*d.y);l.x/=max(uPSh2.y,0.2);float b=uPSh2.x;
+  float fus=1.0-smoothstep(-b,b,length(vec2(l.x/1.3,l.y/9.0))*9.0-9.0);
+  float hw=8.6*clamp((l.y+2.0)/5.5,0.0,1.0);float wing=(1.0-smoothstep(-b,b,abs(l.x)-hw))*smoothstep(-b-0.2,b+0.2,l.y+2.0)*(1.0-smoothstep(-b,b,l.y-3.6));
+  float tw=3.4*clamp((l.y-6.0)/3.0,0.0,1.0);float tail=(1.0-smoothstep(-b,b,abs(l.x)-tw))*smoothstep(-b,b,l.y-6.0)*(1.0-smoothstep(-b,b,l.y-9.2));
+  return clamp(max(fus,max(wing,tail)),0.0,1.0)*uPSh.w;}
 void main(){
   vec2 xz=vP;float dist=length(vW-cameraPosition);
   vec4 sc=stormCover(vec3(xz.x,0.0,xz.y));
@@ -99,11 +105,15 @@ void main(){
   // 反射した視線が雲底に当たる場所の雲量
   vec2 hit=xz+clamp(R.xz/R.y,vec2(-9.0),vec2(9.0))*1300.0;
   float cR=stormCover(vec3(hit.x,1300.0,hit.y)).x;
-  float sv=(1.0-0.92*sc.x)*farShadow(vec3(xz.x,5.0,xz.y))*(1.0-0.62*cumShadow(xz,0.0));
+  // 海面の影は淡く、輪郭も柔らかく（海はおもに空を映すので、影が効くのは日のきらめきと水中の色だけ）
+  float sv=(1.0-0.92*sc.x)*mix(1.0,farShadow(vec3(xz.x,5.0,xz.y)),0.75)*(1.0-0.36*cumShadow(xz,0.0));
+  float psh=planeShadow(xz);sv*=1.0-psh;
   vec2 fd=(xz-uFlashPos.xz)/1800.0;vec3 fl=vec3(1.6,1.9,2.6)*uFlashI/(1.0+dot(fd,fd));
-  vec3 cloudRef=mix(vec3(0.34,0.37,0.41),vec3(0.058,0.066,0.078),sat(sc.x*1.1))+fl*0.25;
+  // 空からの明かりは小さな雲の下でも届く（遮られるのは直射だけ）。暗さは嵐の大きな広がりで決め、その地点の雲量は少しだけ効かせる
+  float rr1=length(xz),bigC=smoothstep(EYE_R*uEye*0.9,EYE_R*uEye*1.4,rr1)*(1.0-smoothstep(4500.0,15500.0,rr1))*clamp(uStorm,0.0,1.0),ambC=max(sc.x*0.38,bigC*0.92);
+  vec3 cloudRef=mix(vec3(0.34,0.37,0.41),vec3(0.058,0.066,0.078),sat(max(sc.x*0.5,bigC)*1.1))+fl*0.25;
   vec3 refl=mix(skyColor(R),cloudRef,sat(cR*1.25));
-  vec3 E=uSunCol*sv*0.16+mix(uSkyHor*0.7,vec3(0.11,0.12,0.14),sat(sc.x*1.2))+fl*0.2;
+  vec3 E=uSunCol*sv*0.16+mix(uSkyHor*0.7,vec3(0.11,0.12,0.14),sat(ambC*1.2))+fl*0.2;
   vec3 body=mix(vec3(0.006,0.040,0.085),vec3(0.026,0.058,0.062),wp)*(E+0.04);
   // 波頭の透過色。うねり 3 本の重なりは規則的な格子になるので、遠目（上空）では消し、近くでもむらを掛ける
   body+=vec3(0.0,0.050,0.046)*sat(crest/(0.317*sea))*sv*(1.0-smoothstep(220.0,950.0,dist))*(0.3+1.1*smN(rot(xz,1.3)/370.0+wd*0.001));
@@ -118,7 +128,8 @@ void main(){
   body=mix(body,vec3(0.36,0.33,0.25)*(E+0.06),(1.0-smoothstep(0.0,2.2,dep))*(1.0-hbm)*0.55);
   // 港の中：浚渫して少し深く、濁った青緑。むらを付けて周りの海から急に色が変わらないように
   {float hn=texture2D(tNoise2,xz/180.0).b;body=mix(body,vec3(0.022,0.15,0.14)*(0.85+0.3*hn)*(E+0.04),hbm*0.55);}
-  vec3 col=mix(body,refl,F);
+  body*=1.0-0.3*psh;
+  vec3 col=mix(body,refl,F*(1.0-0.25*psh));
   // 太陽のきらめき
   vec3 Hh=normalize(V+uSunDir);float NdH=max(dot(N,Hh),0.0);
   float al=(0.040+0.05*wp)*(0.6+0.5*wPat)+sat(dist/14000.0)*0.11,a2=al*al;
@@ -130,7 +141,10 @@ void main(){
   float cn=crest/(0.317*sea);
   float th=mix(1.28,0.52,sat(wp*1.1));
   float cap=smoothstep(th,th+0.22,cn*0.6+n1*0.75);
-  float lace=smoothstep(0.43,0.60,n2*0.62+n3*0.48);
+  // 白波は風下へ引き伸ばされた筋で、内側はレース状にほどける（丸い綿のかたまりに見せない）
+  float strk=texture2D(tNoise2,rot(xz,0.64)/vec2(64.0,7.5)+wd*0.004).b*0.65+texture2D(tNoise2,rot(xz,0.64)/vec2(23.0,3.1)-wd*0.009).b*0.35;
+  cap*=smoothstep(0.38,0.66,strk);
+  float lace=smoothstep(0.43,0.62,n2*0.62+n3*0.48)*(0.55+0.45*smoothstep(0.3,0.7,strk));
   float foam=cap*lace;
   // 磯波
   {float sw=texture2D(tNoise2,xz/260.0).b*6.0,ph=dep*0.85+uTime*1.05+sw;
@@ -142,7 +156,7 @@ void main(){
   float st=texture2D(tNoise2,vec2(atan(xz.y,xz.x)*35.65+rr0/900.0+uTime*0.004,(rr0+(n1-0.5)*520.0)/52.0)).b;
   foam=max(foam,smoothstep(0.52,0.74,st)*smoothstep(0.40,0.66,n2*0.5+n3*0.6)*sat(sc.x*2.2-0.8)*0.7*(1.0-sat(dist/6000.0)));
   foam*=mix(1.0,0.4,sat(dist/7000.0))*(1.0-hbm);
-  col=mix(col,vec3(0.78,0.82,0.84)*(E+0.02),foam*0.92);
+  col=mix(col,vec3(0.78,0.82,0.84)*(E+0.02),foam*0.82);
   gl_FragColor=vec4(col,1.0);
 }`});
   ocean=new THREE.Mesh(g,m);ocean.frustumCulled=false;scene.add(ocean);

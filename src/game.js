@@ -1453,6 +1453,8 @@ function updateCommon(dt){
   fu.uScr.value=G.scr;fu.uHurt.value=G.hurt+(P.hull<=30&&G.mode==='play'?.18+.1*Math.sin(G.t*5):0);fu.uWhite.value=G.white;
   {const wet=smooth(.15,.7,G.rain)*(1-(G.indoor||0));if(Math.abs(wet-(G.wet||0))>.01||G.wet===undefined){G.wet=wet;for(const m of WETM){m.roughness=lerp(m.userData.r0,m.userData.r0*.4,wet);m.color.copy(m.userData.c0).multiplyScalar(1-.2*wet);}}}
   const vis=sunVisAt(P.pos),sd=U.uSunDir.value,scol=U.uSunCol.value;
+  // 海面に落ちる自機の影（低空ほど濃くくっきり、高いほど淡くぼやける。島の上は地面が影を受けるので出さない）
+  {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying',h=P.pos.y-3.5;let k=0;if(inG&&P.mesh&&P.mesh.visible&&sd.y>.12&&h>-1){const t=h/sd.y,sx=P.pos.x-sd.x*t,sz=P.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;U.uPSh.value.set(sx,sz,P.yaw,k);U.uPSh2.value.set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(P.roll))));}else U.uPSh.value.w=0;}
   sunL.position.copy(P.pos).addScaledVector(sd,300);sunL.target.position.copy(P.pos);sunL.target.updateMatrixWorld();
   sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis;
   {const c=baseGroup.userData.cones,o=G.doorO===undefined?1:G.doorO,day=1-sat((G.gloom||0)*.9);c.spillM.opacity=.2*o*day;c.hazeM.opacity=.05*o*day;
@@ -1550,9 +1552,10 @@ const spP={},spW=[{},{}];
 let strikeGlow=null;
 let sprayTrail,puffs=[],sprays=[],ships=[],dpods=[],tether;const qT=new THREE.Quaternion();
 // しぶきの絵柄：中心の霧に、大小の水滴をまだらに散らす。白く、日の当たる側は明るい
+const _spV=new V3(),_spQ=new THREE.Quaternion();
 function sprayMat(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),r=mulberry(909);
-  for(let i=0;i<26;i++){const a=r()*6.283,d=Math.pow(r(),.8)*34,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d,rr=10+r()*22,g=x.createRadialGradient(px,py,0,px,py,rr);g.addColorStop(0,'rgba(255,255,255,'+(.10+r()*.12)+')');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(px-rr,py-rr,rr*2,rr*2);}
-  for(let i=0;i<420;i++){const a=r()*6.283,d=Math.pow(r(),.55)*58,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d,rr=.5+r()*r()*3.2;x.fillStyle='rgba(255,255,255,'+(.35+r()*.5)*(1-d/64)+')';x.beginPath();x.arc(px,py,rr,0,7);x.fill();}
+  for(let i=0;i<18;i++){const a=r()*6.283,d=Math.pow(r(),.8)*30,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d,rr=10+r()*20,g=x.createRadialGradient(px,py,0,px,py,rr);g.addColorStop(0,'rgba(255,255,255,'+(.05+r()*.07)+')');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(px-rr,py-rr,rr*2,rr*2);}
+  for(let i=0;i<700;i++){const a=r()*6.283,d=Math.pow(r(),.55)*58,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d,rr=.4+r()*r()*2.4;x.fillStyle='rgba(255,255,255,'+(.35+r()*.5)*(1-d/64)+')';x.beginPath();x.arc(px,py,rr,0,7);x.fill();}
   const t=new THREE.CanvasTexture(c);
   return new THREE.ShaderMaterial({uniforms:{map:{value:t},uAlpha:{value:0},uSun:U.uSunCol,tDepth:U.tDepth,uRes:U.uRes},transparent:true,depthTest:false,depthWrite:false,
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
@@ -1683,7 +1686,11 @@ function updateSeaLife(dt){
     for(let k=0;k<n;k++){const u=Math.random()*2-1,r=Math.sign(u)*Math.pow(Math.abs(u),.7)*17,ahead=-6+Math.random()*22,f=.8+Math.random()*.22,big=Math.random()<.12?1.5:1;
       puff(tB.x+tA.x*ahead+tC.x*r,3.6+Math.random()*1.5,tB.z+tA.z*ahead+tC.z*r,tA.x*P.speed*f+tC.x*(r*.6+(Math.random()-.5)*10),(12+Math.random()*26)*(.5+sp*.6)*big,tA.z*P.speed*f+tC.z*(r*.6+(Math.random()-.5)*10),(1.1+Math.random()*2.3)*(.5+sp)*big,.45+Math.random()*.75,1,sprays);}}}
   for(const p of puffs.concat(sprays)){if(p.life<=0)continue;p.life-=dt;if(p.life<=0){p.m.visible=false;continue;}const k=p.life/p.max;p.vel.y-=(p.a<.5?1.5:11)*dt;p.m.position.addScaledVector(p.vel,dt);if(p.m.position.y<3.5&&p.a===1)p.m.position.y=3.5;
-    const s=p.s*(1+(1-k)*4.5);p.m.scale.set(s,s,1);p.m.quaternion.copy(camera.quaternion);p.m.rotateZ(p.rot||(p.rot=Math.random()*6.283));p.m.material.uniforms.uAlpha.value=Math.min((1-k)*6,1)*k*.6*p.a;}
+    const s=p.s*(1+(1-k)*4.5);p.m.quaternion.copy(camera.quaternion);
+    // しぶきの粒は飛ぶ向きに引き伸ばす（速いほど細長い水の筋に。霧の粒は丸いまま）
+    if(p.spray&&p.a>=.5){_spV.copy(p.vel).applyQuaternion(_spQ.copy(camera.quaternion).invert());const vs=Math.hypot(_spV.x,_spV.y),st=1+Math.min(1.2,vs*.022);p.m.scale.set(s*st,s/Math.pow(st,.3),1);p.m.rotateZ(Math.atan2(_spV.y,_spV.x));}
+    else{p.m.scale.set(s,s,1);p.m.rotateZ(p.rot||(p.rot=Math.random()*6.283));}
+    p.m.material.uniforms.uAlpha.value=Math.min((1-k)*6,1)*k*.6*p.a;}
   {const u=baseGroup.userData;if(u.lhBeam){u.lhBeam.rotation.y=G.t*.5;u.lhBeamM.opacity=.22*sat((G.gloom||0)*.9+(G.gold||0)*.8);u.lhBeam.visible=u.lhBeamM.opacity>.01&&!u.lhBeam.userData.brkDead;}
     if(u.socks)u.socks.forEach((k,i)=>{k.rotation.z=Math.PI/2-.22+Math.sin(G.t*2.3+i)*.07;k.rotation.y=.5+Math.sin(G.t*.7+i*2)*.25;});}
   {const lh=baseGroup.userData.lhGlow;if(lh){const dk=sat((G.gloom||0)*.8+(G.gold||0)*.7),s=8+16*dk*(.8+.2*Math.sin(G.t*1.3));lh.scale.set(s,s,1);}}
