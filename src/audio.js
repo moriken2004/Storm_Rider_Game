@@ -16,26 +16,25 @@ function initAudio(){
   // 低域の豊かな茶色ノイズ（雷鳴・地鳴り用）
   const bb=ctx.createBuffer(1,ctx.sampleRate*5,ctx.sampleRate),bd=bb.getChannelData(0);let lb=0;for(let i=0;i<bd.length;i++){lb=(lb+.02*(Math.random()*2-1))/1.02;bd[i]=lb*3.5;}AU.brown=bb;
   const loopNoise=()=>{const s=ctx.createBufferSource();s.buffer=nb;s.loop=true;s.start();return s;};
-  // エンジン（出口でまとめて、距離と左右を付ける）
+  // エンジン（出口でまとめて、距離と左右を付ける）：燃焼の轟音（事前合成のループ）・クラックル・タービンの唸り（ずれた 2 音と倍音、羽根の通過音）・腹に響く低音
   {const bus=AU.engBus=ctx.createGain();if(ctx.createStereoPanner){AU.engPan=ctx.createStereoPanner();bus.connect(AU.engPan);AU.engPan.connect(AU.sfx);}else bus.connect(AU.sfx);
-    const g=ctx.createGain();g.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=600;
-    const o1=ctx.createOscillator(),o2=ctx.createOscillator(),o3=ctx.createOscillator();o1.type='sawtooth';o2.type='sawtooth';o3.type='triangle';
-    o1.frequency.value=70;o2.frequency.value=70.9;o3.frequency.value=141;
-    const og=ctx.createGain();og.gain.value=.085;[o1,o2,o3].forEach(o=>{o.connect(og);o.start();});og.connect(f);
-    const n=loopNoise(),nf=ctx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=1400;nf.Q.value=.6;const ng=ctx.createGain();ng.gain.value=.5;n.connect(nf);nf.connect(ng);ng.connect(g);
-    f.connect(g);g.connect(bus);
-    // タービンの高い唸りと、腹に響く低音
-    const wh=ctx.createOscillator();wh.type='sine';wh.frequency.value=1800;const wh2=ctx.createOscillator();wh2.type='triangle';wh2.frequency.value=2710;
-    const whg=ctx.createGain();whg.gain.value=0;wh.connect(whg);wh2.connect(whg);whg.connect(bus);wh.start();wh2.start();
-    const rn=loopNoise(),rf=ctx.createBiquadFilter();rf.type='lowpass';rf.frequency.value=85;const rg2=ctx.createGain();rg2.gain.value=0;rn.connect(rf);rf.connect(rg2);rg2.connect(bus);
-    AU.eng={g,f,o:[o1,o2,o3],nf,wh,wh2,whg,rg2};}
-  // アフターバーナーの轟音
-  {const n=loopNoise(),f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=650;const ws=ctx.createWaveShaper();const cv=new Float32Array(256);for(let i=0;i<256;i++){const x=i/128-1;cv[i]=Math.tanh(x*5);}ws.curve=cv;
-    const g=ctx.createGain();g.gain.value=0;n.connect(f);f.connect(ws);ws.connect(g);g.connect(AU.engBus);AU.roar={g,f};}
+    AU.jetBuf=makeJetBuffer(ctx);AU.crkBuf=makeCrackleBuffer(ctx);
+    const src=ctx.createBufferSource();src.buffer=AU.jetBuf;src.loop=true;src.start();
+    const pk=ctx.createBiquadFilter();pk.type='peaking';pk.frequency.value=380;pk.Q.value=.6;pk.gain.value=7;
+    const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1500;lp.Q.value=.5;const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=38;
+    const rg=ctx.createGain();rg.gain.value=0;src.connect(hp);hp.connect(pk);pk.connect(lp);lp.connect(rg);rg.connect(bus);
+    const cs=ctx.createBufferSource();cs.buffer=AU.crkBuf;cs.loop=true;cs.start();const cf=ctx.createBiquadFilter();cf.type='bandpass';cf.frequency.value=1800;cf.Q.value=.45;const cg=ctx.createGain();cg.gain.value=0;cs.connect(cf);cf.connect(cg);cg.connect(bus);
+    const w=[0,1,2,3].map(i=>{const o=ctx.createOscillator();o.type=i===3?'triangle':'sine';o.frequency.value=1200;o.start();return o;});
+    const wa=[.55,.5,.28,.12].map((v,i)=>{const g=ctx.createGain();g.gain.value=v;w[i].connect(g);return g;});const whg=ctx.createGain();whg.gain.value=0;wa.forEach(g=>g.connect(whg));
+    const wbp=ctx.createBiquadFilter();wbp.type='bandpass';wbp.frequency.value=3000;wbp.Q.value=.9;whg.connect(wbp);wbp.connect(bus);
+    // 唸りのゆらぎ（回転のむら）
+    const vl=ctx.createOscillator();vl.frequency.value=5.3;const vg=ctx.createGain();vg.gain.value=4;vl.connect(vg);w.forEach(o=>vg.connect(o.frequency));vl.start();
+    const bn=loopNoise(),bnf=ctx.createBiquadFilter();bnf.type='bandpass';bnf.Q.value=7;bnf.frequency.value=900;const bng=ctx.createGain();bng.gain.value=0;bn.connect(bnf);bnf.connect(bng);bng.connect(bus);
+    const rn=ctx.createBufferSource();rn.buffer=AU.brown;rn.loop=true;rn.start();const rf=ctx.createBiquadFilter();rf.type='lowpass';rf.frequency.value=75;const rlg=ctx.createGain();rlg.gain.value=0;rn.connect(rf);rf.connect(rlg);rlg.connect(bus);
+    AU.eng={src,pk,lp,rg,cs,cg,w,whg,wbp,bnf,bng,rlg};}
   // 僚機のエンジン（近くを通るときに聞こえる）
   {const bus=ctx.createGain();bus.gain.value=0;let pan=null;if(ctx.createStereoPanner){pan=ctx.createStereoPanner();bus.connect(pan);pan.connect(AU.sfx);}else bus.connect(AU.sfx);
-    const n=loopNoise(),nf=ctx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;nf.Q.value=.5;const ng=ctx.createGain();ng.gain.value=.5;n.connect(nf);nf.connect(ng);ng.connect(bus);
-    const o=ctx.createOscillator();o.type='sawtooth';o.frequency.value=84;const of=ctx.createBiquadFilter();of.type='lowpass';of.frequency.value=520;const og=ctx.createGain();og.gain.value=.1;o.connect(of);of.connect(og);og.connect(bus);o.start();
+    const o=ctx.createBufferSource();o.buffer=AU.jetBuf;o.loop=true;o.start(0,2.1);const nf=ctx.createBiquadFilter();nf.type='lowpass';nf.frequency.value=1400;const ng=ctx.createGain();ng.gain.value=.9;o.connect(nf);nf.connect(ng);ng.connect(bus);
     const w=ctx.createOscillator();w.type='sine';w.frequency.value=2300;const wg=ctx.createGain();wg.gain.value=.012;w.connect(wg);wg.connect(bus);w.start();
     const r=ctx.createBufferSource();r.buffer=AU.brown;r.loop=true;r.start();const rg=ctx.createGain();rg.gain.value=.9;r.connect(rg);rg.connect(bus);
     AU.wingV={bus,pan,nf,o,w};}
@@ -60,7 +59,7 @@ function initAudio(){
   // 警報
   {const o=ctx.createOscillator();o.type='square';o.frequency.value=880;const g=ctx.createGain();g.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=2400;
     o.connect(f);f.connect(g);g.connect(AU.sfx);o.start();AU.alarm={o,g,on:false,t:0};}
-  setVolumes();setTimeout(buildThunderPool,300);
+  setVolumes();setTimeout(buildThunderPool,300);setTimeout(buildBoomPool,1200);
   MUS.tNext=ctx.currentTime+.1;
   if(!AU.timer)AU.timer=setInterval(()=>{musTick();BGM.tick();},40);
   if(BGM.buf){fixCues(BGM.buf.duration);BGM.ready=true;if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}else BGM.load();
@@ -78,15 +77,18 @@ function restartAudio(){const old=AU.ctx;if(old){try{old.close();}catch(e){}}
   initAudio();if(w)setMood(w);if(AU.keep){const p=AU.keep.play();if(p&&p.catch)p.catch(()=>{});}}
 function setVolumes(){if(!AU.ctx)return;AU.mus.gain.value=AU.musVol*.85;AU.sfx.gain.value=AU.sfxVol*.9;}
 function setWingVoice(power,sp){if(!AU.ctx||!AU.wingV)return;const t=AU.ctx.currentTime,v=AU.wingV;v.bus.gain.setTargetAtTime(power*.3*sp.prox,t,.06);if(v.pan)v.pan.pan.setTargetAtTime(sp.pan,t,.06);
-  v.o.frequency.setTargetAtTime((64+power*30)*sp.dop,t,.06);v.w.frequency.setTargetAtTime((1500+power*1100)*sp.dop,t,.06);v.nf.frequency.setTargetAtTime((700+power*500)*sp.dop*sp.muf,t,.06);}
+  v.o.playbackRate.setTargetAtTime((.85+power*.2)*sp.dop,t,.06);v.w.frequency.setTargetAtTime((1500+power*1100)*sp.dop,t,.06);v.nf.frequency.setTargetAtTime((900+power*900)*sp.muf,t,.06);}
 function setLoops(engine,boost,wind,rain,sp){
   if(!AU.ctx)return;const t=AU.ctx.currentTime,e=AU.eng;sp=sp||{prox:1,pan:0,dop:1,muf:1};
   AU.engBus.gain.setTargetAtTime(sp.prox,t,.06);if(AU.engPan)AU.engPan.pan.setTargetAtTime(sp.pan,t,.06);
-  e.g.gain.setTargetAtTime(engine*(.16+boost*.14),t,.12);
-  const f=(62+engine*26+boost*34)*sp.dop;e.o[0].frequency.setTargetAtTime(f,t,.15);e.o[1].frequency.setTargetAtTime(f*1.013,t,.15);e.o[2].frequency.setTargetAtTime(f*2.01,t,.15);
-  e.f.frequency.setTargetAtTime((420+engine*500+boost*900)*sp.muf,t,.15);e.nf.frequency.setTargetAtTime((1100+boost*1500)*sp.dop*sp.muf,t,.15);
-  e.whg.gain.setTargetAtTime(engine*(.012+boost*.02),t,.2);e.wh.frequency.setTargetAtTime((1500+engine*900+boost*1300)*sp.dop,t,.1);e.wh2.frequency.setTargetAtTime((1500+engine*900+boost*1300)*1.506*sp.dop,t,.1);
-  e.rg2.gain.setTargetAtTime(engine*.5+boost*.4,t,.2);AU.roar.g.gain.setTargetAtTime(boost*.2,t,.12);AU.roar.f.frequency.setTargetAtTime(500+boost*500,t,.2);
+  // 燃焼の轟音：強さで音量と明るさ、ブーストでさらに太く。ドップラーは再生速度で
+  e.rg.gain.setTargetAtTime(engine*(.85+boost*.6),t,.12);e.src.playbackRate.setTargetAtTime((.82+engine*.22+boost*.14)*sp.dop,t,.15);
+  e.lp.frequency.setTargetAtTime((1000+engine*2200+boost*3000)*sp.muf,t,.15);e.pk.frequency.setTargetAtTime(320+engine*260+boost*200,t,.2);
+  e.cg.gain.setTargetAtTime((engine*.02+boost*.32)*sp.muf,t,.1);e.cs.playbackRate.setTargetAtTime(sp.dop,t,.1);
+  // タービン：回転数に比例して高く大きく（地上・低出力では唸りが目立ち、全開では轟音に埋もれる）
+  {const f0=(950+engine*1500+boost*350)*sp.dop;[1,1.0062,2.013,1.48].forEach((m,i)=>e.w[i].frequency.setTargetAtTime(f0*m,t,.25));e.wbp.frequency.setTargetAtTime(f0*1.4*sp.muf,t,.2);
+    e.whg.gain.setTargetAtTime(engine*(.022-.008*boost)*Math.min(1,sp.muf*1.2),t,.2);e.bnf.frequency.setTargetAtTime(f0*.5,t,.2);e.bng.gain.setTargetAtTime(engine*.07*sp.muf,t,.2);}
+  e.rlg.gain.setTargetAtTime(engine*.22+boost*.3,t,.2);
   AU.wind.g.gain.setTargetAtTime(.04*engine+wind*.85,t,.3);AU.wind.f.frequency.setTargetAtTime(340+wind*520,t,.4);
   AU.rain.g.gain.setTargetAtTime(rain*.2,t,.3);AU.rain2.g.gain.setTargetAtTime(rain*.24,t,.3);
   AU.wind2.g.gain.setTargetAtTime(wind*wind*.55,t,.5);AU.rumble.g.gain.setTargetAtTime(wind*1.5+rain*.7,t,.5);
@@ -113,6 +115,64 @@ function burst(dest,t,dur,vol,type,f0,f1,q,rev,a){
   s.connect(f);f.connect(g);g.connect(dest);if(rev){const r=ctx.createGain();r.gain.value=rev;g.connect(r);r.connect(AU.rev);}
   s.start(t,Math.random()*1.5);s.stop(t+dur+.05);
 }
+// ───────────────────────── 爆発音とジェット音の事前合成 ─────────────────────────
+// 爆発：最初の衝撃波（Friedlander 波形：急に立ち上がって指数的に減り、負圧へ振れる）＋燃焼の轟き（時間とともに低域へ移るノイズ、乱流でうねる）
+// ＋地鳴り（ごく低いノイズ）＋破片がはぜる音（まばらな短いクリック）。左右で別のノイズを使って広がりを出す
+function renderBoom(sr,big,seed){
+  const R=mulberry(seed),dur=big?5.6:3.0,n=Math.floor(sr*dur),out=[new Float32Array(n),new Float32Array(n)];
+  const Ts=big?.034:.013,tb=big?1.05:.5,tr=big?2.4:1.0,crk=big?2.6:1.2;
+  for(let ch=0;ch<2;ch++){const o=out[ch];let l1=0,l2=0,br=0,rl=0,mod=1,mt=0,ph=0,pa=0,pf=0,pd=0;
+    for(let i=0;i<n;i++){const t=i/sr;
+      // 衝撃波
+      let p=0;if(t<Ts*7){const x=t/Ts,rise=Math.min(1,t/.0004);p=rise*(1-x)*Math.exp(-1.6*x)*(big?1.25:1.05);}
+      // 燃焼の轟き：遮断周波数を時間で下げる 2 段の 1 次低域通過
+      const fc=(big?3800:5200)*Math.exp(-t/(big?.35:.22))+(big?110:180),a=1-Math.exp(-2*Math.PI*fc/sr);
+      const w=R()*2-1;l1+=a*(w-l1);l2+=a*(l1-l2);
+      if(--mt<=0){mt=Math.floor(sr*(.03+R()*.08));mod=.55+R()*.9;}ph+=(mod-ph)*.0009;
+      const env=Math.min(1,t/.006)*Math.exp(-t/tb)*(1-Math.exp(-t/.02));
+      let s=p+l2*env*ph*(big?2.6:2.2);
+      // 地鳴り
+      br=(br+.02*(R()*2-1))/1.02;rl+=.004*(br*3.5-rl);s+=rl*Math.min(1,t/.05)*Math.exp(-t/tr)*(big?5:2.5);
+      // 破片がはぜる音
+      if(t>.04&&t<crk&&R()<(big?260:160)/sr*Math.exp(-t/(crk*.45))){pa=(R()*.6+.2)*Math.exp(-t/crk);pf=(1500+R()*3200)/sr*2*Math.PI;pd=0;}
+      if(pa>1e-4){s+=pa*Math.sin(pd*pf)*Math.exp(-pd/(sr*.0025));pd++;if(pd>sr*.012)pa=0;}
+      o[i]=s;}}
+  // 柔らかく飽和させて揃える
+  let pk=0;for(const o of out)for(let i=0;i<n;i++){o[i]=Math.tanh(o[i]*1.5);pk=Math.max(pk,Math.abs(o[i]));}
+  for(const o of out)for(let i=0;i<n;i++)o[i]*=.95/pk;
+  // 終わりを静かに
+  for(const o of out){const f=Math.floor(sr*.3);for(let i=0;i<f;i++)o[n-1-i]*=i/f;}
+  return out;}
+const BOOMS={big:[],small:[]};
+function buildBoomPool(){if(!AU.ctx||BOOMS.big.length)return;const sr=AU.ctx.sampleRate,jobs=[[1,11],[0,23],[1,37],[0,41],[1,53],[0,67]];let i=0;
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
+// 距離のある爆発：音速ぶん遅れて届き、遠いほど高音が削られ（空気の吸収）、残響が増える
+function boomAt(d,pan,k,type){if(!AU.ctx)return;const big=k>=.55||type==='tank'||type==='ship'||type==='bldg',pool=big?BOOMS.big:BOOMS.small;
+  if(!pool.length){SFX.boom();return;}
+  const ctx=AU.ctx,t=ctx.currentTime+Math.min(6,d/343),s=ctx.createBufferSource();s.buffer=pool[Math.floor(Math.random()*pool.length)];
+  s.playbackRate.value=(big?.82+Math.random()*.2:.95+Math.random()*.3)*(type==='tank'?.85:1)*(k<.35?1.15:1);
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=16000*Math.exp(-d/850)+260;lp.Q.value=.4;
+  const vol=Math.min(1.6,(.5+k*.9)*Math.pow(1/(1+d/170),1.05)*(type==='tank'?1.25:1)),g=ctx.createGain();g.gain.value=vol;
+  s.connect(lp);lp.connect(g);let o=g;if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan))*(1-Math.min(.6,d/2500));g.connect(p);o=p;}o.connect(AU.sfx);
+  const r=ctx.createGain();r.gain.value=vol*(.25+.7*Math.min(1,d/1400));g.connect(r);r.connect(AU.rev);
+  s.start(t);s.stop(t+s.buffer.duration/s.playbackRate.value+.1);
+  // 近いときは胸に響く低い一撃を足す
+  if(d<260&&big)tone(AU.sfx,'sine',62,30,t,.7,.55*(1-d/260)*Math.min(1,k+.3),.004);}
+// ジェットの燃焼音のループ：ピンク寄りのノイズに、ジェット騒音らしい山（低中域）と乱流のうねりを付け、継ぎ目を重ねてつなぐ
+function makeJetBuffer(ctx){const sr=ctx.sampleRate,n=Math.floor(sr*6),X=Math.floor(sr*.4),b=ctx.createBuffer(2,n,sr),R=mulberry(777);
+  for(let ch=0;ch<2;ch++){const o=new Float32Array(n+X);let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,h=0,lo=0,m=1,mt=0,mm=1;
+    for(let i=0;i<n+X;i++){const w=R()*2-1;b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;b2=.969*b2+w*.153852;b3=.8665*b3+w*.3104856;b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;
+      let p=(b0+b1+b2+b3+b4+b5+w*.5362)*.2;lo+=.18*(p-lo);h=lo;   // 高域を少し丸める
+      if(--mt<=0){mt=Math.floor(sr*(.02+R()*.06));m=.75+R()*.5;}mm+=(m-mm)*.0015;o[i]=h*mm;}
+    const d=b.getChannelData(ch);for(let i=0;i<n;i++)d[i]=o[i];for(let i=0;i<X;i++){const u=i/X;d[i]=o[i]*u+o[n+i]*(1-u);}
+    let pk=0;for(let i=0;i<n;i++)pk=Math.max(pk,Math.abs(d[i]));for(let i=0;i<n;i++)d[i]*=.8/pk;}
+  return b;}
+// クラックル：本物のジェット排気に特有の「バリバリ」。正の側へ鋭く立つ、まばらで強さのばらつく圧力のとげ
+function makeCrackleBuffer(ctx){const sr=ctx.sampleRate,n=Math.floor(sr*4),b=ctx.createBuffer(2,n,sr),R=mulberry(4242);
+  for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let a=0,k=0;
+    for(let i=0;i<n;i++){if(R()<420/sr){a=Math.min(1,.15*Math.pow(R()+.02,-.7));k=0;}const e=a*Math.exp(-k/(sr*.00045));d[i]=e-(k>sr*.0006?e*.35:0)+(R()*2-1)*.03;k++;if(k>sr*.004)a=0;}
+    const f=Math.floor(sr*.05);for(let i=0;i<f;i++){const u=i/f;d[i]=d[i]*u+d[n-f+i]*(1-u);}}
+  return b;}
 // ───────────────────────── 雷鳴の合成 ─────────────────────────
 // 放電路を数メートルずつの折れ線で作り、各区間が出す N 字形の圧力波を「聞き手までの距離÷音速」だけ遅らせて重ねる。
 // 視線に直角な区間の束は鋭い「バリッ」、遠い区間は遅れて届く低い「ゴロゴロ」になる。
@@ -221,7 +281,7 @@ const SFX={
   warn(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'square',620,620,t,.12,.07,.003,{lp:2600});tone(AU.sfx,'square',620,620,t+.16,.12,.07,.003,{lp:2600});},
   boost(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',85,42,t,.5,.8,.004);burst(AU.sfx,t,.3,.6,'lowpass',900,200,.8,.3);burst(AU.sfx,t,.9,.35,'bandpass',500,3200,1.2,.3,.05);tone(AU.sfx,'sawtooth',90,220,t,.6,.12,.03,{lp:900});},
   launch(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.09,.9,'bandpass',900,300,5,.3);tone(AU.sfx,'square',95,60,t,.12,.3,.002,{lp:700});burst(AU.sfx,t+.08,2.6,.5,'lowpass',1400,160,.7,.6,.1);burst(AU.sfx,t,1.6,.8,'bandpass',300,4200,1,.5,.02);tone(AU.sfx,'sawtooth',110,880,t,1.2,.2,.02,{lp:2400,rev:.4});tone(AU.sfx,'sine',70,40,t,.5,.7,.004);},
-  boom(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,3.2,1,'lowpass',2200,60,.6,.8);tone(AU.sfx,'sine',90,24,t,2.4,1,.005);burst(AU.sfx,t,.3,.8,'highpass',1800,600,.5,.5);},
+  boom(){if(!AU.ctx)return;if(BOOMS.big.length){boomAt(40,0,.9,'air');return;}const t=AU.ctx.currentTime;burst(AU.sfx,t,3.2,1,'lowpass',2200,60,.6,.8);tone(AU.sfx,'sine',90,24,t,2.4,1,.005);burst(AU.sfx,t,.3,.8,'highpass',1800,600,.5,.5);},
   implode(){if(!AU.ctx)return;const t=AU.ctx.currentTime;
     burst(AU.sfx,t,2.2,.6,'bandpass',200,5200,1.5,.6,1.8);tone(AU.sfx,'sine',40,160,t,2.2,.5,1.8);
     burst(AU.sfx,t+2.2,5,1,'lowpass',3000,50,.5,.9);tone(AU.sfx,'sine',110,22,t+2.2,4,1,.005);

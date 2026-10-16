@@ -1982,7 +1982,7 @@ diffuseColor.rgb=c;`);};
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
       if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz),tall=wd<11&&hy>wd*2.2?1:0,gt=o.geometry.type||'';
       // 壊れ方の種類：0 コンクリート（崩れ落ちる）・1 塔（倒れる）・2 倉庫（屋根が抜ける）・3 タンク（裂けて潰れる）
-      const kind=tall?1:(/Cylinder/.test(gt)&&Math.abs(sx-sz)<.25*wd&&hy<wd*1.6&&hy>wd*.3&&wd>4?3:(wd>28&&hy<wd*.55?2:0));
+      const kind=tall||(wd<16&&hy>wd*4)?1:(/Cylinder/.test(gt)&&Math.abs(sx-sz)<.25*wd&&hy<wd*1.6&&hy>wd*.3&&wd>4?3:(wd>28&&hy<wd*.55?2:0));
       cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,tall,o.userData.rock?1:0,kind]);});
     B.userData.colliders=cols;}
   weatherize(B);
@@ -3480,26 +3480,25 @@ function initAudio(){
   // 低域の豊かな茶色ノイズ（雷鳴・地鳴り用）
   const bb=ctx.createBuffer(1,ctx.sampleRate*5,ctx.sampleRate),bd=bb.getChannelData(0);let lb=0;for(let i=0;i<bd.length;i++){lb=(lb+.02*(Math.random()*2-1))/1.02;bd[i]=lb*3.5;}AU.brown=bb;
   const loopNoise=()=>{const s=ctx.createBufferSource();s.buffer=nb;s.loop=true;s.start();return s;};
-  // エンジン（出口でまとめて、距離と左右を付ける）
+  // エンジン（出口でまとめて、距離と左右を付ける）：燃焼の轟音（事前合成のループ）・クラックル・タービンの唸り（ずれた 2 音と倍音、羽根の通過音）・腹に響く低音
   {const bus=AU.engBus=ctx.createGain();if(ctx.createStereoPanner){AU.engPan=ctx.createStereoPanner();bus.connect(AU.engPan);AU.engPan.connect(AU.sfx);}else bus.connect(AU.sfx);
-    const g=ctx.createGain();g.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=600;
-    const o1=ctx.createOscillator(),o2=ctx.createOscillator(),o3=ctx.createOscillator();o1.type='sawtooth';o2.type='sawtooth';o3.type='triangle';
-    o1.frequency.value=70;o2.frequency.value=70.9;o3.frequency.value=141;
-    const og=ctx.createGain();og.gain.value=.085;[o1,o2,o3].forEach(o=>{o.connect(og);o.start();});og.connect(f);
-    const n=loopNoise(),nf=ctx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=1400;nf.Q.value=.6;const ng=ctx.createGain();ng.gain.value=.5;n.connect(nf);nf.connect(ng);ng.connect(g);
-    f.connect(g);g.connect(bus);
-    // タービンの高い唸りと、腹に響く低音
-    const wh=ctx.createOscillator();wh.type='sine';wh.frequency.value=1800;const wh2=ctx.createOscillator();wh2.type='triangle';wh2.frequency.value=2710;
-    const whg=ctx.createGain();whg.gain.value=0;wh.connect(whg);wh2.connect(whg);whg.connect(bus);wh.start();wh2.start();
-    const rn=loopNoise(),rf=ctx.createBiquadFilter();rf.type='lowpass';rf.frequency.value=85;const rg2=ctx.createGain();rg2.gain.value=0;rn.connect(rf);rf.connect(rg2);rg2.connect(bus);
-    AU.eng={g,f,o:[o1,o2,o3],nf,wh,wh2,whg,rg2};}
-  // アフターバーナーの轟音
-  {const n=loopNoise(),f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=650;const ws=ctx.createWaveShaper();const cv=new Float32Array(256);for(let i=0;i<256;i++){const x=i/128-1;cv[i]=Math.tanh(x*5);}ws.curve=cv;
-    const g=ctx.createGain();g.gain.value=0;n.connect(f);f.connect(ws);ws.connect(g);g.connect(AU.engBus);AU.roar={g,f};}
+    AU.jetBuf=makeJetBuffer(ctx);AU.crkBuf=makeCrackleBuffer(ctx);
+    const src=ctx.createBufferSource();src.buffer=AU.jetBuf;src.loop=true;src.start();
+    const pk=ctx.createBiquadFilter();pk.type='peaking';pk.frequency.value=380;pk.Q.value=.6;pk.gain.value=7;
+    const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1500;lp.Q.value=.5;const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=38;
+    const rg=ctx.createGain();rg.gain.value=0;src.connect(hp);hp.connect(pk);pk.connect(lp);lp.connect(rg);rg.connect(bus);
+    const cs=ctx.createBufferSource();cs.buffer=AU.crkBuf;cs.loop=true;cs.start();const cf=ctx.createBiquadFilter();cf.type='bandpass';cf.frequency.value=1800;cf.Q.value=.45;const cg=ctx.createGain();cg.gain.value=0;cs.connect(cf);cf.connect(cg);cg.connect(bus);
+    const w=[0,1,2,3].map(i=>{const o=ctx.createOscillator();o.type=i===3?'triangle':'sine';o.frequency.value=1200;o.start();return o;});
+    const wa=[.55,.5,.28,.12].map((v,i)=>{const g=ctx.createGain();g.gain.value=v;w[i].connect(g);return g;});const whg=ctx.createGain();whg.gain.value=0;wa.forEach(g=>g.connect(whg));
+    const wbp=ctx.createBiquadFilter();wbp.type='bandpass';wbp.frequency.value=3000;wbp.Q.value=.9;whg.connect(wbp);wbp.connect(bus);
+    // 唸りのゆらぎ（回転のむら）
+    const vl=ctx.createOscillator();vl.frequency.value=5.3;const vg=ctx.createGain();vg.gain.value=4;vl.connect(vg);w.forEach(o=>vg.connect(o.frequency));vl.start();
+    const bn=loopNoise(),bnf=ctx.createBiquadFilter();bnf.type='bandpass';bnf.Q.value=7;bnf.frequency.value=900;const bng=ctx.createGain();bng.gain.value=0;bn.connect(bnf);bnf.connect(bng);bng.connect(bus);
+    const rn=ctx.createBufferSource();rn.buffer=AU.brown;rn.loop=true;rn.start();const rf=ctx.createBiquadFilter();rf.type='lowpass';rf.frequency.value=75;const rlg=ctx.createGain();rlg.gain.value=0;rn.connect(rf);rf.connect(rlg);rlg.connect(bus);
+    AU.eng={src,pk,lp,rg,cs,cg,w,whg,wbp,bnf,bng,rlg};}
   // 僚機のエンジン（近くを通るときに聞こえる）
   {const bus=ctx.createGain();bus.gain.value=0;let pan=null;if(ctx.createStereoPanner){pan=ctx.createStereoPanner();bus.connect(pan);pan.connect(AU.sfx);}else bus.connect(AU.sfx);
-    const n=loopNoise(),nf=ctx.createBiquadFilter();nf.type='bandpass';nf.frequency.value=900;nf.Q.value=.5;const ng=ctx.createGain();ng.gain.value=.5;n.connect(nf);nf.connect(ng);ng.connect(bus);
-    const o=ctx.createOscillator();o.type='sawtooth';o.frequency.value=84;const of=ctx.createBiquadFilter();of.type='lowpass';of.frequency.value=520;const og=ctx.createGain();og.gain.value=.1;o.connect(of);of.connect(og);og.connect(bus);o.start();
+    const o=ctx.createBufferSource();o.buffer=AU.jetBuf;o.loop=true;o.start(0,2.1);const nf=ctx.createBiquadFilter();nf.type='lowpass';nf.frequency.value=1400;const ng=ctx.createGain();ng.gain.value=.9;o.connect(nf);nf.connect(ng);ng.connect(bus);
     const w=ctx.createOscillator();w.type='sine';w.frequency.value=2300;const wg=ctx.createGain();wg.gain.value=.012;w.connect(wg);wg.connect(bus);w.start();
     const r=ctx.createBufferSource();r.buffer=AU.brown;r.loop=true;r.start();const rg=ctx.createGain();rg.gain.value=.9;r.connect(rg);rg.connect(bus);
     AU.wingV={bus,pan,nf,o,w};}
@@ -3524,7 +3523,7 @@ function initAudio(){
   // 警報
   {const o=ctx.createOscillator();o.type='square';o.frequency.value=880;const g=ctx.createGain();g.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=2400;
     o.connect(f);f.connect(g);g.connect(AU.sfx);o.start();AU.alarm={o,g,on:false,t:0};}
-  setVolumes();setTimeout(buildThunderPool,300);
+  setVolumes();setTimeout(buildThunderPool,300);setTimeout(buildBoomPool,1200);
   MUS.tNext=ctx.currentTime+.1;
   if(!AU.timer)AU.timer=setInterval(()=>{musTick();BGM.tick();},40);
   if(BGM.buf){fixCues(BGM.buf.duration);BGM.ready=true;if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}else BGM.load();
@@ -3542,15 +3541,18 @@ function restartAudio(){const old=AU.ctx;if(old){try{old.close();}catch(e){}}
   initAudio();if(w)setMood(w);if(AU.keep){const p=AU.keep.play();if(p&&p.catch)p.catch(()=>{});}}
 function setVolumes(){if(!AU.ctx)return;AU.mus.gain.value=AU.musVol*.85;AU.sfx.gain.value=AU.sfxVol*.9;}
 function setWingVoice(power,sp){if(!AU.ctx||!AU.wingV)return;const t=AU.ctx.currentTime,v=AU.wingV;v.bus.gain.setTargetAtTime(power*.3*sp.prox,t,.06);if(v.pan)v.pan.pan.setTargetAtTime(sp.pan,t,.06);
-  v.o.frequency.setTargetAtTime((64+power*30)*sp.dop,t,.06);v.w.frequency.setTargetAtTime((1500+power*1100)*sp.dop,t,.06);v.nf.frequency.setTargetAtTime((700+power*500)*sp.dop*sp.muf,t,.06);}
+  v.o.playbackRate.setTargetAtTime((.85+power*.2)*sp.dop,t,.06);v.w.frequency.setTargetAtTime((1500+power*1100)*sp.dop,t,.06);v.nf.frequency.setTargetAtTime((900+power*900)*sp.muf,t,.06);}
 function setLoops(engine,boost,wind,rain,sp){
   if(!AU.ctx)return;const t=AU.ctx.currentTime,e=AU.eng;sp=sp||{prox:1,pan:0,dop:1,muf:1};
   AU.engBus.gain.setTargetAtTime(sp.prox,t,.06);if(AU.engPan)AU.engPan.pan.setTargetAtTime(sp.pan,t,.06);
-  e.g.gain.setTargetAtTime(engine*(.16+boost*.14),t,.12);
-  const f=(62+engine*26+boost*34)*sp.dop;e.o[0].frequency.setTargetAtTime(f,t,.15);e.o[1].frequency.setTargetAtTime(f*1.013,t,.15);e.o[2].frequency.setTargetAtTime(f*2.01,t,.15);
-  e.f.frequency.setTargetAtTime((420+engine*500+boost*900)*sp.muf,t,.15);e.nf.frequency.setTargetAtTime((1100+boost*1500)*sp.dop*sp.muf,t,.15);
-  e.whg.gain.setTargetAtTime(engine*(.012+boost*.02),t,.2);e.wh.frequency.setTargetAtTime((1500+engine*900+boost*1300)*sp.dop,t,.1);e.wh2.frequency.setTargetAtTime((1500+engine*900+boost*1300)*1.506*sp.dop,t,.1);
-  e.rg2.gain.setTargetAtTime(engine*.5+boost*.4,t,.2);AU.roar.g.gain.setTargetAtTime(boost*.2,t,.12);AU.roar.f.frequency.setTargetAtTime(500+boost*500,t,.2);
+  // 燃焼の轟音：強さで音量と明るさ、ブーストでさらに太く。ドップラーは再生速度で
+  e.rg.gain.setTargetAtTime(engine*(.85+boost*.6),t,.12);e.src.playbackRate.setTargetAtTime((.82+engine*.22+boost*.14)*sp.dop,t,.15);
+  e.lp.frequency.setTargetAtTime((1000+engine*2200+boost*3000)*sp.muf,t,.15);e.pk.frequency.setTargetAtTime(320+engine*260+boost*200,t,.2);
+  e.cg.gain.setTargetAtTime((engine*.02+boost*.32)*sp.muf,t,.1);e.cs.playbackRate.setTargetAtTime(sp.dop,t,.1);
+  // タービン：回転数に比例して高く大きく（地上・低出力では唸りが目立ち、全開では轟音に埋もれる）
+  {const f0=(950+engine*1500+boost*350)*sp.dop;[1,1.0062,2.013,1.48].forEach((m,i)=>e.w[i].frequency.setTargetAtTime(f0*m,t,.25));e.wbp.frequency.setTargetAtTime(f0*1.4*sp.muf,t,.2);
+    e.whg.gain.setTargetAtTime(engine*(.022-.008*boost)*Math.min(1,sp.muf*1.2),t,.2);e.bnf.frequency.setTargetAtTime(f0*.5,t,.2);e.bng.gain.setTargetAtTime(engine*.07*sp.muf,t,.2);}
+  e.rlg.gain.setTargetAtTime(engine*.22+boost*.3,t,.2);
   AU.wind.g.gain.setTargetAtTime(.04*engine+wind*.85,t,.3);AU.wind.f.frequency.setTargetAtTime(340+wind*520,t,.4);
   AU.rain.g.gain.setTargetAtTime(rain*.2,t,.3);AU.rain2.g.gain.setTargetAtTime(rain*.24,t,.3);
   AU.wind2.g.gain.setTargetAtTime(wind*wind*.55,t,.5);AU.rumble.g.gain.setTargetAtTime(wind*1.5+rain*.7,t,.5);
@@ -3577,6 +3579,64 @@ function burst(dest,t,dur,vol,type,f0,f1,q,rev,a){
   s.connect(f);f.connect(g);g.connect(dest);if(rev){const r=ctx.createGain();r.gain.value=rev;g.connect(r);r.connect(AU.rev);}
   s.start(t,Math.random()*1.5);s.stop(t+dur+.05);
 }
+// ───────────────────────── 爆発音とジェット音の事前合成 ─────────────────────────
+// 爆発：最初の衝撃波（Friedlander 波形：急に立ち上がって指数的に減り、負圧へ振れる）＋燃焼の轟き（時間とともに低域へ移るノイズ、乱流でうねる）
+// ＋地鳴り（ごく低いノイズ）＋破片がはぜる音（まばらな短いクリック）。左右で別のノイズを使って広がりを出す
+function renderBoom(sr,big,seed){
+  const R=mulberry(seed),dur=big?5.6:3.0,n=Math.floor(sr*dur),out=[new Float32Array(n),new Float32Array(n)];
+  const Ts=big?.034:.013,tb=big?1.05:.5,tr=big?2.4:1.0,crk=big?2.6:1.2;
+  for(let ch=0;ch<2;ch++){const o=out[ch];let l1=0,l2=0,br=0,rl=0,mod=1,mt=0,ph=0,pa=0,pf=0,pd=0;
+    for(let i=0;i<n;i++){const t=i/sr;
+      // 衝撃波
+      let p=0;if(t<Ts*7){const x=t/Ts,rise=Math.min(1,t/.0004);p=rise*(1-x)*Math.exp(-1.6*x)*(big?1.25:1.05);}
+      // 燃焼の轟き：遮断周波数を時間で下げる 2 段の 1 次低域通過
+      const fc=(big?3800:5200)*Math.exp(-t/(big?.35:.22))+(big?110:180),a=1-Math.exp(-2*Math.PI*fc/sr);
+      const w=R()*2-1;l1+=a*(w-l1);l2+=a*(l1-l2);
+      if(--mt<=0){mt=Math.floor(sr*(.03+R()*.08));mod=.55+R()*.9;}ph+=(mod-ph)*.0009;
+      const env=Math.min(1,t/.006)*Math.exp(-t/tb)*(1-Math.exp(-t/.02));
+      let s=p+l2*env*ph*(big?2.6:2.2);
+      // 地鳴り
+      br=(br+.02*(R()*2-1))/1.02;rl+=.004*(br*3.5-rl);s+=rl*Math.min(1,t/.05)*Math.exp(-t/tr)*(big?5:2.5);
+      // 破片がはぜる音
+      if(t>.04&&t<crk&&R()<(big?260:160)/sr*Math.exp(-t/(crk*.45))){pa=(R()*.6+.2)*Math.exp(-t/crk);pf=(1500+R()*3200)/sr*2*Math.PI;pd=0;}
+      if(pa>1e-4){s+=pa*Math.sin(pd*pf)*Math.exp(-pd/(sr*.0025));pd++;if(pd>sr*.012)pa=0;}
+      o[i]=s;}}
+  // 柔らかく飽和させて揃える
+  let pk=0;for(const o of out)for(let i=0;i<n;i++){o[i]=Math.tanh(o[i]*1.5);pk=Math.max(pk,Math.abs(o[i]));}
+  for(const o of out)for(let i=0;i<n;i++)o[i]*=.95/pk;
+  // 終わりを静かに
+  for(const o of out){const f=Math.floor(sr*.3);for(let i=0;i<f;i++)o[n-1-i]*=i/f;}
+  return out;}
+const BOOMS={big:[],small:[]};
+function buildBoomPool(){if(!AU.ctx||BOOMS.big.length)return;const sr=AU.ctx.sampleRate,jobs=[[1,11],[0,23],[1,37],[0,41],[1,53],[0,67]];let i=0;
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
+// 距離のある爆発：音速ぶん遅れて届き、遠いほど高音が削られ（空気の吸収）、残響が増える
+function boomAt(d,pan,k,type){if(!AU.ctx)return;const big=k>=.55||type==='tank'||type==='ship'||type==='bldg',pool=big?BOOMS.big:BOOMS.small;
+  if(!pool.length){SFX.boom();return;}
+  const ctx=AU.ctx,t=ctx.currentTime+Math.min(6,d/343),s=ctx.createBufferSource();s.buffer=pool[Math.floor(Math.random()*pool.length)];
+  s.playbackRate.value=(big?.82+Math.random()*.2:.95+Math.random()*.3)*(type==='tank'?.85:1)*(k<.35?1.15:1);
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=16000*Math.exp(-d/850)+260;lp.Q.value=.4;
+  const vol=Math.min(1.6,(.5+k*.9)*Math.pow(1/(1+d/170),1.05)*(type==='tank'?1.25:1)),g=ctx.createGain();g.gain.value=vol;
+  s.connect(lp);lp.connect(g);let o=g;if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan))*(1-Math.min(.6,d/2500));g.connect(p);o=p;}o.connect(AU.sfx);
+  const r=ctx.createGain();r.gain.value=vol*(.25+.7*Math.min(1,d/1400));g.connect(r);r.connect(AU.rev);
+  s.start(t);s.stop(t+s.buffer.duration/s.playbackRate.value+.1);
+  // 近いときは胸に響く低い一撃を足す
+  if(d<260&&big)tone(AU.sfx,'sine',62,30,t,.7,.55*(1-d/260)*Math.min(1,k+.3),.004);}
+// ジェットの燃焼音のループ：ピンク寄りのノイズに、ジェット騒音らしい山（低中域）と乱流のうねりを付け、継ぎ目を重ねてつなぐ
+function makeJetBuffer(ctx){const sr=ctx.sampleRate,n=Math.floor(sr*6),X=Math.floor(sr*.4),b=ctx.createBuffer(2,n,sr),R=mulberry(777);
+  for(let ch=0;ch<2;ch++){const o=new Float32Array(n+X);let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,h=0,lo=0,m=1,mt=0,mm=1;
+    for(let i=0;i<n+X;i++){const w=R()*2-1;b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;b2=.969*b2+w*.153852;b3=.8665*b3+w*.3104856;b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;
+      let p=(b0+b1+b2+b3+b4+b5+w*.5362)*.2;lo+=.18*(p-lo);h=lo;   // 高域を少し丸める
+      if(--mt<=0){mt=Math.floor(sr*(.02+R()*.06));m=.75+R()*.5;}mm+=(m-mm)*.0015;o[i]=h*mm;}
+    const d=b.getChannelData(ch);for(let i=0;i<n;i++)d[i]=o[i];for(let i=0;i<X;i++){const u=i/X;d[i]=o[i]*u+o[n+i]*(1-u);}
+    let pk=0;for(let i=0;i<n;i++)pk=Math.max(pk,Math.abs(d[i]));for(let i=0;i<n;i++)d[i]*=.8/pk;}
+  return b;}
+// クラックル：本物のジェット排気に特有の「バリバリ」。正の側へ鋭く立つ、まばらで強さのばらつく圧力のとげ
+function makeCrackleBuffer(ctx){const sr=ctx.sampleRate,n=Math.floor(sr*4),b=ctx.createBuffer(2,n,sr),R=mulberry(4242);
+  for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let a=0,k=0;
+    for(let i=0;i<n;i++){if(R()<420/sr){a=Math.min(1,.15*Math.pow(R()+.02,-.7));k=0;}const e=a*Math.exp(-k/(sr*.00045));d[i]=e-(k>sr*.0006?e*.35:0)+(R()*2-1)*.03;k++;if(k>sr*.004)a=0;}
+    const f=Math.floor(sr*.05);for(let i=0;i<f;i++){const u=i/f;d[i]=d[i]*u+d[n-f+i]*(1-u);}}
+  return b;}
 // ───────────────────────── 雷鳴の合成 ─────────────────────────
 // 放電路を数メートルずつの折れ線で作り、各区間が出す N 字形の圧力波を「聞き手までの距離÷音速」だけ遅らせて重ねる。
 // 視線に直角な区間の束は鋭い「バリッ」、遠い区間は遅れて届く低い「ゴロゴロ」になる。
@@ -3685,7 +3745,7 @@ const SFX={
   warn(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'square',620,620,t,.12,.07,.003,{lp:2600});tone(AU.sfx,'square',620,620,t+.16,.12,.07,.003,{lp:2600});},
   boost(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',85,42,t,.5,.8,.004);burst(AU.sfx,t,.3,.6,'lowpass',900,200,.8,.3);burst(AU.sfx,t,.9,.35,'bandpass',500,3200,1.2,.3,.05);tone(AU.sfx,'sawtooth',90,220,t,.6,.12,.03,{lp:900});},
   launch(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.09,.9,'bandpass',900,300,5,.3);tone(AU.sfx,'square',95,60,t,.12,.3,.002,{lp:700});burst(AU.sfx,t+.08,2.6,.5,'lowpass',1400,160,.7,.6,.1);burst(AU.sfx,t,1.6,.8,'bandpass',300,4200,1,.5,.02);tone(AU.sfx,'sawtooth',110,880,t,1.2,.2,.02,{lp:2400,rev:.4});tone(AU.sfx,'sine',70,40,t,.5,.7,.004);},
-  boom(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,3.2,1,'lowpass',2200,60,.6,.8);tone(AU.sfx,'sine',90,24,t,2.4,1,.005);burst(AU.sfx,t,.3,.8,'highpass',1800,600,.5,.5);},
+  boom(){if(!AU.ctx)return;if(BOOMS.big.length){boomAt(40,0,.9,'air');return;}const t=AU.ctx.currentTime;burst(AU.sfx,t,3.2,1,'lowpass',2200,60,.6,.8);tone(AU.sfx,'sine',90,24,t,2.4,1,.005);burst(AU.sfx,t,.3,.8,'highpass',1800,600,.5,.5);},
   implode(){if(!AU.ctx)return;const t=AU.ctx.currentTime;
     burst(AU.sfx,t,2.2,.6,'bandpass',200,5200,1.5,.6,1.8);tone(AU.sfx,'sine',40,160,t,2.2,.5,1.8);
     burst(AU.sfx,t+2.2,5,1,'lowpass',3000,50,.5,.9);tone(AU.sfx,'sine',110,22,t+2.2,4,1,.005);
@@ -4106,7 +4166,7 @@ function updatePlayer(dt){
 }
 // 僚機が撃たれた瞬間
 function wingHit(w){
-  if(w.state==='gone'||w.state==='down')return;explode(w.pos,.55);SFX.boom();G.shake=Math.max(G.shake,.5);w.state='down';w.downT=0;w.shot=true;w.power=.05;G.stats.shot=true;G.stats.saved=false;
+  if(w.state==='gone'||w.state==='down')return;explode(w.pos,.55);G.shake=Math.max(G.shake,.5);w.state='down';w.downT=0;w.shot=true;w.power=.05;G.stats.shot=true;G.stats.saved=false;
   if(w===W[1]&&G.flags.stall){G.flags.stall=0;G.prompt=null;carrierRing.visible=false;G.target=G.prevTarget;G.targetLabel=G.prevLabel;setObj('PHASE 1　レインバンド','落雷を避けて中心へ進め');}
   const i=W.indexOf(w);if(i===0){say('G','ぐあっ…！　やられた、操縦が利かん…隊長、逃げろ！',3.2);if(!G.spareGiven&&G.phase!=='ret')ICP.doomed=true;}else say('H','うわあっ！　た、隊長…っ！',2.6);
 }
@@ -4448,10 +4508,11 @@ function updateScud(){if(!SCUD.list.length)initScud();const cam=camera.position,
   SCUD.on=any;}
 // 本棟の前の旗：根元から先へ行くほど大きく波打つ
 function animFlags(){const D=baseGroup.userData.detail,fl=D&&D.userData.flags;if(!fl)return;if(camera.position.distanceTo(_cw.set(BASE.x+330,RWY_Y,BASE.z+335))>900)return;const t=G.t;
-  for(const m of fl){const pa=m.geometry.attributes.position;if(!m.userData.x0)m.userData.x0=Float32Array.from({length:pa.count},(_,i)=>pa.getX(i));const x0=m.userData.x0;
+  for(const m of fl){if(m.userData.brkDead)continue;const pa=m.geometry.attributes.position;if(!m.userData.x0)m.userData.x0=Float32Array.from({length:pa.count},(_,i)=>pa.getX(i));const x0=m.userData.x0;
     for(let i=0;i<pa.count;i++){const u=(x0[i]+1.8)/3.6;pa.setZ(i,Math.sin(t*6.5-u*5.5)*.32*u+Math.sin(t*11-u*9)*.06*u);pa.setX(i,x0[i]-u*u*.15);}pa.needsUpdate=true;m.geometry.computeVertexNormals();}}
 function animCrew(dt){
   const HG=baseGroup.userData.hangar,cr=HG&&HG.userData.crew;if(!cr)return;
+  if(G.hgDead){if(animCrew.far!=='dead'){animCrew.far='dead';for(const c of cr)c.g.visible=false;}return;}   // 格納庫が壊れたら整備員は退避
   const far=G.indoor<=0&&camera.position.distanceTo(_cw.setFromMatrixPosition(HG.matrixWorld))>700;if(far!==animCrew.far){animCrew.far=far;for(const c of cr)c.g.visible=!far;}   // 遠いときは描かない
   if(far)return;
   const pl=HG.worldToLocal(_cl.copy(P.pos)),t=G.t,lit=baseGroup.userData.hlight.intensity>1.1,door=G.doorO||0,pw=P.power||0;
@@ -5021,7 +5082,7 @@ function updateIntercept(dt){
     m.smoke-=dt;if(m.smoke<=0){m.smoke=.025;puff(m.pos.x-m.dir.x*3,m.pos.y-m.dir.y*3,m.pos.z-m.dir.z*3,0,1.5,0,2.2,1.6,.55);}
     let boom=false;if(playing&&!m.tgt&&dist<15){boom=true;P.fling.addScaledVector(m.dir,30);damage(24,'迎撃機のミサイルが命中した');}
     if(m.life<=0||m.pos.y<4)boom=true;
-    if(boom){m.life=0;m.m.visible=m.gl.visible=false;explode(m.pos,.3);SFX.hit();}}
+    if(boom){m.life=0;m.m.visible=m.gl.visible=false;explode(m.pos,.3);}}
   if(closest<1400&&playing&&ICP.st===4){G.prompt={t:'ミサイル接近　引きつけて急旋回か <kbd>A</kbd><kbd>D</kbd> 2 度押しロールでかわせ',p:sat(1-closest/1400)};ICP.beep-=dt;if(ICP.beep<=0){ICP.beep=Math.max(.09,closest/2600);SFX.warn();}}
   else if(ICP.st===4&&playing&&G.armed)G.prompt={t:'交戦中　<kbd>F</kbd> 機銃　<kbd>R</kbd> ミサイル　後ろを取って撃墜せよ',p:0};
   else if(ICP.st===4&&playing)G.prompt={t:back?'任務空域へ戻れ（あと '+Math.max(0,(d+500)/1000).toFixed(1)+' km）':'攻撃を受けている　反転して任務空域へ戻れ',p:back?sat(1-(d+500)/3000):0};
@@ -5161,7 +5222,9 @@ function explode(p,k,type){
   if(hot&&(k>=BOOM.lk*.6||BOOM.lt>1.2)){BOOM.light.position.set(p.x,p.y+6,p.z);BOOM.lt=0;BOOM.lk=k*(big?1.8:1);}
   // 揺れと音は距離で弱める
   const dc=camera.position.distanceTo(p),near=sat(1-dc/1800);
-  if(hot&&k>.5){G.white=Math.max(G.white||0,.38*near);G.shake=Math.max(G.shake,near*(big?1.2:1));if(near>.05&&flashAt)flashAt(p.x,p.y,p.z,1.2*near);SFX.boom();setTimeout(()=>SFX.hit(),90);}
+  // 音：距離と左右を付けて鳴らす（遠いほど遅れて届き、こもる）
+  {_bxv.setFromMatrixColumn(camera.matrixWorld,0);const dx=p.x-camera.position.x,dy=p.y-camera.position.y,dz=p.z-camera.position.z,dl=Math.hypot(dx,dy,dz)||1;boomAt(dl,(dx*_bxv.x+dy*_bxv.y+dz*_bxv.z)/dl,k,type);}
+  if(hot&&k>.5){G.white=Math.max(G.white||0,.38*near);G.shake=Math.max(G.shake,near*(big?1.2:1));if(near>.05&&flashAt)flashAt(p.x,p.y,p.z,1.2*near);}
   else if(hot&&k>.2&&near>.3){G.shake=Math.max(G.shake,.3*near);}
   // タンクは続けて小さな誘爆
   if(big){BOOM.q.push({t:.35,fn:()=>explode(_bxv.set(p.x+brn(-8,8),p.y+brn(2,8),p.z+brn(-8,8)).clone(),.45,'air')},{t:.9,fn:()=>explode(new V3(p.x+brn(-10,10),p.y+brn(4,12),p.z+brn(-10,10)),.35,'air')});}
@@ -5217,8 +5280,14 @@ function brkMeshes(){if(BRK.meshes)return BRK.meshes;const ref=new Map(),all=[];
   return BRK.meshes;}
 const bhash=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
 function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.cols[0]){G.hgDead=true;hangarLight(0);}
+  // 上に載っている部品（管制塔の上の管制室、柱の上の照明など）をたどって、ひとまとめに壊す
+  const asm=[o],cu=c.slice(0,6);
+  for(let k=0;k<asm.length&&asm.length<40;k++){const s=asm[k].c;
+    for(const q of STR.cols){if(q.dead||q.c[7]||asm.includes(q))continue;const e=q.c,qx=(e[0]+e[3])/2,qz=(e[2]+e[5])/2;
+      if(e[1]>=s[1]+.5&&e[1]<=s[4]+2&&qx>s[0]-2&&qx<s[3]+2&&qz>s[2]-2&&qz<s[5]+2){asm.push(q);for(let i=0;i<3;i++){cu[i]=Math.min(cu[i],e[i]);cu[i+3]=Math.max(cu[i+3],e[i+3]);}}}}
+  for(const q of asm){q.dead=true;q.hp=Math.min(q.hp,0);}
   const topM=kind===1?Math.max(3,(c[3]-c[0])*1.2):M;   // 倒れる塔は上に載った照明の頭なども一緒に倒す
-  for(const m of brkMeshes()){const a=m.a,arr=a.array,x0=c[0]-M-m.ox,x1=c[3]+M-m.ox,y0=c[1]-M-m.oy,y1=c[4]+topM-m.oy,z0=c[2]-M-m.oz,z1=c[5]+M-m.oz,idx=[];
+  for(const m of brkMeshes()){const a=m.a,arr=a.array,x0=cu[0]-M-m.ox,x1=cu[3]+M-m.ox,y0=cu[1]-M-m.oy,y1=cu[4]+topM-m.oy,z0=cu[2]-M-m.oz,z1=cu[5]+M-m.oz,idx=[];
     const inb=i=>{const x=arr[i*3];if(x<x0||x>x1)return false;const z=arr[i*3+2];if(z<z0||z>z1)return false;const y=arr[i*3+1];return y>=y0&&y<=y1;};
     // 三角形の 3 頂点がすべて箱の中にあるときだけ動かす（道路・電線・クレーンのように箱をまたぐ三角形を引き伸ばさない）
     const ix=m.o.geometry.index;
@@ -5230,14 +5299,28 @@ function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.col
   const a=Math.random()*6.283,gy=groundAt((c[0]+c[3])/2,(c[2]+c[5])/2),fl=Math.max(gy,3.5);
   // 地面から浮いた部品（クレーンの梁など）はその場で崩さず、傾きながら地面へ落とす
   // ただし真下に別の建物があって支えられている部品（屋上のドームなど）は、その場で崩す
-  const sup=c[1]-fl>6&&STR.cols.some(q=>q!==o&&!q.c[7]&&q.c[0]<c[3]&&q.c[3]>c[0]&&q.c[2]<c[5]&&q.c[5]>c[2]&&q.c[1]<c[1]-.5&&q.c[4]>=c[1]-3);
+  const sup=c[1]-fl>6&&STR.cols.some(q=>!asm.includes(q)&&!q.c[7]&&q.c[0]<c[3]&&q.c[3]>c[0]&&q.c[2]<c[5]&&q.c[5]>c[2]&&q.c[1]<c[1]-.5&&q.c[4]>=c[1]-3);
   const kd=c[1]-fl>6?(sup?(kind===1?0:kind):4):kind;   // 高い位置の細長い部材は倒さない（空中で横へ突き出して旗のように見える）
-  const b={o,c,kind:kd,u:0,dur:[2.3,2.8,1.9,1.3,1.7][kd],parts,y1:c[4],fl,dx:Math.cos(a),dz:Math.sin(a),done:false,sc:-1,hit:false};
+  const b={o,c,cu,asm:asm.map(q=>({c:q.c,y1:q.c[4]})),kind:kd,u:0,dur:[2.3,2.8,1.9,1.3,1.7][kd],parts,y1:cu[4],fl,dx:Math.cos(a),dz:Math.sin(a),done:false,sc:-1,hit:false,hide:[],att:[]};
+  // 範囲の中の灯り（光の板・点光源・灯台の光芒）は消し、回る部品（風車の羽根・レーダー・旗）は止めて一緒に倒す／落とす
+  {const ex=4,bx=[cu[0]-ex,cu[1]-1,cu[2]-ex,cu[3]+ex,cu[4]+(kd===1?topM+4:ex),cu[5]+ex],ud=baseGroup.userData,spin=new Set(ud.spin||[]),beam=ud.lhBeam;
+    const inBox=x=>{x.getWorldPosition(_bw);return _bw.x>bx[0]&&_bw.x<bx[3]&&_bw.y>bx[1]&&_bw.y<bx[4]&&_bw.z>bx[2]&&_bw.z<bx[5];};
+    const walk=n=>{for(const x of n.children){if(x.userData.brkDead)continue;
+      const glow=x===beam||x.isLight||x.isSprite||(x.isMesh&&!Array.isArray(x.material)&&x.material&&(x.material.blending===THREE.AdditiveBlending||x.material.blending===THREE.CustomBlending));
+      const dyn=!glow&&!x.userData.noWeather&&(x.userData.dyn||spin.has(x));
+      if((glow||dyn)&&!x.isPoints&&inBox(x)){x.userData.brkDead=true;
+        if(glow){b.hide.push({x,v:x.visible});x.visible=false;}
+        else{x.updateMatrixWorld(true);const wp=new V3(),wq=new THREE.Quaternion();x.getWorldPosition(wp);x.getWorldQuaternion(wq);const pq=new THREE.Quaternion();x.parent.getWorldQuaternion(pq);
+          b.att.push({x,p0:x.position.clone(),q0:x.quaternion.clone(),wp,wq,pqi:pq.invert(),fl:Math.max(groundAt(wp.x,wp.z),3.5)});}
+        continue;}
+      walk(x);}};
+    walk(baseGroup);}
   // 焼け焦げの範囲を登録（24 棟まで）
-  if(BRK.sc<24){const i=BRK.sc++;b.sc=i;U.uScA.value[i].set(c[0],c[1],c[2],0);U.uScB.value[i].set(c[3],c[4],c[5],0);U.uScN.value=BRK.sc;}
+  if(BRK.sc<24){const i=BRK.sc++;b.sc=i;U.uScA.value[i].set(cu[0],cu[1],cu[2],0);U.uScB.value[i].set(cu[3],cu[4],cu[5],0);U.uScN.value=BRK.sc;}
   BRK.list.push(b);return b;}
-// 1 頂点の崩れ方（ワールド座標で計算）
-function brkPos(b,X,Y,Z,u,out){const c=b.c,x0=c[0],x1=c[3],z0=c[2],z1=c[5],y0=c[1],h=Math.max(1,b.y1-y0),w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2,ny=sat((Y-y0)/h);
+const _bw=new V3(),_bq=new THREE.Quaternion(),_bax=new V3();
+// 1 頂点の崩れ方（ワールド座標で計算）。塔は柱（b.c）の根元を支点に、ほかはひとまとめの範囲（b.cu）で崩す
+function brkPos(b,X,Y,Z,u,out){const c=b.kind===1?b.c:b.cu,x0=c[0],x1=c[3],z0=c[2],z1=c[5],y0=c[1],h=Math.max(1,b.y1-y0),w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2,ny=sat((Y-y0)/h);
   if(b.kind===1){// 塔：根元の端を支点に倒れる（加速しながら）
     const th=1.48*Math.min(1,u*u),px=cx+b.dx*w*.5,pz=cz+b.dz*d*.5,kx=b.dz,kz=-b.dx,vx=X-px,vy=Y-y0,vz=Z-pz,cs=Math.cos(th),sn=Math.sin(th),kd=kx*vx+kz*vz;
     // v cos + (k×v) sin + k(k·v)(1-cos)　k=(kx,0,kz)
@@ -5260,12 +5343,17 @@ function brkUpdate(dt){if(!BRK.list.length)return;const rng=new Map();
   for(const b of BRK.list){if(b.done)continue;b.u=Math.min(1,b.u+dt/b.dur);const u=b.u;
     for(const P0 of b.parts){const m=P0.m,arr=m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j];brkPos(b,P0.O[j*3]+m.ox,P0.O[j*3+1]+m.oy,P0.O[j*3+2]+m.oz,u,_bp);arr[i*3]=_bp.x-m.ox;arr[i*3+1]=_bp.y-m.oy;arr[i*3+2]=_bp.z-m.oz;}
       const r=rng.get(m.a);if(r){r[0]=Math.min(r[0],P0.lo);r[1]=Math.max(r[1],P0.hi);}else rng.set(m.a,[P0.lo,P0.hi]);}
+    // 回る部品：塔と一緒に倒れる。ほかは傾きながら地面へ落ちる
+    for(const t of b.att){if(b.kind===1){brkPos(b,t.wp.x,t.wp.y,t.wp.z,u,_bp);_bq.setFromAxisAngle(_bax.set(b.dz,0,-b.dx),1.48*Math.min(1,u*u));}
+      else{const k=Math.min(1,u*u*1.15);_bp.set(t.wp.x,Math.max(t.fl+1,t.wp.y-(t.wp.y-t.fl)*k),t.wp.z);_bq.setFromAxisAngle(_bax.set(b.dz,0,-b.dx),.9*ease(sat(u)));}
+      _bq.multiply(t.wq);t.x.position.copy(t.x.parent.worldToLocal(_bp));t.x.quaternion.copy(t.pqi).multiply(_bq);}
     if(b.sc>=0)U.uScA.value[b.sc].w=sat(u*1.6);
     // 倒れた塔が地面を打つ
-    if(b.kind===1&&!b.hit&&u>.97){b.hit=true;const c=b.c,h=b.y1-c[1];explode(new V3((c[0]+c[3])/2+b.dx*h*.8,c[1]+2,(c[2]+c[5])/2+b.dz*h*.8),.7,'dust');SFX.boom();G.shake=Math.max(G.shake,.4*sat(1-camera.position.distanceTo(_bp)/1500));}
-    if(u>=1){b.done=true;const c=b.c;c[4]=b.kind===1?c[1]+2:c[1]+(b.y1-c[1])*(b.kind===2?.5:.32);}}
+    if(b.kind===1&&!b.hit&&u>.97){b.hit=true;const c=b.c,h=b.y1-c[1];explode(new V3((c[0]+c[3])/2+b.dx*h*.8,c[1]+2,(c[2]+c[5])/2+b.dz*h*.8),.7,'dust');G.shake=Math.max(G.shake,.4*sat(1-camera.position.distanceTo(_bp)/1500));}
+    if(u>=1){b.done=true;for(const q of b.asm){const c=q.c;c[4]=b.kind===1||b.kind===4?c[1]+2:c[1]+(q.y1-c[1])*(b.kind===2?.5:.32);}}}
   for(const[a,r]of rng){a.updateRange.offset=r[0]*3;a.updateRange.count=(r[1]-r[0]+1)*3;a.needsUpdate=true;}}
-function brkReset(){for(const b of BRK.list){for(const P0 of b.parts){const arr=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j];arr[i*3]=P0.O[j*3];arr[i*3+1]=P0.O[j*3+1];arr[i*3+2]=P0.O[j*3+2];}P0.m.a.updateRange.offset=0;P0.m.a.updateRange.count=-1;P0.m.a.needsUpdate=true;}b.c[4]=b.y1;}
+function brkReset(){for(let k=BRK.list.length-1;k>=0;k--){const b=BRK.list[k];for(const P0 of b.parts){const arr=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j];arr[i*3]=P0.O[j*3];arr[i*3+1]=P0.O[j*3+1];arr[i*3+2]=P0.O[j*3+2];}P0.m.a.updateRange.offset=0;P0.m.a.updateRange.count=-1;P0.m.a.needsUpdate=true;}
+    for(const q of b.asm)q.c[4]=q.y1;for(const h of b.hide){h.x.visible=h.v;h.x.userData.brkDead=false;}for(const t of b.att){t.x.position.copy(t.p0);t.x.quaternion.copy(t.q0);t.x.userData.brkDead=false;}}
   BRK.list.length=0;BRK.sc=0;U.uScN.value=0;BRK.claim.clear();if(G.hgDead){G.hgDead=false;hangarLight(1);}}
 function updateCommon(dt){
   {const ip=G.mode==='play';if(ip!==G.inplayCls){G.inplayCls=ip;document.body.classList.toggle('inplay',ip);if(!ip){input.tx=input.ty=0;input.tAct=input.tBoost=input.tGun=input.tMsl=false;}}}
@@ -5316,7 +5404,7 @@ function updateCommon(dt){
   const inGame=G.mode==='play'||G.mode==='cut'||G.mode==='dying';
   sfxAmbient(dt,inGame&&G.mode!=='cut'?G.rain:0,G.mode==='play'?(P.turb||0):0,G.mode==='play'?(P.g||1):1,inGame?sat(1-P.pos.y/180):0,inGame?P.speed:0);
   {const bd=Math.hypot(camera.position.x-BASE.x,camera.position.z-BASE.z);baseGroup.userData.trees.visible=bd<14000;baseGroup.userData.palms.forEach(p=>{p.visible=bd<7000;});baseGroup.userData.avenue.forEach(p=>{p.visible=bd<6000;});baseGroup.userData.hangar.visible=bd<6000;baseGroup.userData.lod.visible=bd<8000;baseGroup.userData.lodLH.visible=bd<8000;baseGroup.userData.detail.visible=bd<9000&&!(G.indoor>.6);}
-  baseGroup.userData.spin.forEach(o=>{o.rotation[o.userData.ax]+=dt*o.userData.sp;});
+  baseGroup.userData.spin.forEach(o=>{if(!o.userData.brkDead)o.rotation[o.userData.ax]+=dt*o.userData.sp;});
   {let best=null,bd=1e9;W.forEach((w,i)=>{if(w.state==='gone')return;const d=camera.position.distanceTo(w.pos);if(d<bd){bd=d;best=i;}});
     if(best!==null&&inGame){const w=W[best];setWingVoice(w.state==='stall'?.08:(G.mode==='cut'?(w.power===undefined?.8:w.power):.8),spatial(w,spW[best]));}else setWingVoice(0,{prox:0,pan:0,dop:1,muf:1});}
   // 地上では排気が床の埃を吹き飛ばす
@@ -5479,7 +5567,7 @@ function initGulls(){const wm=new THREE.MeshStandardMaterial({color:0xe8eae8,rou
   for(let i=0;i<16;i++){const g=new THREE.Group();const b=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),wm);b.scale.set(1,1,2.6);g.add(b);const wl=[];
     for(const s of[-1,1]){const p=new THREE.Group();const w=new THREE.Mesh(wg,wm);w.scale.set(s,1,1);p.add(w);const tp=new THREE.Mesh(new THREE.BoxGeometry(.2,.01,.12),tip);tp.position.set(s*.85,0,0);p.add(tp);p.position.x=s*.08;g.add(p);wl.push(p);}
     g.scale.setScalar(2.2);scene.add(g);const port=i<10;GULLS.push({g,wl,cx:port?BASE.x+1200+Math.random()*250:0,cz:port?BASE.z+Math.random()*400-50:0,ship:port?null:ships[i%2?0:2],R:30+Math.random()*80,h:14+Math.random()*40,a:Math.random()*6.3,w:(.25+Math.random()*.2)*(Math.random()<.5?-1:1),ph:Math.random()*10});}}
-function animGulls(dt){if(!GULLS.length)initGulls();const t=G.t;for(const q of GULLS){let cx=q.cx,cz=q.cz;if(q.ship){cx=q.ship.x+Math.sin(q.ship.h)*40;cz=q.ship.z+Math.cos(q.ship.h)*40;}
+function animGulls(dt){if(!GULLS.length)initGulls();const t=G.t;for(const q of GULLS){let cx=q.cx,cz=q.cz;if(q.ship&&q.ship.dead&&!q.ship.m.visible){q.g.visible=false;continue;}/* 沈んだ船のカモメは去る */if(q.ship){cx=q.ship.x+Math.sin(q.ship.h)*40;cz=q.ship.z+Math.cos(q.ship.h)*40;}
     if(camera.position.distanceTo(_fv.set(cx,q.h,cz))>2500){q.g.visible=false;continue;}q.g.visible=true;
     q.a+=q.w*dt;const x=cx+Math.cos(q.a)*q.R,z=cz+Math.sin(q.a)*q.R,y=q.h+Math.sin(t*.4+q.ph)*4;q.g.position.set(x,y,z);q.g.rotation.set(0,Math.atan2(Math.sin(q.a)*q.w,-Math.cos(q.a)*q.w),-q.w*1.1,'YXZ');
     const flap=(Math.sin(t*.5+q.ph)>.3)?Math.sin(t*11+q.ph)*.65:.12;q.wl[0].rotation.z=-flap;q.wl[1].rotation.z=flap;}}
@@ -5523,7 +5611,7 @@ function updateSeaLife(dt){
       puff(tB.x+tA.x*ahead+tC.x*r,3.6+Math.random()*1.5,tB.z+tA.z*ahead+tC.z*r,tA.x*P.speed*f+tC.x*(r*.6+(Math.random()-.5)*10),(12+Math.random()*26)*(.5+sp*.6)*big,tA.z*P.speed*f+tC.z*(r*.6+(Math.random()-.5)*10),(1.1+Math.random()*2.3)*(.5+sp)*big,.45+Math.random()*.75,1,sprays);}}}
   for(const p of puffs.concat(sprays)){if(p.life<=0)continue;p.life-=dt;if(p.life<=0){p.m.visible=false;continue;}const k=p.life/p.max;p.vel.y-=(p.a<.5?1.5:11)*dt;p.m.position.addScaledVector(p.vel,dt);if(p.m.position.y<3.5&&p.a===1)p.m.position.y=3.5;
     const s=p.s*(1+(1-k)*4.5);p.m.scale.set(s,s,1);p.m.quaternion.copy(camera.quaternion);p.m.rotateZ(p.rot||(p.rot=Math.random()*6.283));p.m.material.uniforms.uAlpha.value=Math.min((1-k)*6,1)*k*.6*p.a;}
-  {const u=baseGroup.userData;if(u.lhBeam){u.lhBeam.rotation.y=G.t*.5;u.lhBeamM.opacity=.22*sat((G.gloom||0)*.9+(G.gold||0)*.8);u.lhBeam.visible=u.lhBeamM.opacity>.01;}
+  {const u=baseGroup.userData;if(u.lhBeam){u.lhBeam.rotation.y=G.t*.5;u.lhBeamM.opacity=.22*sat((G.gloom||0)*.9+(G.gold||0)*.8);u.lhBeam.visible=u.lhBeamM.opacity>.01&&!u.lhBeam.userData.brkDead;}
     if(u.socks)u.socks.forEach((k,i)=>{k.rotation.z=Math.PI/2-.22+Math.sin(G.t*2.3+i)*.07;k.rotation.y=.5+Math.sin(G.t*.7+i*2)*.25;});}
   {const lh=baseGroup.userData.lhGlow;if(lh){const dk=sat((G.gloom||0)*.8+(G.gold||0)*.7),s=8+16*dk*(.8+.2*Math.sin(G.t*1.3));lh.scale.set(s,s,1);}}
   if(AU.spray)AU.spray.g.gain.setTargetAtTime(sp*.45,AU.ctx.currentTime,.08);
@@ -5594,7 +5682,7 @@ function updateArmed(dt){
 }
 // 迎撃機が撃たれた
 function fighterHit(f,dmg){if(f.dead)return;f.hp-=dmg;if(f.hp>0){if(Math.random()<.4)puff(f.pos.x,f.pos.y,f.pos.z,0,2,0,3,1,.8);return;}
-  f.dead=true;f.downT=0;explode(f.pos,.6);SFX.boom();G.stats.kills=(G.stats.kills||0)+1;
+  f.dead=true;f.downT=0;explode(f.pos,.6);G.stats.kills=(G.stats.kills||0)+1;
   say('F',['メーデー、メーデー！　被弾した、脱出する！','ぐっ…！　制御不能、脱出する！'][ICP.f.indexOf(f)%2],2.6);
   if(ICP.st>=1&&ICP.st<=3){ICP.st=4;ICP.t=0;ICP.misT=2;ICP.gunT=4;setAlarm(true);say('F','撃ってきたぞ！　全機、交戦せよ！',2.2);}
   if(ICP.f.every(q=>q.dead||!q.mesh.visible)){setAlarm(false);G.prompt=null;say('C','迎撃機、2 機とも撃墜を確認…。隊長、これは国際問題になりますよ',4);ICP.cleared=true;ICP.st=5;ICP.t=0;G.lockF=null;}}

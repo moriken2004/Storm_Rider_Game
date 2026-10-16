@@ -11,9 +11,15 @@ const r=await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR,V=
   if(rise)bad.push('上へ伸びた頂点 '+rise);if(nan)bad.push('数値の異常 '+nan);
   const dead=S.STR.cols.filter(o=>o.dead).length;
   // タイトルで元に戻るか
+  // 止めた部品・消した灯りの数（壊した直後）と、回る部品の位置の数値
+  let sc=null;S.P.mesh.traverseAncestors(x=>{if(x.isScene)sc=x;});const B=sc.children.find(x=>x.userData&&x.userData.hangar);const hid=S.BRK.list.reduce((k,bk)=>k+bk.hide.length,0),att=S.BRK.list.reduce((k,bk)=>k+bk.att.length,0);
+  for(const bk of S.BRK.list)for(const t of bk.att)if(![t.x.position.x,t.x.position.y,t.x.position.z].every(Number.isFinite))bad.push('回る部品の位置が異常');
+  const pos0=(B.userData.spin||[]).map(o=>null);
   const saved=S.BRK.list.map(bk=>bk.parts.map(P0=>[P0.m.a.array,P0.I,P0.O]));S.showTitle();for(let i=0;i<5;i++)S.step(1/30);
   let diff=0;for(const bp of saved)for(const[a,I,O]of bp)for(let j=0;j<I.length;j++){const i=I[j];if(Math.abs(a[i*3]-O[j*3])+Math.abs(a[i*3+1]-O[j*3+1])+Math.abs(a[i*3+2]-O[j*3+2])>1e-4)diff++;}
-  if(diff)bad.push('タイトルで戻らない頂点 '+diff);if(S.U.uScN.value)bad.push('焦げ跡が残る');if(S.STR.cols.some(o=>o.dead))bad.push('壊れた扱いが残る');if(S.G.hgDead)bad.push('格納庫の照明が消えたまま');
-  return {bad,dead,n};});
-console.log('壊した '+r.dead+' 棟・動かした頂点 '+r.n);
+  if(diff)bad.push('タイトルで戻らない頂点 '+diff);
+  {let left=0;B.traverse(x=>{if(x.userData.brkDead)left++;});if(left)bad.push('止まったまま・消えたままの部品 '+left);}
+  window.__extra='消した灯り '+hid+'・止めた部品 '+att;if(S.U.uScN.value)bad.push('焦げ跡が残る');if(S.STR.cols.some(o=>o.dead))bad.push('壊れた扱いが残る');if(S.G.hgDead)bad.push('格納庫の照明が消えたまま');
+  return {bad,dead,n,extra:window.__extra};});
+console.log('壊した '+r.dead+' 棟・動かした頂点 '+r.n+'・'+r.extra);
 const all=r.bad.concat(errs);console.log(all.length?'問題 '+all.join(' / '):'問題なし');await b.close();

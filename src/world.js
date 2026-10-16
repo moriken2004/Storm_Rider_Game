@@ -963,7 +963,7 @@ diffuseColor.rgb=c;`);};
       bx.setFromObject(o);const hy=bx.max.y-bx.min.y,sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,gy=Math.max(islandH(bx.min.x/2+bx.max.x/2-BASE.x,bx.min.z/2+bx.max.z/2-BASE.z),0);
       if(hy<2.5||bx.max.y<gy+5||sx>700||sz>700)return;const wd=Math.max(sx,sz),tall=wd<11&&hy>wd*2.2?1:0,gt=o.geometry.type||'';
       // 壊れ方の種類：0 コンクリート（崩れ落ちる）・1 塔（倒れる）・2 倉庫（屋根が抜ける）・3 タンク（裂けて潰れる）
-      const kind=tall?1:(/Cylinder/.test(gt)&&Math.abs(sx-sz)<.25*wd&&hy<wd*1.6&&hy>wd*.3&&wd>4?3:(wd>28&&hy<wd*.55?2:0));
+      const kind=tall||(wd<16&&hy>wd*4)?1:(/Cylinder/.test(gt)&&Math.abs(sx-sz)<.25*wd&&hy<wd*1.6&&hy>wd*.3&&wd>4?3:(wd>28&&hy<wd*.55?2:0));
       cols.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z,tall,o.userData.rock?1:0,kind]);});
     B.userData.colliders=cols;}
   weatherize(B);
