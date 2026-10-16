@@ -92,8 +92,9 @@ function setLoops(engine,boost,wind,rain,sp){
   AU.wind2.g.gain.setTargetAtTime(wind*wind*.55,t,.5);AU.rumble.g.gain.setTargetAtTime(wind*1.5+rain*.7,t,.5);
 }
 function setAlarm(on){
-  if(!AU.ctx||AU.alarm.on===on)return;AU.alarm.on=on;const t=AU.ctx.currentTime,g=AU.alarm.g.gain;g.cancelScheduledValues(t);
-  if(on){for(let i=0;i<40;i++){g.setValueAtTime(.05,t+i*.36);g.setValueAtTime(0,t+i*.36+.16);AU.alarm.o.frequency.setValueAtTime(i%2?740:980,t+i*.36);}}
+  // 鳴らすのは約 14 秒の一続き。鳴り終わったあとの true は鳴らし直す（次の危険の警報が無視されないように）
+  if(!AU.ctx)return;const t=AU.ctx.currentTime;if(on?AU.alarm.on&&t<(AU.alarm.until||0):!AU.alarm.on)return;AU.alarm.on=on;const g=AU.alarm.g.gain;g.cancelScheduledValues(t);
+  if(on){AU.alarm.until=t+40*.36;for(let i=0;i<40;i++){g.setValueAtTime(.05,t+i*.36);g.setValueAtTime(0,t+i*.36+.16);AU.alarm.o.frequency.setValueAtTime(i%2?740:980,t+i*.36);}}
   else g.setValueAtTime(0,t);
 }
 // 汎用の単音

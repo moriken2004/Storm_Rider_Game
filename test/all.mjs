@@ -6,6 +6,7 @@ const T=[
   ['通しプレイ（訓練）','play.mjs',['d0'],o=>/RESULT [SABC]/.test(o)],
   ['入念な検査','soak.mjs',quick?['quick']:[],o=>/見つかった問題 0 件/.test(o)],
   ['でたらめ操作','chaos.mjs',[],o=>/^=== 問題 0 件/m.test(o),true],
+  ['変なプレイ','abuse.mjs',[],o=>/^問題なし/m.test(o)],
   ['目標の印','mark.mjs',[],o=>(o.match(/おかしいもの 0/g)||[]).length===3],
   ['スマートフォン表示','mtest.mjs',[],o=>/重なり: なし/.test(o)&&!/PAGEERR/.test(o)],
   ['機銃で船・施設','strafe.mjs',[],o=>/沈没/.test(o)&&/"dead":true/.test(o)],

@@ -3547,8 +3547,9 @@ function setLoops(engine,boost,wind,rain,sp){
   AU.wind2.g.gain.setTargetAtTime(wind*wind*.55,t,.5);AU.rumble.g.gain.setTargetAtTime(wind*1.5+rain*.7,t,.5);
 }
 function setAlarm(on){
-  if(!AU.ctx||AU.alarm.on===on)return;AU.alarm.on=on;const t=AU.ctx.currentTime,g=AU.alarm.g.gain;g.cancelScheduledValues(t);
-  if(on){for(let i=0;i<40;i++){g.setValueAtTime(.05,t+i*.36);g.setValueAtTime(0,t+i*.36+.16);AU.alarm.o.frequency.setValueAtTime(i%2?740:980,t+i*.36);}}
+  // 鳴らすのは約 14 秒の一続き。鳴り終わったあとの true は鳴らし直す（次の危険の警報が無視されないように）
+  if(!AU.ctx)return;const t=AU.ctx.currentTime;if(on?AU.alarm.on&&t<(AU.alarm.until||0):!AU.alarm.on)return;AU.alarm.on=on;const g=AU.alarm.g.gain;g.cancelScheduledValues(t);
+  if(on){AU.alarm.until=t+40*.36;for(let i=0;i<40;i++){g.setValueAtTime(.05,t+i*.36);g.setValueAtTime(0,t+i*.36+.16);AU.alarm.o.frequency.setValueAtTime(i%2?740:980,t+i*.36);}}
   else g.setValueAtTime(0,t);
 }
 // 汎用の単音
@@ -4274,7 +4275,7 @@ function updatePhase(dt){
     if(P.engineOut){
       if(input.act)P.restart+=dt;else P.restart=Math.max(0,P.restart-dt*.6);
       G.prompt={t:'<kbd>Space</kbd> を押し続けてエンジンを再始動',p:P.restart/2.2};
-      if(P.restart>=2.2){P.engineOut=false;G.prompt=null;setAlarm(false);SFX.restart();say('G','火が入ったな。まったく、最後まで世話の焼ける機体だ');}
+      if(P.restart>=2.2){P.engineOut=false;G.prompt=null;alarmOff();SFX.restart();say('G','火が入ったな。まったく、最後まで世話の焼ける機体だ');}
     }
     while(G.gate<3&&z>gateRings[G.gate].position.z-40){
       const g=gateRings[G.gate];if(Math.hypot(P.pos.x-g.position.x,P.pos.y-g.position.y)<170){SFX.pickup();SFX.gate();G.gateHit=(G.gateHit||0)+1;}g.visible=false;G.gate++;
@@ -4292,9 +4293,9 @@ function updatePhase(dt){
     if(f.hailT<=0)say('C','雹の帯を抜けました');}
   if(P.fire){if(input.act)P.fireT+=dt;else P.fireT=Math.max(0,P.fireT-dt*.5);P.hull-=1.6*dt;G.stats.dmg+=1.6*dt;hurtBy('エンジン火災',1.6*dt);G.hurt=Math.max(G.hurt,.3);G.prompt={t:'<kbd>Space</kbd> を押し続けて消火',p:P.fireT/2};
     if(P.hull<=0){P.hull=.5;P.inv=0;damage(5,'エンジン火災で機体を失った');}
-    else if(P.fireT>=2){P.fire=false;G.prompt=null;setAlarm(false);SFX.restart();say('S','消火を確認。推力は回復した');}}
+    else if(P.fireT>=2){P.fire=false;G.prompt=null;alarmOff();SFX.restart();say('S','消火を確認。推力は回復した');}}
   if(f.gustT>0){f.gustT-=dt;G.gust=damp(G.gust,f.gustT>0?.9:0,3,dt);}else G.gust=damp(G.gust,0,2,dt);
-  if(f.downT>0){f.downT-=dt;G.down=damp(G.down,f.downT>1?1:0,2.5,dt);if(f.downT<=0)setAlarm(false);}else G.down=damp(G.down,0,2,dt);
+  if(f.downT>0){f.downT-=dt;G.down=damp(G.down,f.downT>1?1:0,2.5,dt);if(f.downT<=0)alarmOff();}else G.down=damp(G.down,0,2,dt);
   if(f.stall)updateStall(dt);
   // 落雷
   if(G.phase==='bands'||G.phase==='wall'||G.phase==='spare'||(G.phase==='eye'&&G.ringIdx>=2)){
@@ -4348,7 +4349,10 @@ function updateStall(dt){
     else{w.state='gone';G.stats.saved=false;say('H','だめです、高度が保てません…離脱して帰投します。すみません…！');say('C','3番機は離脱。救難艇を向かわせます。残る2機で続行してください');}
   }
 }
-function fail(cause){G.cause=cause;G.mode='dying';G.dieT=1.2;setAlarm(false);}
+// 警報が必要な危険がまだ続いているか（一つが収まっても、ほかが続いていれば警報を止めない）
+function hazAlarm(){return !!(P.fire||P.engineOut||(G.flags&&G.flags.downT>0)||ICP.st===4);}
+function alarmOff(){if(!hazAlarm())setAlarm(false);}
+function fail(cause){if(G.mode==='dying'||G.mode==='over'||G.mode==='result'||G.mode==='title')return;if(CUT)endCut();G.cause=cause;G.mode='dying';G.dieT=1.2;setAlarm(false);}
 
 // ───────────────────────── カットシーン ─────────────────────────
 let CUT=null;
@@ -4379,7 +4383,7 @@ function endCut(){
   c.def.end();
   if(c.save&&G.mode==='play'){c.save.vis.forEach((o,i)=>o.visible=c.save.v[i]);$('timer').hidden=c.save.timer;}
 }
-function skipCut(){if(!CUT||CUT.skip)return;CUT.skip=true;$('fade').style.opacity=1;setTimeout(()=>{if(CUT)endCut();$('fade').style.opacity=0;},520);}
+function skipCut(){if(!CUT||CUT.skip)return;CUT.skip=true;$('fade').style.opacity=1;const c=CUT;setTimeout(()=>{if(CUT===c)endCut();$('fade').style.opacity=0;},520);}   // 暗転の間に次のカットが始まっていたら、そちらは終わらせない
 function cutFly(dt,spd){fwdOf(P.yaw,P.pitch,tA);P.pos.addScaledVector(tA,spd*dt);W.forEach(w=>{if(w.state==='gone')return;slotOf(w,tB);tB.y+=Math.sin(G.t*1.1+w.ph)*3;w.pos.lerp(tB,1-Math.exp(-dt*3));w.yaw=P.yaw;w.pitch=P.pitch;w.roll=Math.sin(G.t*1.6+w.ph)*.05;});}
 function card(a,b){const c=$('card');c.children[0].style.fontSize=a.length>12?'min(6.4vw,66px)':'';c.children[0].textContent=a;c.children[1].textContent=b;c.classList.add('on');}
 const RZ0=()=>BASE.z+1060;
@@ -4827,7 +4831,7 @@ function bindInput(){
 function togglePause(){
   document.body.classList.toggle('inplay',G.mode==='pause');G.inplayCls=G.mode==='pause';
   if(G.mode==='play'){G.mode='pause';$('pause').hidden=false;setAlarm(false);if(AU.ctx){AU.paused=true;AU.ctx.suspend();}}
-  else if(G.mode==='pause'){G.mode='play';$('pause').hidden=true;$('opts').hidden=true;if(AU.ctx){AU.paused=false;AU.ctx.resume();}}
+  else if(G.mode==='pause'){G.mode='play';$('pause').hidden=true;$('opts').hidden=true;if(AU.ctx){AU.paused=false;AU.ctx.resume();}if(hazAlarm())setAlarm(true);}
 }
 
 // ───────────────────────── メインループ ─────────────────────────
@@ -4897,7 +4901,7 @@ function updateIntercept(dt){
   ICP.t+=(back&&(ICP.st===2||ICP.st===3))?0:dt;const st=ICP.st;
   // 空域へ戻ったら離脱していく
   // 武装して交戦中は、空域へ少し戻ったくらいでは追ってくる
-  if(playing&&st>=1&&st<=4&&d<(G.armed&&st===4?-4000:-500)){ICP.st=5;ICP.t=0;ICP.n++;setAlarm(false);G.prompt=null;if(st>=2)say('F','退去を確認した。二度と我が国の空に近づくな');if(ICP.doomed){ICP.doomT=5;say('C','予備のディフューザーは 2 番機とともに失われました…。任務は、続行できません');}for(const m of ICP.mis)if(m.life>0)m.life=Math.min(m.life,.4);}
+  if(playing&&st>=1&&st<=4&&d<(G.armed&&st===4?-4000:-500)){ICP.st=5;ICP.t=0;ICP.n++;alarmOff();G.prompt=null;if(st>=2)say('F','退去を確認した。二度と我が国の空に近づくな');if(ICP.doomed){ICP.doomT=5;say('C','予備のディフューザーは 2 番機とともに失われました…。任務は、続行できません');}for(const m of ICP.mis)if(m.life>0)m.life=Math.min(m.life,.4);}
   if(!playing&&st>=1&&st<=4){ICP.st=5;ICP.t=0;if(G.mode==='dying'&&st===4)say('F','目標の撃墜を確認。帰投する');}
   fwdOf(P.yaw,0,tA);tB.set(-tA.z,0,tA.x);  // tA=前、tB=右
   // ── 迎撃機の動き
@@ -5123,9 +5127,9 @@ function step(dt){
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
     // 結果画面：パネルの左の空いた所に機体が来るように画面をずらす（空きが狭いときはずらさない）
-    if(G.mode==='result'){const pr=$('resPlate').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=pr.left,ox=free>W*.2?Math.round(W/2-free/2):0;if(camera.view?camera.view.offsetX!==ox||!camera.view.enabled:ox){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+    if(G.mode==='result'){const pr=$('resPlate').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=pr.left,ox=free>W*.2?Math.round(W/2-free/2):0;if(ox?!camera.view||!camera.view.enabled||camera.view.offsetX!==ox||camera.view.fullWidth!==W||camera.view.fullHeight!==H:camera.view&&camera.view.enabled){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
     else {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
-        const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(camera.view?camera.view.offsetX!==ox:true){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+        const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(ox?!camera.view||!camera.view.enabled||camera.view.offsetX!==ox||camera.view.fullWidth!==W||camera.view.fullHeight!==H:camera.view&&camera.view.enabled){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
       else if(camera.view&&camera.view.enabled)camera.clearViewOffset();}
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
     else if(G.mode==='title'&&G.optPrev&&G.orb){// ドラッグで回した視点（格納庫の床・天井・壁を突き抜けない範囲）
