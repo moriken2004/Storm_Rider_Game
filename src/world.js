@@ -1630,7 +1630,7 @@ function buildFighter(){
   const g=new THREE.Group(),ud=g.userData,WX=new V3(1.25,-.35,5.5);
   const top=panelize(std({color:lin(0x56626d),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),top2=panelize(std({color:lin(0x3f4a54),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),
     bot=panelize(std({color:lin(0x93a0aa),metalness:.5,roughness:.5,side:THREE.DoubleSide}),WX),dk=std({color:lin(0x16191c),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
-    radome=std({color:lin(0x2c3338),metalness:.2,roughness:.6}),hot=std({color:lin(0x4a4038),metalness:.95,roughness:.34,side:THREE.DoubleSide}),metal=std({color:lin(0x9aa0a6),metalness:.95,roughness:.25}),
+    radome=std({color:lin(0x2c3338),metalness:.2,roughness:.6}),hot=std({color:lin(0x4a4038),metalness:.9,roughness:.5,side:THREE.DoubleSide}),flap=std({color:lin(0x3a342e),metalness:.55,roughness:.78}),metal=std({color:lin(0x9aa0a6),metalness:.95,roughness:.25}),
     wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x4a3a12),metalness:.95,roughness:.06});glass.envMapIntensity=2;
   const UP=new V3(0,1,0);
   const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
@@ -1656,7 +1656,7 @@ function buildFighter(){
     A(new THREE.BoxGeometry(1.3,.08,2.4),dk,ex,ey+.62,-2.6);
     A(latheZ([[-.6,.72],[1.5,.86],[5,.88],[8,.8],[9.3,.74]],18),bot,ex,ey+.12,0);
     A(latheZ([[9.3,.76],[10.0,.72],[10.9,.6]],18),hot,ex,ey+.12,0);
-    for(let k=0;k<12;k++){const a=k/12*6.283,p=A(new THREE.BoxGeometry(.3,.03,1.0),hot,ex+Math.cos(a)*.66,ey+.12+Math.sin(a)*.66,10.4);p.rotation.z=a+Math.PI/2;}
+    for(let k=0;k<12;k++){const a=k/12*6.283,p=A(new THREE.BoxGeometry(.3,.07,1.0),flap,ex+Math.cos(a)*.66,ey+.12+Math.sin(a)*.66,10.4);p.rotation.z=a+Math.PI/2;}
     A(new THREE.CircleGeometry(.55,16),new THREE.MeshBasicMaterial({color:new THREE.Color(4.2,2.0,.7)}),ex,ey+.12,10.5);
     const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.3,.65,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(ex,ey+.12,11.5);gl.scale.set(5,5,1);g.add(glowLOD(gl,30,.3));(ud.glows=ud.glows||[]).push(gl);
     {const pg=new THREE.CylinderGeometry(.12,.56,1,14,1,true);pg.translate(0,.5,0);pg.rotateX(Math.PI/2);const pl=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.75,.35),transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));pl.position.set(ex,ey+.12,10.9);pl.frustumCulled=false;g.add(pl);(ud.plumes=ud.plumes||[]).push(pl);}

@@ -21,8 +21,10 @@ const tA=new V3(),tB=new V3(),tC=new V3(),tD=new V3();
 // ───────────────────────── 環境（太陽・空） ─────────────────────────
 const ENV_A={dir:new V3(-0.45,0.42,0.78).normalize(),sun:new V3(5.2,4.5,3.6),zen:new V3(0.045,0.115,0.30),hor:new V3(0.30,0.38,0.48)};
 const ENV_B={dir:new V3(-0.20,0.20,0.95).normalize(),sun:new V3(7.8,4.7,2.4),zen:new V3(0.075,0.185,0.46),hor:new V3(0.60,0.60,0.68)};
+// 台風の目の中では太陽を高くして、壁雲に囲まれた海に日が差すようにする（壁雲の中を通る間に切り替わるので、外の景色の変化は見えない）
+const SUN_BASE=ENV_A.dir.clone(),SUN_EYE=new V3(-0.45*.5,0.86,0.78*.5).normalize();
 function applyEnv(g){
-  G.gold=g;U.uSunDir.value.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
+  G.gold=g;SUN_BASE.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,G.eyeSun||0).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
   U.uSkyZen.value.copy(ENV_A.zen).lerp(ENV_B.zen,g);U.uSkyHor.value.copy(ENV_A.hor).lerp(ENV_B.hor,g);
 }
 
@@ -350,7 +352,7 @@ function nextRing(){
 function startRun0(){icpReset();W.forEach(w=>{w.shot=false;w.downT=0;});if(G.stats)G.stats.shot=false;G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
 function startRun(ph){startRun0();
   resetHaz();clearRadio();
-  U.uStorm.value=1;U.uEye.value=1;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
+  U.uStorm.value=1;U.uEye.value=1;G.eyeSun=ph==='eye'||ph==='spare'?1:0;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
   G.flags={};G.spareGiven=(ph==='ret');if(ph==='ret'||ph==='spare')P.hasPod=false;$('fade').style.opacity=0;finalMat.uniforms.uWhite.value=0;G.white=0;
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);
   if(G.ckpt&&ph!=='approach'){W.forEach((w,i)=>{w.state=G.ckpt.w[i];});G.stats.saved=G.ckpt.saved;P.hull=Math.max(G.ckpt.hull,DF().floor);}
@@ -932,7 +934,7 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
@@ -1205,6 +1207,7 @@ function updateCommon(dt){
   if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('banner').classList.remove('on');}
   // 環境
   const cp=camera.position,cs=stormAt(cp.x,cp.y,cp.z);
+  {const want=U.uStorm.value>.5&&cs.r<EYE_R*U.uEye.value+1200?1:0,es=damp(G.eyeSun||0,want,cs.r<EYE_R*U.uEye.value?.6:1.2,dt);if(Math.abs(es-(G.eyeSun||0))>1e-4||want!==(G.eyeSun>.5?1:0)){G.eyeSun=es;U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,es).normalize();}}
   G.gloom=damp(G.gloom,cp.y<cs.top+300?cs.c:cs.c*.2,1.5,dt);
   G.rain=damp(G.rain,cp.y<lerp(900,500,cs.wall)+200?cs.rain:(cp.y<cs.top?cs.rain*.5:0),1.5,dt);
   cloudMat.uniforms.uGloom.value=G.gloom;cloudMat.uniforms.uHaze.value=lerp(.00004,.00013,G.gloom);
@@ -1262,7 +1265,9 @@ function step(dt){
   else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
-    {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
+    // 結果画面：パネルの左の空いた所に機体が来るように画面をずらす（空きが狭いときはずらさない）
+    if(G.mode==='result'){const pr=$('resPlate').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=pr.left,ox=free>W*.2?Math.round(W/2-free/2):0;if(camera.view?camera.view.offsetX!==ox||!camera.view.enabled:ox){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+    else {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
         const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(camera.view?camera.view.offsetX!==ox:true){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
       else if(camera.view&&camera.view.enabled)camera.clearViewOffset();}
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
@@ -1271,7 +1276,7 @@ function step(dt){
       setCam(P.pos.x+cx,P.pos.y+.6+Math.sin(o.el)*o.r,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'){const a=G.t*.02+.6;G.indoor=0;setCam(Math.sin(a)*17000,33000,Math.cos(a)*17000+3000,0,0,-800,48);}
-    else if(G.mode==='result'){const a=G.t*.05;setCam(BASE.x-260*Math.cos(a),RWY_Y+120,P.pos.z-260*Math.sin(a),P.pos.x,P.pos.y,P.pos.z,46);}
+    else if(G.mode==='result'){const a=G.t*.045+2.2,r=72+8*Math.sin(G.t*.07);G.indoor=0;setCam(P.pos.x+Math.sin(a)*r,P.pos.y+3.2+1.6*Math.sin(G.t*.11),P.pos.z+Math.cos(a)*r,P.pos.x,P.pos.y+1.4,P.pos.z,30);}   // 低い位置から、夕日の中の機体をゆっくり回り込む
   }
   if(window.__PCAM)window.__PCAM(camera,dt);
   updateCommon(dt);

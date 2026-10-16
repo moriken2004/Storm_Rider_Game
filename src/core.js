@@ -25,6 +25,8 @@ const BASE=new V3(0,0,21000), RWY_Y=15;
 // ───────────────────────── レンダラ ─────────────────────────
 const canvas=$('gl');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
+// HDR は半精度（最大 65504）。光をかすめる角度の鏡面反射は桁外れに大きくなり、溢れたチャンネルだけが無限大になって赤・緑・青の点に見える。書き込む前に上限を設ける
+THREE.ShaderChunk.dithering_fragment+='\ngl_FragColor.rgb=clamp(gl_FragColor.rgb,0.0,64.0);';
 renderer.autoClear=false;
 renderer.setClearColor(0x000000,1);
 const scene=new THREE.Scene(), overlay=new THREE.Scene();
@@ -264,6 +266,8 @@ void main(){
     if(coarse&&!forced&&ec>2e-5){t=max(t0,t-dsC*0.92);coarse=false;zero=0;continue;}
     if(e>1e-6){
       float colm=max(sc.w-p.y,0.0)*sc.x;
+      // 目に面した壁雲の内側は、開いた目から横向きに光を受ける（真上の雲の厚さで暗くしない）
+      {float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;colm*=1.0-0.85*(1.0-smoothstep(er+80.0,er+900.0,length(p.xz)))*sat(uStorm*2.0-1.0);}
       float sunT=exp(-colm*0.0024);
       vec3 S;
       if(e>DENSE){
@@ -400,16 +404,15 @@ void main(){
     if(dd<1.0){float zz=texture2D(tDepth,vUv).x;float zl=zz>=0.999999?1e5:270000.0/(90000.0-zz*89997.0);
       if(zl>uHeatD-5.0){float f=(1.0-dd)*(1.0-dd)*(1.0-hh*0.65)*uHeatAmt;
         vec2 n=vec2(sin(vUv.y*310.0+uTime*37.0)+sin(vUv.x*190.0-uTime*23.0+vUv.y*90.0),sin(vUv.x*260.0+uTime*29.0)+sin(vUv.y*170.0+uTime*19.0));suv+=n*uPx*2.6*f;}}}
-  vec3 col=fxaa(suv);float cocv=0.0;
+  vec3 col=fxaa(suv);
   // 被写界深度（ムービーの寄りの場面だけ）
   if(uDof>0.01){float z=texture2D(tDepth,suv).x;float d=z>=0.999999?1e5:(3.0*90000.0)/(90000.0-z*(90000.0-3.0));
-    float coc=sat(abs(d-uFocus)/max(uFocus,1.0)*0.55-0.16)*uDof;cocv=coc;
-    if(coc>0.03){vec2 r=uPx*coc*4.2;vec3 a=T(suv+r*vec2(1.0,0.0))+T(suv+r*vec2(-1.0,0.0))+T(suv+r*vec2(0.0,1.0))+T(suv+r*vec2(0.0,-1.0))+T(suv+r*vec2(0.7,0.7))+T(suv+r*vec2(-0.7,0.7))+T(suv+r*vec2(0.7,-0.7))+T(suv+r*vec2(-0.7,-0.7));
-      vec2 r2=r*0.5;a+=T(suv+r2*vec2(0.38,0.92))+T(suv+r2*vec2(-0.92,0.38))+T(suv+r2*vec2(-0.38,-0.92))+T(suv+r2*vec2(0.92,-0.38));
-      col=mix(col,(col+a)/13.0,sat(coc*3.0));}}
-  // レンズの色収差（周辺だけ）
-  vec2 ca=(vUv-0.5)*v*0.0045;
-  float caw=0.8*(1.0-sat(cocv*6.0))*(1.0-sat(drop*4.0));   // 雨粒の中では色ずれを止める（明るい灯りが色の点に割れる）col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
+    float coc=sat(abs(d-uFocus)/max(uFocus,1.0)*0.55-0.16)*uDof;
+    // 渦巻き状に 16 点を拾い、画素ごとに回して規則的な写しの点を作らない。明るい点ほど重みを下げ、噴出口や灯火が粒の輪に割れないようにする
+    if(coc>0.03){float rad=coc*4.2,ang=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)*6.2832;
+      float wc=1.0/(1.0+luma(col));vec3 a=col*wc;float ws=wc;
+      for(int i=0;i<16;i++){float fi=float(i)+0.5;float rr=sqrt(fi/16.0)*rad;float th=fi*2.39996+ang;vec3 s=T(suv+uPx*rr*vec2(cos(th),sin(th)));float w=1.0/(1.0+luma(s));a+=s*w;ws+=w;}
+      col=mix(col,a/ws,sat(coc*3.0));}}
   col+=texture2D(tBloom,suv).rgb*0.42;
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;
@@ -445,7 +448,7 @@ void main(){
 // 発光オーバーレイ用マテリアル（深度は手動テスト）
 function glowMat(color,mode,opts){
   const m=new THREE.ShaderMaterial(Object.assign({
-    uniforms:{uColor:{value:color.clone?color.clone():new V3(color[0],color[1],color[2])},uAlpha:{value:1},tDepth:U.tDepth,uRes:U.uRes},
+    uniforms:{uColor:{value:color.clone?color.clone():new V3(color[0],color[1],color[2])},uAlpha:{value:1},tDepth:U.tDepth,uRes:U.uRes,uT:U.uTime},
     defines:{MODE:mode},
     vertexShader:`varying vec2 vUv;varying vec3 vN;varying vec3 vV;varying float vA;
 #ifdef USE_AA
@@ -456,7 +459,7 @@ void main(){vUv=uv;vec4 mv=modelViewMatrix*vec4(position,1.0);vN=normalMatrix*no
 vA=aA;
 #endif
 gl_Position=projectionMatrix*mv;}`,
-    fragmentShader:`uniform vec3 uColor;uniform float uAlpha;uniform sampler2D tDepth;uniform vec2 uRes;
+    fragmentShader:`uniform vec3 uColor;uniform float uAlpha,uT;uniform sampler2D tDepth;uniform vec2 uRes;
 varying vec2 vUv;varying vec3 vN;varying vec3 vV;varying float vA;
 void main(){
   float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;
@@ -470,7 +473,9 @@ void main(){
 #elif MODE==5
   a*=pow(max(1.0-abs(vUv.x-0.5)*2.0,0.0),1.6)*pow(vUv.y,1.4);
 #elif MODE==4
-  a*=0.35+0.65*pow(abs(sin(vUv.y*40.0)),6.0);float f=abs(dot(normalize(vN),normalize(vV)));a*=0.02+0.98*pow(1.0-f,2.0);
+  // 落雷の予告柱：下へ流れる光の輪、輪郭を強く、海面と上空では薄れる（平らな板に見せない）
+  float f=abs(dot(normalize(vN),normalize(vV)));a*=0.03+0.97*pow(1.0-f,2.4);
+  a*=0.22+0.78*pow(abs(sin(vUv.y*55.0+uT*7.0)),7.0);a*=smoothstep(0.0,0.03,vUv.y)*(1.0-smoothstep(0.35,0.95,vUv.y));
 #endif
   gl_FragColor=vec4(uColor*a,1.0);
 }`,

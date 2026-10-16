@@ -417,6 +417,8 @@ const BASE=new V3(0,0,21000), RWY_Y=15;
 // ───────────────────────── レンダラ ─────────────────────────
 const canvas=$('gl');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
+// HDR は半精度（最大 65504）。光をかすめる角度の鏡面反射は桁外れに大きくなり、溢れたチャンネルだけが無限大になって赤・緑・青の点に見える。書き込む前に上限を設ける
+THREE.ShaderChunk.dithering_fragment+='\ngl_FragColor.rgb=clamp(gl_FragColor.rgb,0.0,64.0);';
 renderer.autoClear=false;
 renderer.setClearColor(0x000000,1);
 const scene=new THREE.Scene(), overlay=new THREE.Scene();
@@ -656,6 +658,8 @@ void main(){
     if(coarse&&!forced&&ec>2e-5){t=max(t0,t-dsC*0.92);coarse=false;zero=0;continue;}
     if(e>1e-6){
       float colm=max(sc.w-p.y,0.0)*sc.x;
+      // 目に面した壁雲の内側は、開いた目から横向きに光を受ける（真上の雲の厚さで暗くしない）
+      {float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;colm*=1.0-0.85*(1.0-smoothstep(er+80.0,er+900.0,length(p.xz)))*sat(uStorm*2.0-1.0);}
       float sunT=exp(-colm*0.0024);
       vec3 S;
       if(e>DENSE){
@@ -792,16 +796,15 @@ void main(){
     if(dd<1.0){float zz=texture2D(tDepth,vUv).x;float zl=zz>=0.999999?1e5:270000.0/(90000.0-zz*89997.0);
       if(zl>uHeatD-5.0){float f=(1.0-dd)*(1.0-dd)*(1.0-hh*0.65)*uHeatAmt;
         vec2 n=vec2(sin(vUv.y*310.0+uTime*37.0)+sin(vUv.x*190.0-uTime*23.0+vUv.y*90.0),sin(vUv.x*260.0+uTime*29.0)+sin(vUv.y*170.0+uTime*19.0));suv+=n*uPx*2.6*f;}}}
-  vec3 col=fxaa(suv);float cocv=0.0;
+  vec3 col=fxaa(suv);
   // 被写界深度（ムービーの寄りの場面だけ）
   if(uDof>0.01){float z=texture2D(tDepth,suv).x;float d=z>=0.999999?1e5:(3.0*90000.0)/(90000.0-z*(90000.0-3.0));
-    float coc=sat(abs(d-uFocus)/max(uFocus,1.0)*0.55-0.16)*uDof;cocv=coc;
-    if(coc>0.03){vec2 r=uPx*coc*4.2;vec3 a=T(suv+r*vec2(1.0,0.0))+T(suv+r*vec2(-1.0,0.0))+T(suv+r*vec2(0.0,1.0))+T(suv+r*vec2(0.0,-1.0))+T(suv+r*vec2(0.7,0.7))+T(suv+r*vec2(-0.7,0.7))+T(suv+r*vec2(0.7,-0.7))+T(suv+r*vec2(-0.7,-0.7));
-      vec2 r2=r*0.5;a+=T(suv+r2*vec2(0.38,0.92))+T(suv+r2*vec2(-0.92,0.38))+T(suv+r2*vec2(-0.38,-0.92))+T(suv+r2*vec2(0.92,-0.38));
-      col=mix(col,(col+a)/13.0,sat(coc*3.0));}}
-  // レンズの色収差（周辺だけ）
-  vec2 ca=(vUv-0.5)*v*0.0045;
-  float caw=0.8*(1.0-sat(cocv*6.0))*(1.0-sat(drop*4.0));   // 雨粒の中では色ずれを止める（明るい灯りが色の点に割れる）col.r=mix(col.r,texture2D(tHDR,suv+ca).r,caw);col.b=mix(col.b,texture2D(tHDR,suv-ca).b,caw);
+    float coc=sat(abs(d-uFocus)/max(uFocus,1.0)*0.55-0.16)*uDof;
+    // 渦巻き状に 16 点を拾い、画素ごとに回して規則的な写しの点を作らない。明るい点ほど重みを下げ、噴出口や灯火が粒の輪に割れないようにする
+    if(coc>0.03){float rad=coc*4.2,ang=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)*6.2832;
+      float wc=1.0/(1.0+luma(col));vec3 a=col*wc;float ws=wc;
+      for(int i=0;i<16;i++){float fi=float(i)+0.5;float rr=sqrt(fi/16.0)*rad;float th=fi*2.39996+ang;vec3 s=T(suv+uPx*rr*vec2(cos(th),sin(th)));float w=1.0/(1.0+luma(s));a+=s*w;ws+=w;}
+      col=mix(col,a/ws,sat(coc*3.0));}}
   col+=texture2D(tBloom,suv).rgb*0.42;
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;
@@ -837,7 +840,7 @@ void main(){
 // 発光オーバーレイ用マテリアル（深度は手動テスト）
 function glowMat(color,mode,opts){
   const m=new THREE.ShaderMaterial(Object.assign({
-    uniforms:{uColor:{value:color.clone?color.clone():new V3(color[0],color[1],color[2])},uAlpha:{value:1},tDepth:U.tDepth,uRes:U.uRes},
+    uniforms:{uColor:{value:color.clone?color.clone():new V3(color[0],color[1],color[2])},uAlpha:{value:1},tDepth:U.tDepth,uRes:U.uRes,uT:U.uTime},
     defines:{MODE:mode},
     vertexShader:`varying vec2 vUv;varying vec3 vN;varying vec3 vV;varying float vA;
 #ifdef USE_AA
@@ -848,7 +851,7 @@ void main(){vUv=uv;vec4 mv=modelViewMatrix*vec4(position,1.0);vN=normalMatrix*no
 vA=aA;
 #endif
 gl_Position=projectionMatrix*mv;}`,
-    fragmentShader:`uniform vec3 uColor;uniform float uAlpha;uniform sampler2D tDepth;uniform vec2 uRes;
+    fragmentShader:`uniform vec3 uColor;uniform float uAlpha,uT;uniform sampler2D tDepth;uniform vec2 uRes;
 varying vec2 vUv;varying vec3 vN;varying vec3 vV;varying float vA;
 void main(){
   float d=texture2D(tDepth,gl_FragCoord.xy/uRes).x;if(gl_FragCoord.z>d)discard;
@@ -862,7 +865,9 @@ void main(){
 #elif MODE==5
   a*=pow(max(1.0-abs(vUv.x-0.5)*2.0,0.0),1.6)*pow(vUv.y,1.4);
 #elif MODE==4
-  a*=0.35+0.65*pow(abs(sin(vUv.y*40.0)),6.0);float f=abs(dot(normalize(vN),normalize(vV)));a*=0.02+0.98*pow(1.0-f,2.0);
+  // 落雷の予告柱：下へ流れる光の輪、輪郭を強く、海面と上空では薄れる（平らな板に見せない）
+  float f=abs(dot(normalize(vN),normalize(vV)));a*=0.03+0.97*pow(1.0-f,2.4);
+  a*=0.22+0.78*pow(abs(sin(vUv.y*55.0+uT*7.0)),7.0);a*=smoothstep(0.0,0.03,vUv.y)*(1.0-smoothstep(0.35,0.95,vUv.y));
 #endif
   gl_FragColor=vec4(uColor*a,1.0);
 }`,
@@ -2642,7 +2647,7 @@ function buildFighter(){
   const g=new THREE.Group(),ud=g.userData,WX=new V3(1.25,-.35,5.5);
   const top=panelize(std({color:lin(0x56626d),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),top2=panelize(std({color:lin(0x3f4a54),metalness:.55,roughness:.46,side:THREE.DoubleSide}),WX),
     bot=panelize(std({color:lin(0x93a0aa),metalness:.5,roughness:.5,side:THREE.DoubleSide}),WX),dk=std({color:lin(0x16191c),metalness:.7,roughness:.45,side:THREE.DoubleSide}),
-    radome=std({color:lin(0x2c3338),metalness:.2,roughness:.6}),hot=std({color:lin(0x4a4038),metalness:.95,roughness:.34,side:THREE.DoubleSide}),metal=std({color:lin(0x9aa0a6),metalness:.95,roughness:.25}),
+    radome=std({color:lin(0x2c3338),metalness:.2,roughness:.6}),hot=std({color:lin(0x4a4038),metalness:.9,roughness:.5,side:THREE.DoubleSide}),flap=std({color:lin(0x3a342e),metalness:.55,roughness:.78}),metal=std({color:lin(0x9aa0a6),metalness:.95,roughness:.25}),
     wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x4a3a12),metalness:.95,roughness:.06});glass.envMapIntensity=2;
   const UP=new V3(0,1,0);
   const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
@@ -2668,7 +2673,7 @@ function buildFighter(){
     A(new THREE.BoxGeometry(1.3,.08,2.4),dk,ex,ey+.62,-2.6);
     A(latheZ([[-.6,.72],[1.5,.86],[5,.88],[8,.8],[9.3,.74]],18),bot,ex,ey+.12,0);
     A(latheZ([[9.3,.76],[10.0,.72],[10.9,.6]],18),hot,ex,ey+.12,0);
-    for(let k=0;k<12;k++){const a=k/12*6.283,p=A(new THREE.BoxGeometry(.3,.03,1.0),hot,ex+Math.cos(a)*.66,ey+.12+Math.sin(a)*.66,10.4);p.rotation.z=a+Math.PI/2;}
+    for(let k=0;k<12;k++){const a=k/12*6.283,p=A(new THREE.BoxGeometry(.3,.07,1.0),flap,ex+Math.cos(a)*.66,ey+.12+Math.sin(a)*.66,10.4);p.rotation.z=a+Math.PI/2;}
     A(new THREE.CircleGeometry(.55,16),new THREE.MeshBasicMaterial({color:new THREE.Color(4.2,2.0,.7)}),ex,ey+.12,10.5);
     const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.3,.65,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(ex,ey+.12,11.5);gl.scale.set(5,5,1);g.add(glowLOD(gl,30,.3));(ud.glows=ud.glows||[]).push(gl);
     {const pg=new THREE.CylinderGeometry(.12,.56,1,14,1,true);pg.translate(0,.5,0);pg.rotateX(Math.PI/2);const pl=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.75,.35),transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));pl.position.set(ex,ey+.12,10.9);pl.frustumCulled=false;g.add(pl);(ud.plumes=ud.plumes||[]).push(pl);}
@@ -3873,8 +3878,10 @@ const tA=new V3(),tB=new V3(),tC=new V3(),tD=new V3();
 // ───────────────────────── 環境（太陽・空） ─────────────────────────
 const ENV_A={dir:new V3(-0.45,0.42,0.78).normalize(),sun:new V3(5.2,4.5,3.6),zen:new V3(0.045,0.115,0.30),hor:new V3(0.30,0.38,0.48)};
 const ENV_B={dir:new V3(-0.20,0.20,0.95).normalize(),sun:new V3(7.8,4.7,2.4),zen:new V3(0.075,0.185,0.46),hor:new V3(0.60,0.60,0.68)};
+// 台風の目の中では太陽を高くして、壁雲に囲まれた海に日が差すようにする（壁雲の中を通る間に切り替わるので、外の景色の変化は見えない）
+const SUN_BASE=ENV_A.dir.clone(),SUN_EYE=new V3(-0.45*.5,0.86,0.78*.5).normalize();
 function applyEnv(g){
-  G.gold=g;U.uSunDir.value.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
+  G.gold=g;SUN_BASE.copy(ENV_A.dir).lerp(ENV_B.dir,g).normalize();U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,G.eyeSun||0).normalize();U.uSunCol.value.copy(ENV_A.sun).lerp(ENV_B.sun,g);
   U.uSkyZen.value.copy(ENV_A.zen).lerp(ENV_B.zen,g);U.uSkyHor.value.copy(ENV_A.hor).lerp(ENV_B.hor,g);
 }
 
@@ -4202,7 +4209,7 @@ function nextRing(){
 function startRun0(){icpReset();W.forEach(w=>{w.shot=false;w.downT=0;});if(G.stats)G.stats.shot=false;G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
 function startRun(ph){startRun0();
   resetHaz();clearRadio();
-  U.uStorm.value=1;U.uEye.value=1;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
+  U.uStorm.value=1;U.uEye.value=1;G.eyeSun=ph==='eye'||ph==='spare'?1:0;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
   G.flags={};G.spareGiven=(ph==='ret');if(ph==='ret'||ph==='spare')P.hasPod=false;$('fade').style.opacity=0;finalMat.uniforms.uWhite.value=0;G.white=0;
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);
   if(G.ckpt&&ph!=='approach'){W.forEach((w,i)=>{w.state=G.ckpt.w[i];});G.stats.saved=G.ckpt.saved;P.hull=Math.max(G.ckpt.hull,DF().floor);}
@@ -4784,7 +4791,7 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();view.scale=1;view.upT=0;view.tier=0;setTier(0);cloudMat.uniforms.uSteps.value=(IS_TOUCH?[52,80,112]:[72,100,136])[opts.q];resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
@@ -5057,6 +5064,7 @@ function updateCommon(dt){
   if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('banner').classList.remove('on');}
   // 環境
   const cp=camera.position,cs=stormAt(cp.x,cp.y,cp.z);
+  {const want=U.uStorm.value>.5&&cs.r<EYE_R*U.uEye.value+1200?1:0,es=damp(G.eyeSun||0,want,cs.r<EYE_R*U.uEye.value?.6:1.2,dt);if(Math.abs(es-(G.eyeSun||0))>1e-4||want!==(G.eyeSun>.5?1:0)){G.eyeSun=es;U.uSunDir.value.copy(SUN_BASE).lerp(SUN_EYE,es).normalize();}}
   G.gloom=damp(G.gloom,cp.y<cs.top+300?cs.c:cs.c*.2,1.5,dt);
   G.rain=damp(G.rain,cp.y<lerp(900,500,cs.wall)+200?cs.rain:(cp.y<cs.top?cs.rain*.5:0),1.5,dt);
   cloudMat.uniforms.uGloom.value=G.gloom;cloudMat.uniforms.uHaze.value=lerp(.00004,.00013,G.gloom);
@@ -5114,7 +5122,9 @@ function step(dt){
   else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
-    {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
+    // 結果画面：パネルの左の空いた所に機体が来るように画面をずらす（空きが狭いときはずらさない）
+    if(G.mode==='result'){const pr=$('resPlate').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=pr.left,ox=free>W*.2?Math.round(W/2-free/2):0;if(camera.view?camera.view.offsetX!==ox||!camera.view.enabled:ox){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
+    else {const on=G.mode==='title'&&G.optPrev;if(on){const pr=document.querySelector('#opts .panel').getBoundingClientRect(),W=innerWidth,H=innerHeight,free=W-pr.width-12;
         const ox=pr.left>W*.4?Math.round((W-free)/2):0;if(camera.view?camera.view.offsetX!==ox:true){if(ox)camera.setViewOffset(W,H,ox,0,W,H);else camera.clearViewOffset();}}
       else if(camera.view&&camera.view.enabled)camera.clearViewOffset();}
     if(G.mode==='title'&&G.optPrev&&G.insp){const q=G.insp,ce=Math.cos(q.el),tx=P.pos.x+(q.tx||0),ty=P.pos.y+(q.ty||0),tz=P.pos.z+(q.tz||0);G.indoor=q.indoor||0;setCam(tx+Math.sin(q.az)*ce*q.r,ty+Math.sin(q.el)*q.r,tz+Math.cos(q.az)*ce*q.r,tx,ty,tz,q.fov||30);}
@@ -5123,7 +5133,7 @@ function step(dt){
       setCam(P.pos.x+cx,P.pos.y+.6+Math.sin(o.el)*o.r,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'&&G.optPrev){const a=G.t*.2+.9,cx=Math.sin(a)*30,cz=Math.cos(a)*42,l=Math.hypot(cx,cz),k=0;G.indoor=.5;setCam(P.pos.x+cx,P.pos.y+5.5+Math.sin(a*.5)*4,P.pos.z+2+cz,P.pos.x+cz/l*k,P.pos.y+.6,P.pos.z+2-cx/l*k,40);}
     else if(G.mode==='title'){const a=G.t*.02+.6;G.indoor=0;setCam(Math.sin(a)*17000,33000,Math.cos(a)*17000+3000,0,0,-800,48);}
-    else if(G.mode==='result'){const a=G.t*.05;setCam(BASE.x-260*Math.cos(a),RWY_Y+120,P.pos.z-260*Math.sin(a),P.pos.x,P.pos.y,P.pos.z,46);}
+    else if(G.mode==='result'){const a=G.t*.045+2.2,r=72+8*Math.sin(G.t*.07);G.indoor=0;setCam(P.pos.x+Math.sin(a)*r,P.pos.y+3.2+1.6*Math.sin(G.t*.11),P.pos.z+Math.cos(a)*r,P.pos.x,P.pos.y+1.4,P.pos.z,30);}   // 低い位置から、夕日の中の機体をゆっくり回り込む
   }
   if(window.__PCAM)window.__PCAM(camera,dt);
   updateCommon(dt);
