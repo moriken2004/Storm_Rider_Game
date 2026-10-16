@@ -353,7 +353,7 @@ function nextRing(){
   else{coreShell.visible=coreGlow.visible=true;G.target=CORE;G.targetLabel='コア';setObj('PHASE 3　台風の目','コアに機首を向けてロックオンせよ');
     say(W[1].state!=='gone'?'H':'C','コアの座標、確定しました！');say('C','高度3400、目の中心です。機首を向け続ければロックオンします');}
 }
-function startRun0(){icpReset();W.forEach(w=>{w.shot=false;w.downT=0;});if(G.stats)G.stats.shot=false;G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
+function startRun0(){TM.forEach(m=>m.visible=false);icpReset();W.forEach(w=>{w.shot=false;w.downT=0;});if(G.stats)G.stats.shot=false;G.dieWall=0;G.dmgBy={};G.crash=0;G.boomBig=0;if(P.mesh)P.mesh.visible=true;if(P.hidden){for(const c of P.hidden)c.visible=true;P.hidden=null;}P.wingLost=0;for(const d of DEBRIS)scene.remove(d.m);DEBRIS.length=0;}
 function startRun(ph){startRun0();
   resetHaz();clearRadio();
   U.uStorm.value=1;U.uEye.value=1;G.eyeSun=ph==='eye'||ph==='spare'?1:0;applyEnv(0);P.hasPod=true;P.speed=150;P.boost=100;P.pitch=0;P.roll=0;
@@ -805,11 +805,14 @@ const CUT_LAND={
       update(t,u){const gy=RWY_Y+3.6,e=1-Math.pow(1-u,2.2),p0=this.p0;P.pos.set(lerp(p0.x,0,ease(sat(u*1.5))),lerp(p0.y,gy,e),lerp(p0.z,BASE.z-760,u));
       P.yaw=lerp(this.y0,Math.PI,ease(sat(u*1.8)));P.pitch=lerp(this.pt,.03+.07*smooth(.6,1,u),sat(u*3));P.roll=Math.sin(t*1.3)*.03*(1-u);P.power=.35;P.pos.y=Math.max(P.pos.y,gy+GP(P,P.pitch));
       W.forEach((w,i)=>{slotOf(w,tA);tB.set(i?70:-70,260+i*30,P.pos.z-420-i*120);w.pos.lerp(tB,sat(u*1.2)*.08+ (u>.5?1:0)*0);if(u<.02)w.pos.copy(tA);w.yaw=P.yaw;w.pitch=0;w.roll=0;});
-      setCam(42,RWY_Y+4+u*2,BASE.z-690,P.pos.x,P.pos.y+1,P.pos.z,17+u*16);
+      // 望遠で機体を追う（遠いほど画角を絞り、機体が画面の一定の大きさに見える）
+      {const dx=P.pos.x-42,dy=P.pos.y-(RWY_Y+4+u*2),dz=P.pos.z-(BASE.z-690),dd=Math.hypot(dx,dy,dz);setCam(42,RWY_Y+4+u*2,BASE.z-690,P.pos.x,P.pos.y+1,P.pos.z,clamp(2*Math.atan(30/dd)*57.3,3.5,34));}
       if(u>.985&&!this.td){this.td=1;SFX.touch();G.shake=.4;
         // 接地：主脚のタイヤから白い煙が後ろへ流れる
-        fwdOf(P.yaw,0,tA);for(const sd of[-1,1])for(let k=0;k<8;k++)puff(P.pos.x+tA.z*sd*2.55-tA.x*(1+k*.8),P.pos.y-3.2,P.pos.z-tA.x*sd*2.55-tA.z*(1+k*.8),-tA.x*(8+k*2),2+Math.random()*3,-tA.z*(8+k*2),2.2+Math.random()*1.5,1.6+Math.random(),.55);}}},
-    {dur:8,update(t,u){const gy=RWY_Y+3.6,z=BASE.z-760+78*t-.5*9.2*t*t;P.pitch=.07*(1-sat(t/1.5));P.pos.set(0,gy+GP(P,P.pitch),z);P.power=.2;
+        fwdOf(P.yaw,0,tA);if(!BOOM.init)boomInit();for(const sd of[-1,1])for(let k=0;k<9;k++)bpart(BOOM.dust,P.pos.x+tA.z*sd*2.55-tA.x*(1+k*.9),RWY_Y+1,P.pos.z-tA.x*sd*2.55-tA.z*(1+k*.9),-tA.x*(10+k*2)+(Math.random()-.5)*3,1+Math.random()*2,-tA.z*(10+k*2)+(Math.random()-.5)*3,brn(1.6,2.6),1.6+k*.15,brn(6,10),{d:k*.012,g:.8,dr:1.6,a:.75,c:_bc.setRGB(.82,.82,.84)});   /* タイヤの白煙（地面に沈まない粒） */
+        tireMarks(P.pos.x,P.pos.z,P.yaw);}}},
+    {dur:8,update(t,u){const gy=RWY_Y+3.6,z=BASE.z-760+78*t-.5*9.2*t*t;P.pitch=.07*(1-sat(t/1.5))-.025*Math.sin(Math.PI*sat((t-1.2)/.7))*(t>1.2&&t<1.9?1:0);P.pos.set(0,gy+GP(P,P.pitch)-.32*Math.sin(Math.PI*sat(t/.45))*(t<.45?1:0)-.18*Math.sin(Math.PI*sat((t-1.2)/.7))*(t>1.2&&t<1.9?1:0),z);P.power=.2;   /* 主脚の沈み込みと、前脚が着くときの小さな揺れ */
+      if(t>1.2&&!this.nw){this.nw=1;SFX.touch&&SFX.touch();}if(t<.1)this.nw=0;
       W.forEach((w,i)=>{w.pos.set(i?55:-55,RWY_Y+70+i*14,BASE.z-2600+175*t-i*150);w.yaw=Math.PI;w.roll=(i?-1:1)*sat(t/6)*.5;w.pitch=.05;});
       setCam(-48+u*14,RWY_Y+6,P.pos.z+70-u*20,P.pos.x,P.pos.y+2,P.pos.z+10,40);}},
     {dur:8,setup(){card('MISSION COMPLETE','任務完了');},update(t,u){W.forEach((w,i)=>{w.pos.set((i?-1:1)*(300+u*200),320+u*90,BASE.z+600+i*200+t*150);w.yaw=Math.PI+(i?-.3:.3);w.roll=0;});
@@ -1588,6 +1591,11 @@ const spP={},spW=[{},{}];
 let strikeGlow=null;
 let sprayTrail,puffs=[],sprays=[],ships=[],dpods=[],tether;const qT=new THREE.Quaternion();
 // しぶきの絵柄：中心の霧に、大小の水滴をまだらに散らす。白く、日の当たる側は明るい
+// タイヤ痕：接地点から後ろへ伸びる黒いゴムの跡（滑走路に残る）
+const TM=[];function tireMarks(x,z,yaw){if(!TM.length){const c=document.createElement('canvas');c.width=16;c.height=128;const q=c.getContext('2d');for(let i=0;i<128;i++){const a=(.45+.5*Math.random())*Math.min(1,i/10)*Math.min(1,(128-i)/60);q.fillStyle='rgba(8,7,7,'+a+')';q.fillRect(1+Math.random()*2,i,12-Math.random()*3,1);}
+    const tx=new THREE.CanvasTexture(c);for(let i=0;i<8;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(.7,1),new THREE.MeshBasicMaterial({map:tx,transparent:true,opacity:.95,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,color:0xffffff}));m.rotation.order='YXZ';m.visible=false;scene.add(m);TM.push(m);}}
+  TM.k=(TM.k||0);const fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);
+  for(const sd of[-1,1])for(let j=0;j<2;j++){const m=TM[TM.k++%TM.length],L=14+Math.random()*10,off=sd*(2.55+(j-.5)*.35),bk=j*3+Math.random()*3;m.scale.set(1,L,1);m.position.set(x+rx*off-fx*(bk+L/2),RWY_Y+.06,z+rz*off-fz*(bk+L/2));m.rotation.set(-Math.PI/2,yaw,0);m.visible=true;}}
 const _spV=new V3(),_spQ=new THREE.Quaternion();
 function sprayMat(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),r=mulberry(909);
   for(let i=0;i<18;i++){const a=r()*6.283,d=Math.pow(r(),.8)*30,px=64+Math.cos(a)*d,py=64+Math.sin(a)*d,rr=10+r()*20,g=x.createRadialGradient(px,py,0,px,py,rr);g.addColorStop(0,'rgba(255,255,255,'+(.05+r()*.07)+')');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(px-rr,py-rr,rr*2,rr*2);}
