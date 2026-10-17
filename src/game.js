@@ -729,7 +729,7 @@ function coreFxInit(){if(CFX.g)return;const g=new THREE.Group();g.position.copy(
   g.visible=false;overlay.add(g);CFX.g=g;CFX.shell=shell;CFX.inner=inner;CFX.halo=halo;}
 function coreFxUpdate(dt,on){coreFxInit();CFX.g.visible=on;if(!on)return;CFX.t+=dt;const t=CFX.t,pu=.8+.2*Math.sin(t*7)+.1*Math.sin(t*23);
   CFX.shell.scale.setScalar(120*pu);CFX.shell.material.uniforms.uAlpha.value=.3*pu;
-  for(const[b,s,a]of[[CFX.inner,260,1],[CFX.halo,620,.4]]){b.scale.set(s*pu,s*pu,1);b.quaternion.copy(camera.quaternion);b.material.uniforms.uAlpha.value=a*pu;}
+  CFX.shell.visible=false;CFX.halo.visible=false;for(const[b,s,a]of[[CFX.inner,150,.55]]){b.scale.set(s*pu,s*pu,1);b.quaternion.copy(camera.quaternion);b.material.uniforms.uAlpha.value=a*pu;}
   CFX.arcT-=dt;if(CFX.arcT<=0){CFX.arcT=.07+Math.random()*.14;const a=Math.random()*6.283,e=(Math.random()-.5)*2.2,r=180+Math.random()*320;
     tB.set(CORE.x+Math.cos(a)*Math.cos(e)*40,CORE.y+Math.sin(e)*40,CORE.z+Math.sin(a)*Math.cos(e)*40);tC.set(CORE.x+Math.cos(a)*Math.cos(e)*r,CORE.y+Math.sin(e)*r,CORE.z+Math.sin(a)*Math.cos(e)*r);boltFromTo(tB,tC,4+Math.random()*3);if(Math.random()<.3)SFX.zap();}}
 // ディフューザーの焼け焦げ（被雷）と、元の色への戻し
@@ -738,6 +738,32 @@ function projChar(k){proj.d.traverse(o=>{if(!o.isMesh||!o.material||!o.material.
   if(!m.userData.c0){m.userData.c0=m.color.clone();m.userData.mr=[m.metalness,m.roughness];m.userData.env=m.envMap;}m.color.copy(m.userData.c0).multiplyScalar(1-.93*k);m.metalness=lerp(m.userData.mr[0],0,k);m.roughness=lerp(m.userData.mr[1],.9,k);
   // 空の映り込みを外す（地色を黒くしても、明るい空の反射で白っぽく見えていた）
   const ne=k>0?null:m.userData.env;if(m.envMap!==ne){m.envMap=ne;m.needsUpdate=true;}});}
+// ── 管制のコア解析モニター（1 発目の失敗カット）
+function monShow(on){const m=$('mon');if(!m)return;m.hidden=!on;if(on){const c=$('monC'),r=devicePixelRatio||1;c.width=Math.round(innerWidth*r);c.height=Math.round(innerHeight*r);}}
+function monDraw(t){const c=$('monC');if(!c||$('mon').hidden)return;const x=c.getContext('2d'),W=c.width,H=c.height,s=Math.min(W/1600,H/900);x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,W,H);
+  const C1='#7fd8ff',C2='rgba(127,216,255,.35)',WARN='#ff6a55',F=(px,w)=>(w||400)+' '+Math.round(px*1.3)+'px "Hiragino Sans","Yu Gothic UI",sans-serif';
+  const ox=(W-1600*s)/2,oy=(H-900*s)/2;x.translate(ox,oy);x.scale(s,s);
+  // 枠と見出し
+  x.strokeStyle=C2;x.lineWidth=1.5;x.strokeRect(40,40,1520,820);x.fillStyle=C1;x.font=F(26,500);x.fillText('ミズハ管制　コア解析',70,92);x.font=F(18);x.fillStyle=C2;x.fillText('台風13号〈オロチ〉 中心部　観測リンク：2番機ゴウ',70,124);
+  x.textAlign='right';x.fillStyle=C1;x.font=F(20);x.fillText('T+'+(18+t).toFixed(1)+' s',1530,92);x.textAlign='left';
+  // 左：目の平面図（コアと、ディフューザーの軌跡が途中で途切れる）
+  const cx=420,cy=490,R=270;x.strokeStyle=C2;for(const k of[1,.66,.33]){x.beginPath();x.arc(cx,cy,R*k,0,6.283);x.stroke();}x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
+  x.save();x.translate(cx,cy);x.rotate(t*1.4);const gr=x.createLinearGradient(0,0,R,0);gr.addColorStop(0,'rgba(127,216,255,.28)');gr.addColorStop(1,'rgba(127,216,255,0)');x.fillStyle=gr;x.beginPath();x.moveTo(0,0);x.arc(0,0,R,-.35,0);x.fill();x.restore();
+  const pu=.5+.5*Math.sin(t*6);x.fillStyle='rgba(255,106,85,'+(.55+.4*pu)+')';x.beginPath();x.arc(cx,cy,9+3*pu,0,6.283);x.fill();x.strokeStyle=WARN;x.beginPath();x.arc(cx,cy,22,0,6.283);x.stroke();
+  x.fillStyle=WARN;x.font=F(17,500);x.fillText('コア',cx+28,cy-10);
+  x.setLineDash([8,6]);x.strokeStyle=C1;x.beginPath();x.moveTo(cx-230,cy+190);x.lineTo(cx-95,cy+70);x.stroke();x.setLineDash([]);
+  x.strokeStyle=WARN;x.lineWidth=3;x.beginPath();x.moveTo(cx-105,cy+60);x.lineTo(cx-85,cy+80);x.moveTo(cx-85,cy+60);x.lineTo(cx-105,cy+80);x.stroke();x.lineWidth=1.5;
+  x.fillStyle=C1;x.font=F(16);x.fillText('ディフューザー軌跡',cx-250,cy+220);x.fillStyle=WARN;x.fillText('被雷・信号途絶',cx-80,cy+105);
+  // 右上：観測値の表
+  const rows=[['コア電位差','1.00','→ 0.99','健在',WARN],['中心気圧','890 hPa','→ 890 hPa','変化なし',WARN],['渦の回転','62 m/s','→ 62 m/s','変化なし',WARN],['ディフューザー','到達率 0 %','','信号途絶',WARN],['眼の半径','24 km','→ 23 km','縮小中',C1]];
+  x.font=F(19);let y=200;for(const[a,b,c2,d,col]of rows){const show=t>.3+rows.indexOf(rows.find(r=>r[0]===a))*.35;if(!show)break;x.fillStyle=C2;x.fillText(a,860,y);x.fillStyle=C1;x.fillText(b,1080,y);x.fillText(c2,1230,y);x.fillStyle=col;x.textAlign='right';x.fillText(d,1530,y);x.textAlign='left';x.strokeStyle='rgba(127,216,255,.15)';x.beginPath();x.moveTo(860,y+14);x.lineTo(1530,y+14);x.stroke();y+=52;}
+  // 右下：コアの強さの時間変化（着弾予定の線を越えても下がらない）
+  const gx=860,gy=520,gw=670,gh=260;x.strokeStyle=C2;x.strokeRect(gx,gy,gw,gh);x.fillStyle=C2;x.font=F(15);x.fillText('コア強度',gx+8,gy+22);
+  const hitX=gx+gw*.55;x.setLineDash([5,5]);x.beginPath();x.moveTo(hitX,gy);x.lineTo(hitX,gy+gh);x.stroke();x.setLineDash([]);x.fillText('着弾予定',hitX+6,gy+gh-10);
+  const n=Math.min(1,t/2.6);x.strokeStyle=WARN;x.lineWidth=2.5;x.beginPath();for(let i=0;i<=200*n;i++){const q=i/200,X=gx+q*gw,v=.72+.025*Math.sin(q*31+1.3)+.018*Math.sin(q*77+t*2)+.012*Math.sin(q*173);const Y=gy+gh*(1-v);i?x.lineTo(X,Y):x.moveTo(X,Y);}x.stroke();x.lineWidth=1.5;
+  // 結論（後半で点滅）
+  if(t>2.4){x.fillStyle='rgba(255,106,85,'+(t%0.8<.55?1:.35)+')';x.font=F(30,600);x.textAlign='center';x.fillText('攻撃失敗　コアは健在',1195,470);x.textAlign='left';}
+}
 const CUT_FIRE1={
   blendIn:.9,blendOut:1.3,
   subs:[[.3,'C','ディフューザーの発射を確認'],[4.2,'H','か、雷が…！　コアから伸びてきた！',2.8],
@@ -766,14 +792,13 @@ const CUT_FIRE1={
     // 4 真上から：黒煙を引き、回りながら遥か下の海へ落ちていく
     {dur:3.5,setup(){proj.cam=proj.g.position.clone().add(tD.set(8,34,5));},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,false);projFall(dt,1);G.shake=0;const p=proj.g.position;
       const d=proj.cam.distanceTo(p);setCam(proj.cam.x,proj.cam.y,proj.cam.z,p.x,p.y,p.z,clamp(2*Math.atan(9/d)*57.3,6,48));}},
-    // 5 無傷のコア：脈打ちながら放電を続ける
-    {dur:3.0,setup(){proj.g.visible=false;},update(t,u,dt){cutFly(dt,130);coreFxUpdate(dt,true);fwdOf(P.yaw,P.pitch,tA);
-      setCam(P.pos.x-tA.x*20+tA.z*6,P.pos.y+4,P.pos.z-tA.z*20-tA.x*6,CORE.x,CORE.y,CORE.z,16-u*4);}},
+    // 5 管制のモニター：コアの観測データ。着弾は無く、コアの値は下がっていない
+    {dur:4.4,setup(){proj.g.visible=false;coreFxUpdate(0,false);monShow(true);},update(t,u,dt){cutFly(dt,130);monDraw(t);},end(){monShow(false);}},
     // 6 編隊：衝撃で揺れ、目が閉じ始める
-    {dur:12,setup(){setMood('climax');setAlarm(true);coreFxUpdate(0,false);},update(t,u,dt){cutFly(dt,130);P.roll=Math.sin(t*3)*.12*(1-u);G.shake=Math.max(G.shake,.25*(1-u));
+    {dur:12,setup(){setMood('climax');setAlarm(true);coreFxUpdate(0,false);monShow(false);},update(t,u,dt){cutFly(dt,130);P.roll=Math.sin(t*3)*.12*(1-u);G.shake=Math.max(G.shake,.25*(1-u));
       U.uEye.value=1-.08*u;if(t>3)setAlarm(false);
       fwdOf(P.yaw,P.pitch,tA);const a=.5+u*2.4;setCam(P.pos.x+tA.x*46*Math.cos(a)+tA.z*46*Math.sin(a),P.pos.y+5+u*6,P.pos.z+tA.z*46*Math.cos(a)-tA.x*46*Math.sin(a),P.pos.x,P.pos.y+1,P.pos.z,46);}}],
-  end(){coreFxUpdate(0,false);projChar(0);startRunKeep('spare');}
+  end(){coreFxUpdate(0,false);monShow(false);projChar(0);startRunKeep('spare');}
 };
 // 予備弾の受け渡し：2番機が横に並び、腹の下からアームを伸ばして、予備弾を 1番機の腹の下へ滑らせて装着する
 const HAND={init:false,A:new V3(),B:new V3(),q:new THREE.Quaternion()};

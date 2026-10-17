@@ -78,6 +78,10 @@ body.cine #radio{bottom:calc(11vh + 14px)}
 #banner small{display:block;font-size:12px;letter-spacing:.5em;color:var(--hud2);margin-bottom:8px}
 #banner b{font-size:34px;font-weight:300;letter-spacing:.24em;text-shadow:0 0 24px rgba(0,0,0,.9)}
 #banner:after{content:"";display:block;width:260px;height:1px;margin:14px auto 0;background:linear-gradient(90deg,transparent,#bfe9ff,transparent)}
+#mon{position:fixed;inset:0;background:#02080c;pointer-events:none;z-index:5}
+#radio,#skip{z-index:6}
+#mon canvas{width:100%;height:100%;display:block}
+#mon::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);pointer-events:none}
 #card{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 1.2s}
 #card.on{opacity:1}
 .logo{font-family:var(--f-deco);font-size:min(11vw,104px);font-weight:400;letter-spacing:.16em;margin:0;padding-left:.16em;
@@ -276,6 +280,7 @@ body.small .panel p,body.small .panel li{line-height:1.6}
 </div>
 
 <div id="banner"><small></small><b></b></div>
+<div id="mon" hidden><canvas id="monC"></canvas></div>
 <div id="card"><h1 class="logo"></h1><div class="sub"></div></div>
 <div class="bars" id="barT"></div><div class="bars" id="barB"></div>
 <div id="radio"><span id="rwho"></span><span id="rtext"></span></div>
