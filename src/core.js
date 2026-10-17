@@ -484,9 +484,9 @@ void main(){
 #elif MODE==5
   a*=pow(max(1.0-abs(vUv.x-0.5)*2.0,0.0),1.6)*pow(vUv.y,1.4);
 #elif MODE==4
-  // 落雷の予告柱：下へ流れる光の輪、輪郭を強く、海面と上空では薄れる（平らな板に見せない）
+  // 落雷の予告柱：下へ流れる光の輪、輪郭を強く、海面と上端だけ薄れる（上空を飛ぶときも見えるように）
   float f=abs(dot(normalize(vN),normalize(vV)));a*=0.03+0.97*pow(1.0-f,2.4);
-  a*=0.22+0.78*pow(abs(sin(vUv.y*55.0+uT*7.0)),7.0);a*=smoothstep(0.0,0.03,vUv.y)*(1.0-smoothstep(0.35,0.95,vUv.y));
+  a*=0.22+0.78*pow(abs(sin(vUv.y*55.0+uT*7.0)),7.0);a*=smoothstep(0.0,0.03,vUv.y)*(1.0-smoothstep(0.88,1.0,vUv.y));
 #endif
   gl_FragColor=vec4(uColor*a,1.0);
 }`,
