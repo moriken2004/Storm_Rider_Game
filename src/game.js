@@ -1073,7 +1073,7 @@ function readInput(){
   x+=input.tx;y+=input.ty;
   // 指やスティックを左右へ 2 度すばやく倒すとバレルロール（キーの 2 度押しと同じ）
   {const sx=input.tx+(navigator.getGamepads&&navigator.getGamepads()[0]?.axes[0]||0),d=sx>.75?1:sx<-.75?-1:0;
-    if(d&&!input.flk&&G.mode==='play'){const now=performance.now();if(input.flD===d&&now-input.flT<380){input.rollQ=d;input.flT=0;}else{input.flD=d;input.flT=now;}}if(d)input.flk=1;else if(Math.abs(sx)<.35)input.flk=0;}b=b||input.tBoost;a=a||input.tAct;
+    if(d&&!input.flk&&G.mode==='play'){const now=G.t*1000;/* 実時間ではなくゲーム内時間（コマ落ちや録画でも同じ判定） */if(input.flD===d&&now-input.flT<380){input.rollQ=d;input.flT=0;}else{input.flD=d;input.flT=now;}}if(d)input.flk=1;else if(Math.abs(sx)<.35)input.flk=0;}b=b||input.tBoost;a=a||input.tAct;
   const gp=navigator.getGamepads?navigator.getGamepads()[0]:null;
   if(gp){if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
   {const gn=!!k.KeyF||!!input.tGun,ms=!!k.KeyR||!!input.tMsl;input.gun=G.armed&&gn;input.mslHit=G.armed&&ms&&!input.msl;input.msl=ms;}
