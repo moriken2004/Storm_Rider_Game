@@ -554,6 +554,10 @@ function setDoors(o){G.doorO=o;const d=baseGroup.userData.doors;d[0].position.x=
 const _cl=new V3(),_cw=new V3();
 // 重さの段階：0 通常、1 解像度の下限 50%・木 60%・低木 50%、2 下限 42%・木 40%・低木なし
 // （雲の歩数を減らすと、残り歩数で届かないときの粗い歩みに早く切り替わってかえって重くなるので、雲は解像度で軽くする）
+// 自動の画質調整で落ち着いた値を覚えておき（再読み込み後も）、次の出撃はそこから始める。出撃直後の数秒は速く調整する
+function perfStart(){let L=null;try{L=JSON.parse(localStorage.getItem('stormrider_perf')||'null');}catch(e){}if(!L||L.q!==opts.q)L=null;
+  view.scale=L?Math.min(1,Math.max(.42,+L.scale||1)):1;view.cs=L?Math.min(1,Math.max(.65,+L.cs||1)):1;view.upT=0;view.tierT=0;setTier(L?Math.min(2,Math.max(0,L.tier|0)):0);cloudSteps();G.fastAdapt=6;fpsAcc=0;fpsN=0;}
+function perfSave(){const s=JSON.stringify({q:opts.q,scale:+view.scale.toFixed(3),cs:+(view.cs||1).toFixed(3),tier:view.tier||0});if(s===perfSave.last)return;perfSave.last=s;try{localStorage.setItem('stormrider_perf',s);}catch(e){}}
 function cloudSteps(){cloudMat.uniforms.uSteps.value=Math.round((IS_TOUCH?[64,90,120]:[96,120,150])[opts.q]*(view.cs||1));}
 // 初めての出撃の前に、任務で使う物をすべて一度描いて GPU に送っておく（初めて見えた瞬間のひっかかりを無くす）
 // 段階に分けて読み込み画面のバーを進め、ブラウザが描画できるよう間を空ける
@@ -1094,7 +1098,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;startCut(CUT_INTRO);});
+  click('bStart',()=>{perfStart();resize();$('title').hidden=true;startCut(CUT_INTRO);});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -1115,7 +1119,7 @@ function bindInput(){
   mkSel('oShape',SHAPES,'shape',it=>it.name);
   click('bResume',togglePause);click('bPTitle',showTitle);click('bOTitle',showTitle);click('bRTitle',showTitle);
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
-  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('res').hidden=true;startCut(CUT_INTRO);});
+  click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */perfStart();resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
   $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
@@ -1659,16 +1663,18 @@ function frame(now){
   try{step(dt);}catch(e){console.error(e);if(G.mode==='cut'){try{endCut();}catch(_){showTitle();}}}
   fpsAcc+=dt;fpsN++;
   if(G.mode==='title'){fpsAcc=0;fpsN=0;}   // タイトルの重い俯瞰で下がった解像度を本編へ持ち込まない
-  if(fpsAcc>1.5){const fps=fpsN/fpsAcc;fpsAcc=0;fpsN=0;
+  if(G.mode==='play'&&G.fastAdapt>0)G.fastAdapt-=dt;
+  if(fpsAcc>(G.fastAdapt>0?.5:1.5)){const fps=fpsN/fpsAcc;fpsAcc=0;fpsN=0;const dk=G.fastAdapt>0?Math.max(.6,Math.min(.85,fps/48)):.85;
     // 重いときは、まず雲の歩数を減らす（機体や景色の解像度は落とさない）。それでも重ければ解像度を下げる
-    if(fps<36&&(view.cs||1)>.66&&G.mode!=='title'){view.cs=Math.max(.65,(view.cs||1)*.85);cloudSteps();view.upT=-4;}
-    else if(fps<36&&view.scale>(view.minScale||.6)+.001){view.scale=Math.max(view.minScale||.6,view.scale*.85);view.upT=-8;resize();renderFrame();}
+    if(fps<36&&(view.cs||1)>.66&&G.mode!=='title'){view.cs=Math.max(.65,(view.cs||1)*dk);cloudSteps();view.upT=-4;perfSave();}
+    else if(fps<36&&view.scale>(view.minScale||.6)+.001){view.scale=Math.max(view.minScale||.6,view.scale*dk);view.upT=-8;resize();renderFrame();perfSave();}
     // 解像度を最低まで下げてもまだ重いときは、雲の細かさと木・低木の本数を段階的に減らす（軽くなれば戻す）
     else if(fps<30&&view.scale<=(view.minScale||.6)+.01&&(view.tier||0)<2&&G.mode==='play'){view.tierT=0;setTier((view.tier||0)+1);}
     else if(fps>55&&view.tier>0&&view.scale>=.99){view.tierT=(view.tierT||0)+1;if(view.tierT>=4){view.tierT=0;setTier(view.tier-1);}}
     else if(fps>58&&view.scale<1){view.upT=(view.upT||0)+1;if(view.upT>=3){view.upT=0;view.scale=Math.min(1,view.scale*1.1);resize();renderFrame();}}
     else if(fps>58&&(view.cs||1)<1){view.upT=(view.upT||0)+1;if(view.upT>=3){view.upT=0;view.cs=Math.min(1,(view.cs||1)*1.1);cloudSteps();}}
-    else{view.upT=0;view.tierT=0;}}
+    else{view.upT=0;view.tierT=0;}
+    if(G.mode==='play')perfSave();}
 }
 
 // ───────────────────────── 起動 ─────────────────────────
