@@ -557,12 +557,13 @@ const _cl=new V3(),_cw=new V3();
 function cloudSteps(){cloudMat.uniforms.uSteps.value=Math.round((IS_TOUCH?[64,90,120]:[96,120,150])[opts.q]*(view.cs||1));}
 // 初めての出撃の前に、任務で使う物をすべて一度描いて GPU に送っておく（初めて見えた瞬間のひっかかりを無くす）
 // 段階に分けて読み込み画面のバーを進め、ブラウザが描画できるよう間を空ける
-function warmUp(done){if(G.warmed){done();return;}G.warmed=true;const L=$('load'),bar=$('loadBar');L.children[0].textContent='任務の準備中';L.hidden=false;bar.style.transform='scaleX(0)';
+function warmUp(done){if(G.warmed){if(done!=='sync')done();return;}G.warmed=true;const L=$('load'),bar=$('loadBar');if(done!=='sync'){L.children[0].textContent='任務の準備中';L.hidden=false;bar.style.transform='scaleX(0)';}
   const cam0={p:camera.position.clone(),q:camera.quaternion.clone(),f:camera.fov},forced=[];
   const views=[[0,600,17400,0,400,9000],[0,1400,9000,0,900,0],[0,700,4300,0,1500,0],[0,1500,0,2400,1800,0],[0,3200,2200,0,3400,0],[0,9000,26000,0,0,0],[300,120,BASE.z-900,0,15,BASE.z+400],[1250,80,BASE.z-300,1250,15,BASE.z+200]];
-  const steps=[()=>{for(const root of[scene,overlay])root.traverse(o=>{if(!o.visible&&!o.isLight){forced.push(o);o.visible=true;}});renderer.compile(scene,camera);renderer.compile(overlay,camera);},
+  const steps=[()=>{try{if(!ICP.f.length)icpInit();pmInit();coreFxInit();if(!SAT.m)initSat();if(!SCUD.list.length)initScud();if(!GULLS.length)initGulls();if(!STR.init)strInit();tireMarks(0,BASE.z-700,Math.PI);monShow(true);monDraw(3);monShow(false);projChar(1);}catch(e){console.error(e);}},()=>{for(const root of[scene,overlay])root.traverse(o=>{if(!o.visible&&!o.isLight){forced.push(o);o.visible=true;}});renderer.compile(scene,camera);renderer.compile(overlay,camera);},
     ...views.map(v=>()=>{camera.position.set(v[0],v[1],v[2]);camera.lookAt(v[3],v[4],v[5]);camera.fov=70;camera.updateProjectionMatrix();renderFrame();}),
-    ()=>{for(const o of forced)o.visible=false;camera.position.copy(cam0.p);camera.quaternion.copy(cam0.q);camera.fov=cam0.f;camera.updateProjectionMatrix();cloudReset=true;}];
+    ()=>{for(const o of forced)o.visible=false;TM.forEach(m=>m.visible=false);projChar(0);renderFrame();camera.position.copy(cam0.p);camera.quaternion.copy(cam0.q);camera.fov=cam0.f;camera.updateProjectionMatrix();cloudReset=true;}];
+  if(done==='sync'){for(const s of steps){try{s();}catch(e){console.error(e);}}fpsAcc=0;fpsN=0;return;}
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);}i++;bar.style.transform='scaleX('+(i/steps.length)+')';if(i<steps.length)setTimeout(run,16);else{L.hidden=true;fpsAcc=0;fpsN=0;done();}};setTimeout(run,30);}
 function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
   if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();renderFrame();}   // 大きさを変えると画面が消えるので、同じコマのうちに描き直す
@@ -1093,7 +1094,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;warmUp(()=>startCut(CUT_INTRO));});
+  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;startCut(CUT_INTRO);});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -1932,6 +1933,7 @@ function boot(){
       const pg=new THREE.Group(),pd=buildDiffuser();pd.rotation.y=Math.PI;pg.add(pd);pg.visible=false;scene.add(pg);proj={g:pg,d:pd,glow:makeBillboard(new V3(.9,2.8,4.4)),trail:makeTrail(),from:new V3(),T:0};
             proj.trail.mesh.material.uniforms.uColor.value.set(.5,1.4,2.2);},
     ()=>{rctx=$('radar').getContext('2d');hctx=$('fhud').getContext('2d');bindInput();showTitle();renderer.compile(scene,camera);step(.016);boomWarm();},
+    ()=>{warmUp('sync');showTitle();step(.016);},   /* 任務で使う物をすべて先に描いておく（出撃カットを飛ばしても重くならない） */
   ];
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
