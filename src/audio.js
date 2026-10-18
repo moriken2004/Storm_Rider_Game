@@ -59,7 +59,7 @@ function initAudio(){
   // 警報
   {const o=ctx.createOscillator();o.type='square';o.frequency.value=880;const g=ctx.createGain();g.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=2400;
     o.connect(f);f.connect(g);g.connect(AU.sfx);o.start();AU.alarm={o,g,on:false,t:0};}
-  setVolumes();setTimeout(buildThunderPool,300);setTimeout(buildBoomPool,1200);
+  setVolumes();setTimeout(buildThunderPool,300);setTimeout(buildBoomPool,1200);setTimeout(buildSfxPool,2200);
   MUS.tNext=ctx.currentTime+.1;
   if(!AU.timer)AU.timer=setInterval(()=>{musTick();BGM.tick();},40);
   if(BGM.buf){fixCues(BGM.buf.duration);BGM.ready=true;if(MUS.want){const w=MUS.want;MUS.pending='none';BGM.play(w);}}else BGM.load();
@@ -173,6 +173,56 @@ function makeCrackleBuffer(ctx){const sr=ctx.sampleRate,n=Math.floor(sr*4),b=ctx
     for(let i=0;i<n;i++){if(R()<420/sr){a=Math.min(1,.15*Math.pow(R()+.02,-.7));k=0;}const e=a*Math.exp(-k/(sr*.00045));d[i]=e-(k>sr*.0006?e*.35:0)+(R()*2-1)*.03;k++;if(k>sr*.004)a=0;}
     const f=Math.floor(sr*.05);for(let i=0;i<f;i++){const u=i/f;d[i]=d[i]*u+d[n-f+i]*(1-u);}}
   return b;}
+// ───────────────────────── ディフューザーの発射音・水への衝突音（事前合成） ─────────────────────────
+// 発射：留め金が外れる金属音（減衰の速い不協和な固有振動）→ 0.22 秒後に点火の破裂音とはぜる音 → モーターの轟音（燃焼の不安定さでざらつき、遠ざかるにつれ高音が落ちて小さくなる）
+function renderLaunch(sr,seed){const R=mulberry(seed),n=Math.floor(sr*3.8),out=[new Float32Array(n),new Float32Array(n)];
+  for(let ch=0;ch<2;ch++){const o=out[ch];let l1=0,l2=0,am=1,amT=0,amV=1,pa=0,pd=0,pf=0,hp=0,lw=0;
+    const modes=[[310,.07],[781,.05],[1427,.035],[2290,.022],[3410,.015]];
+    for(let i=0;i<n;i++){const t=i/sr;let s=0;
+      // 留め金
+      for(const[f,tau]of modes)s+=Math.sin(2*Math.PI*f*(1+ch*.003)*t)*Math.exp(-t/tau)*.22;
+      s+=Math.sin(2*Math.PI*68*t)*Math.exp(-t/.07)*.7;
+      const tm=t-.22;
+      if(tm>0){// 点火の圧力波
+        const w=R()*2-1;hp=w-lw;lw=w;s+=hp*Math.exp(-tm/.012)*1.1+Math.sin(2*Math.PI*55*tm)*Math.exp(-tm/.09)*.9;
+        // モーター：低域から高域まで広いノイズ。遮断周波数が上がってから、遠ざかって下がる
+        const fc=Math.min(4200,600+tm*16000)*Math.exp(-Math.max(0,tm-.35)/1.5)+260,a=1-Math.exp(-2*Math.PI*fc/sr);
+        l1+=a*(w-l1);l2+=a*(l1-l2);
+        if(--amT<=0){amT=Math.floor(sr/(35+R()*45));amV=.55+R()*.9;}am+=(amV-am)*.02;
+        const env=Math.min(1,tm/.06)/(1+Math.max(0,tm-.3)*1.25);s+=l2*env*am*2.6;
+        // はぜる音（点火直後に密、だんだんまばらに）
+        if(R()<(900*Math.exp(-tm/.35)+90)/sr){pa=(.2+R()*.5)*Math.min(1,1/(1+tm*1.5));pf=(1200+R()*4000)/sr*2*Math.PI;pd=0;}
+        if(pa>1e-4){s+=pa*Math.sin(pd*pf)*Math.exp(-pd/(sr*.0018));pd++;if(pd>sr*.008)pa=0;}}
+      o[i]=s;}}
+  return normOut(out,.3);}
+// 水への衝突：叩く音（水面を打つ短い衝撃）＋水の塊が動く低いうねり＋取り込まれた泡の共鳴（ミナート周波数、上がっていく短い正弦波）＋落ちてくるしぶきの細かい音
+function renderSplash(sr,big,seed){const R=mulberry(seed),dur=big?4.2:1.6,n=Math.floor(sr*dur),out=[new Float32Array(n),new Float32Array(n)];
+  const NB=big?520:110,bub=[];for(let k=0;k<NB;k++){const t0=.012+(-Math.log(1-R()*.995))*(big?.32:.12),f=Math.exp(Math.log(big?220:380)+R()*Math.log(big?16:12)),tau=Math.min(.06,1.8/f*(2+R()*3));bub.push([t0,f,tau,(.15+R()*.85)*Math.min(1,600/f+.25)]);}
+  const NR=big?700:120,rain=[];for(let k=0;k<NR;k++){const t0=(big?.5:.25)+R()*(big?2.6:1.0),f=1500+R()*5000;rain.push([t0,f,.002+R()*.004,(.05+R()*.18)*Math.exp(-(t0-.4)/(big?1.4:.6))]);}
+  for(let ch=0;ch<2;ch++){const o=out[ch];let l1=0,l2=0,b1=0,hp=0,lw=0;
+    for(let i=0;i<n;i++){const t=i/sr,w=R()*2-1;let s=0;
+      // 叩く音：帯域を絞ったノイズの急な立ち上がり
+      hp=w-lw;lw=w;b1+=.09*(hp-b1);s+=b1*Math.exp(-t/(big?.07:.025))*(big?5:3.4);
+      if(big)s+=Math.sin(2*Math.PI*(48-12*t)*t)*Math.exp(-t/.35)*1.1;
+      // 水の塊のうねり
+      const fc=(big?1300:1900)*Math.exp(-t/(big?.9:.35))+120,a=1-Math.exp(-2*Math.PI*fc/sr);l1+=a*(w-l1);l2+=a*(l1-l2);
+      s+=l2*Math.min(1,t/.015)*Math.exp(-t/(big?1.2:.4))*(big?2.2:1.3);
+      // しぶきが降るさーっという音
+      s+=hp*.05*Math.exp(-Math.pow((t-(big?1.2:.45))/(big?.9:.35),2))*(big?1:.6);
+      o[i]=s;}
+    for(const[t0,f,tau,a]of bub){const i0=Math.floor((t0+(ch?R()*.002:0))*sr),len=Math.min(n-i0,Math.floor(tau*6*sr));for(let j=0;j<len;j++){const tt=j/sr;o[i0+j]+=a*.35*Math.sin(2*Math.PI*f*(tt+tt*tt/(tau*8)))*Math.exp(-tt/tau)*Math.min(1,j/12);}}
+    for(const[t0,f,tau,a]of rain){const i0=Math.floor(t0*sr),len=Math.min(n-i0,Math.floor(tau*6*sr));for(let j=0;j<len;j++){const tt=j/sr;o[i0+j]+=a*Math.sin(2*Math.PI*f*(tt+tt*tt/(tau*6)))*Math.exp(-tt/tau);}}}
+  return normOut(out,.25);}
+function normOut(out,fade){let pk=0;for(const o of out)for(let i=0;i<o.length;i++){o[i]=Math.tanh(o[i]*1.2);pk=Math.max(pk,Math.abs(o[i]));}
+  for(const o of out){for(let i=0;i<o.length;i++)o[i]*=.95/pk;const f=Math.floor(o.length*fade*.3);for(let i=0;i<f;i++)o[o.length-1-i]*=i/f;}return out;}
+const SBUF={launch:[],splashBig:[],splashSmall:[]};
+function buildSfxPool(){if(!AU.ctx||SBUF.launch.length)return;const sr=AU.ctx.sampleRate,jobs=[['launch',()=>renderLaunch(sr,5)],['launch',()=>renderLaunch(sr,9)],['splashBig',()=>renderSplash(sr,true,3)],['splashBig',()=>renderSplash(sr,true,8)],['splashSmall',()=>renderSplash(sr,false,4)],['splashSmall',()=>renderSplash(sr,false,6)]];let i=0;
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[k,fn]=jobs[i++],d=fn(),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);SBUF[k].push(b);setTimeout(next,40);};next();}
+// 事前合成の音を距離・左右付きで鳴らす
+function playBuf(pool,o){if(!AU.ctx||!pool.length)return false;o=o||{};const ctx=AU.ctx,d=o.d||0,t=ctx.currentTime+Math.min(4,d/343)+(o.delay||0),s=ctx.createBufferSource();s.buffer=pool[Math.floor(Math.random()*pool.length)];s.playbackRate.value=(o.rate||1)*(.96+Math.random()*.08);
+  const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=16000*Math.exp(-d/900)+300;const g=ctx.createGain();g.gain.value=(o.vol||1)/(1+d/160);
+  s.connect(lp);lp.connect(g);let out=g;if(ctx.createStereoPanner&&o.pan){const p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,o.pan));g.connect(p);out=p;}out.connect(AU.sfx);
+  const r=ctx.createGain();r.gain.value=(o.vol||1)*(o.rev||.2)/(1+d/400);g.connect(r);r.connect(AU.rev);s.start(t);return true;}
 // ───────────────────────── 雷鳴の合成 ─────────────────────────
 // 放電路を数メートルずつの折れ線で作り、各区間が出す N 字形の圧力波を「聞き手までの距離÷音速」だけ遅らせて重ねる。
 // 視線に直角な区間の束は鋭い「バリッ」、遠い区間は遅れて届く低い「ゴロゴロ」になる。
@@ -269,7 +319,7 @@ const SFX={
   spool(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',40,260,t,6,.16,2,{lp:1300,rev:.3});tone(AU.sfx,'sine',300,3400,t,6.5,.05,3,{rev:.3});burst(AU.sfx,t+1,6,.3,'bandpass',300,2400,1,.3,3);burst(AU.sfx,t+.1,.25,.5,'lowpass',700,150,1,.3);},
   hit(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.12,.7,'highpass',2200,900,.7,.3);for(let i=0;i<5;i++)burst(AU.sfx,t+.08+i*.06,.05,.2,'bandpass',700+Math.random()*900,400,6);burst(AU.sfx,t,.45,.9,'lowpass',1800,160,.7,.3);tone(AU.sfx,'sine',120,38,t,.5,.8,.004);tone(AU.sfx,'square',310,90,t,.25,.12,.004,{lp:1400});},
   zap(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',60,28,t,1.1,.9,.003);burst(AU.sfx,t,.9,.7,'lowpass',2600,120,.6,.6);burst(AU.sfx,t,.3,.7,'bandpass',3200,600,2.5,.2);for(let i=0;i<5;i++)tone(AU.sfx,'sawtooth',900+Math.random()*1800,200,t+i*.035,.06,.1,.002,{lp:5000});},
-  splash(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.25,.8,'lowpass',500,90,.8,.3);burst(AU.sfx,t+.1,1.4,.4,'highpass',2600,4800,.6,.4,.2);burst(AU.sfx,t,.9,.8,'bandpass',900,300,.6,.4,.02);},
+  splash(){if(!AU.ctx)return;if(playBuf(SBUF.splashSmall,{vol:1.2}))return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.25,.8,'lowpass',500,90,.8,.3);burst(AU.sfx,t+.1,1.4,.4,'highpass',2600,4800,.6,.4,.2);burst(AU.sfx,t,.9,.8,'bandpass',900,300,.6,.4,.02);},
   // 画面のボタン：決定（2 音の鐘）、出撃（低い打音＋上がる和音）、カーソルが乗ったとき（短い刻み）
   ui(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.03;tone(AU.sfx,'triangle',2400,1200,t,.03,.16,.002);tone(AU.sfx,'sine',880,880,t,.16,.3,.004,{rev:.35});tone(AU.sfx,'sine',1318.5,1318.5,t+.07,.26,.26,.004,{rev:.45});},
   uiStart(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.03;tone(AU.sfx,'sine',150,55,t,.3,.5,.004);[587.3,740,880,1174.7].forEach((f,i)=>tone(AU.sfx,'triangle',f,f,t+i*.07,.5,.2,.006,{rev:.5}));},
@@ -280,12 +330,15 @@ const SFX={
   lockOn(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'square',1760,1760,t,.5,.07,.003,{lp:4000});},
   warn(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'square',620,620,t,.12,.07,.003,{lp:2600});tone(AU.sfx,'square',620,620,t+.16,.12,.07,.003,{lp:2600});},
   boost(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',85,42,t,.5,.8,.004);burst(AU.sfx,t,.3,.6,'lowpass',900,200,.8,.3);burst(AU.sfx,t,.9,.35,'bandpass',500,3200,1.2,.3,.05);tone(AU.sfx,'sawtooth',90,220,t,.6,.12,.03,{lp:900});},
-  launch(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.09,.9,'bandpass',900,300,5,.3);tone(AU.sfx,'square',95,60,t,.12,.3,.002,{lp:700});burst(AU.sfx,t+.08,2.6,.5,'lowpass',1400,160,.7,.6,.1);burst(AU.sfx,t,1.6,.8,'bandpass',300,4200,1,.5,.02);tone(AU.sfx,'sawtooth',110,880,t,1.2,.2,.02,{lp:2400,rev:.4});tone(AU.sfx,'sine',70,40,t,.5,.7,.004);},
+  launch(){if(!AU.ctx)return;if(playBuf(SBUF.launch,{vol:1.1,rev:.35}))return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.09,.9,'bandpass',900,300,5,.3);tone(AU.sfx,'square',95,60,t,.12,.3,.002,{lp:700});burst(AU.sfx,t+.08,2.6,.5,'lowpass',1400,160,.7,.6,.1);burst(AU.sfx,t,1.6,.8,'bandpass',300,4200,1,.5,.02);tone(AU.sfx,'sawtooth',110,880,t,1.2,.2,.02,{lp:2400,rev:.4});tone(AU.sfx,'sine',70,40,t,.5,.7,.004);},
   boom(){if(!AU.ctx)return;if(BOOMS.big.length){boomAt(40,0,.9,'air');return;}const t=AU.ctx.currentTime;burst(AU.sfx,t,3.2,1,'lowpass',2200,60,.6,.8);tone(AU.sfx,'sine',90,24,t,2.4,1,.005);burst(AU.sfx,t,.3,.8,'highpass',1800,600,.5,.5);},
+  servo(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',180,260,t,1.4,.05,.15,{lp:900});tone(AU.sfx,'square',360,520,t,1.4,.015,.15,{lp:1400});burst(AU.sfx,t,1.4,.05,'bandpass',2400,2600,4,.1,.2);},
+  latch(){if(!AU.ctx)return;const t=AU.ctx.currentTime;[[290,.09],[760,.06],[1390,.04],[2240,.025],[3300,.015]].forEach(([f,d])=>tone(AU.sfx,'sine',f,f*.995,t,d*5,.18,.001));tone(AU.sfx,'sine',70,50,t,.25,.6,.002);burst(AU.sfx,t,.03,.5,'highpass',3000,3000,.7,.2);
+    [0,.11].forEach(dt=>tone(AU.sfx,'square',1760,1760,t+.35+dt,.06,.05,.002,{lp:4000}));},
   implode(){if(!AU.ctx)return;const t=AU.ctx.currentTime;
-    burst(AU.sfx,t,2.2,.6,'bandpass',200,5200,1.5,.6,1.8);tone(AU.sfx,'sine',40,160,t,2.2,.5,1.8);
-    burst(AU.sfx,t+2.2,5,1,'lowpass',3000,50,.5,.9);tone(AU.sfx,'sine',110,22,t+2.2,4,1,.005);
-    [62,69,74,78,81,86].forEach((m,i)=>tone(AU.sfx,'sine',mtof(m+12),mtof(m+12),t+2.3+i*.09,5,.07,.02,{rev:.9}));},
+    burst(AU.sfx,t,2.25,.55,'bandpass',300,3800,1.2,.5,2.1);tone(AU.sfx,'sine',38,90,t,2.2,.45,2.0);for(let i=0;i<22;i++)burst(AU.sfx,t+Math.pow(i/22,.6)*2.1,.04,.12+i*.012,'bandpass',1800+Math.random()*3000,900,4);
+    if(BOOMS.big.length){const c=AU.ctx,s2=c.createBufferSource();s2.buffer=BOOMS.big[0];s2.playbackRate.value=.55;const g=c.createGain();g.gain.value=1.3;s2.connect(g);g.connect(AU.sfx);const r=c.createGain();r.gain.value=.9;g.connect(r);r.connect(AU.rev);s2.start(t+2.2);}
+    else burst(AU.sfx,t+2.2,5,1,'lowpass',3000,50,.5,.9);tone(AU.sfx,'sine',62,20,t+2.2,5,1,.004);burst(AU.sfx,t+2.4,6,.35,'lowpass',260,60,.6,.8,.6);},
   stall(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',180,45,t,1.3,.25,.01,{lp:900});},
   restart(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',50,170,t,1.1,.25,.05,{lp:1200});burst(AU.sfx,t+.5,.8,.3,'bandpass',600,2600,1,.2,.2);},
   touch(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',1400,700,t,.22,.12,.004,{lp:3000});burst(AU.sfx,t+.1,5,.35,'lowpass',260,90,1,.3,.1);burst(AU.sfx,t,.5,.5,'bandpass',1800,700,3,.2);tone(AU.sfx,'sine',80,45,t,.3,.5,.004);},

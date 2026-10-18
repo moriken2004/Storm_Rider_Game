@@ -331,7 +331,7 @@ function enterPhase(ph,fresh){
   }else if(ph==='bands'){
     setObj('PHASE 1　レインバンド','落雷を避けて中心へ進め');banner('PHASE 1','レインバンド突破');setMood('storm');MUS.intensity=1;G.strikeT=5;
   }else if(ph==='wall'){
-    setObj('PHASE 2　壁雲','マーカーを頼りに壁雲を突き抜けろ');banner('PHASE 2','壁雲突入');MUS.intensity=2;G.strikeT=2;
+    setObj('PHASE 2　壁雲','マーカーを頼りに壁雲を突き抜けろ');banner('PHASE 2','壁雲突入');setMood('storm');MUS.intensity=2;G.strikeT=2;
     say('C','壁雲に突入します。視界はほぼゼロ、風速は70メートルを超えます。マーカーだけを見てください');
     if(W[1].state!=='gone')say('H','な、何も見えません…！　隊長、どこですか！');
     say('G','喋るな、舌を噛むぞ！');
@@ -555,6 +555,15 @@ const _cl=new V3(),_cw=new V3();
 // 重さの段階：0 通常、1 解像度の下限 50%・木 60%・低木 50%、2 下限 42%・木 40%・低木なし
 // （雲の歩数を減らすと、残り歩数で届かないときの粗い歩みに早く切り替わってかえって重くなるので、雲は解像度で軽くする）
 function cloudSteps(){cloudMat.uniforms.uSteps.value=Math.round((IS_TOUCH?[64,90,120]:[96,120,150])[opts.q]*(view.cs||1));}
+// 初めての出撃の前に、任務で使う物をすべて一度描いて GPU に送っておく（初めて見えた瞬間のひっかかりを無くす）
+// 段階に分けて読み込み画面のバーを進め、ブラウザが描画できるよう間を空ける
+function warmUp(done){if(G.warmed){done();return;}G.warmed=true;const L=$('load'),bar=$('loadBar');L.children[0].textContent='任務の準備中';L.hidden=false;bar.style.transform='scaleX(0)';
+  const cam0={p:camera.position.clone(),q:camera.quaternion.clone(),f:camera.fov},forced=[];
+  const views=[[0,600,17400,0,400,9000],[0,1400,9000,0,900,0],[0,700,4300,0,1500,0],[0,1500,0,2400,1800,0],[0,3200,2200,0,3400,0],[0,9000,26000,0,0,0],[300,120,BASE.z-900,0,15,BASE.z+400],[1250,80,BASE.z-300,1250,15,BASE.z+200]];
+  const steps=[()=>{for(const root of[scene,overlay])root.traverse(o=>{if(!o.visible&&!o.isLight){forced.push(o);o.visible=true;}});renderer.compile(scene,camera);renderer.compile(overlay,camera);},
+    ...views.map(v=>()=>{camera.position.set(v[0],v[1],v[2]);camera.lookAt(v[3],v[4],v[5]);camera.fov=70;camera.updateProjectionMatrix();renderFrame();}),
+    ()=>{for(const o of forced)o.visible=false;camera.position.copy(cam0.p);camera.quaternion.copy(cam0.q);camera.fov=cam0.f;camera.updateProjectionMatrix();cloudReset=true;}];
+  let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);}i++;bar.style.transform='scaleX('+(i/steps.length)+')';if(i<steps.length)setTimeout(run,16);else{L.hidden=true;fpsAcc=0;fpsN=0;done();}};setTimeout(run,30);}
 function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
   if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();renderFrame();}   // 大きさを変えると画面が消えるので、同じコマのうちに描き直す
   for(const[im,k]of[[B.trees,[1,.6,.4][t]],[B.shrubs,[1,.5,0][t]]]){if(!im)continue;if(im.userData.n0===undefined)im.userData.n0=im.count;im.count=Math.floor(im.userData.n0*k);}}
@@ -826,12 +835,12 @@ const CUT_HAND={mid:true,blendIn:.6,blendOut:1.0,
     {dur:3.2,update(t,u,dt){handFly(dt);handArm(ease(sat((t-.5)/2.2)));fwdOf(P.yaw,0,tA);const rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw);
       const mx=(P.pos.x+W[0].pos.x)/2,mz=(P.pos.z+W[0].pos.z)/2;setCam(mx-tA.x*44-rx*6,P.pos.y-4.5,mz-tA.z*44-rz*6,mx,P.pos.y-1.2,mz,40);}},
     // 予備弾がアームを伝って 1番機へ滑っていく
-    {dur:3.0,setup(){W[0].mesh.userData.pod.visible=false;HAND.pod.visible=true;SFX.ui();},update(t,u,dt){handFly(dt);handArm(1);const s=ease(sat((t-.2)/2.5));
+    {dur:3.0,setup(){W[0].mesh.userData.pod.visible=false;HAND.pod.visible=true;SFX.servo();},update(t,u,dt){handFly(dt);handArm(1);const s=ease(sat((t-.2)/2.5));
       HAND.pod.position.lerpVectors(HAND.A,HAND.B,s);HAND.pod.position.y+=Math.sin(s*Math.PI)*.35+Math.sin(G.t*9)*.04*(1-s);P.mesh.userData.pod.getWorldQuaternion(HAND.pod.quaternion);
       fwdOf(P.yaw,0,tA);const p=HAND.pod.position;setCam(p.x+tA.x*13,p.y-3.2,p.z+tA.z*13,p.x,p.y,p.z,44);}},
     // 取り付け口：金具が噛み合い、ランプが緑に変わる
     {dur:3.0,update(t,u,dt){handFly(dt);handArm(t<1.4?1:1-ease(sat((t-1.4)/1.2)));
-      if(!HAND.locked&&t>.35){HAND.locked=true;HAND.pod.visible=false;P.hasPod=true;G.spareGiven=true;syncPods();SFX.pickup();G.shake=Math.max(G.shake,.25);}
+      if(!HAND.locked&&t>.35){HAND.locked=true;HAND.pod.visible=false;P.hasPod=true;G.spareGiven=true;syncPods();SFX.latch();G.shake=Math.max(G.shake,.25);}
       if(!HAND.locked){HAND.pod.position.copy(HAND.B);P.mesh.userData.pod.getWorldQuaternion(HAND.pod.quaternion);}
       fwdOf(P.yaw,0,tA);const rx=Math.cos(P.yaw),rz=-Math.sin(P.yaw),B=HAND.B;HAND.lamp.visible=HAND.locked&&(t*4%1<.6);HAND.lamp.position.set(B.x+rx*.7,B.y-.35,B.z+rz*.7);
       setCam(B.x+tA.x*7+rx*4.5,B.y-1.6,B.z+tA.z*7+rz*4.5,B.x,B.y,B.z,34);}},
@@ -902,7 +911,7 @@ function startRunKeep(ph){ // カットシーン後、機体の状態を保っ�
 // ───────────────────────── 画面 ─────────────────────────
 function showTitle(){
   view.scale=.72;cloudMat.uniforms.uSteps.value=84;resize();
-  G.mode='title';ICP.seen=0;strReset();P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
+  G.mode='title';ICP.seen=0;strReset();monShow(false);if(typeof CFX!=='undefined'&&CFX.g)CFX.g.visible=false;P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
   ['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');
   U.uStorm.value=1;U.uEye.value=1;G.eyeSun=0;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
   P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.br=null;P.brA=0;P.brCD=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
@@ -1084,7 +1093,7 @@ function bindInput(){
   document.querySelectorAll('.screen button').forEach(b=>b.addEventListener('mouseenter',()=>SFX.uiHover()));
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
-  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;startCut(CUT_INTRO);});
+  click('bStart',()=>{view.scale=1;view.upT=0;view.tier=0;setTier(0);view.cs=1;cloudSteps();resize();$('title').hidden=true;warmUp(()=>startCut(CUT_INTRO));});
   click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
@@ -1403,6 +1412,7 @@ function explode(p,k,type){
   if(low&&k>.4&&hot){const r=BOOM.ring.reduce((a,b)=>b.t>a.t?b:a);r.t=0;r.k=k*(big?1.5:1);r.m.position.set(p.x,floor+.4,p.z);r.m.visible=true;}
   // 照り返しの光（いちばん新しい大きい爆発に付ける）
   if(hot&&(k>=BOOM.lk*.6||BOOM.lt>1.2)){BOOM.light.position.set(p.x,p.y+6,p.z);BOOM.lt=0;BOOM.lk=k*(big?1.8:1);}
+  if(sea&&hgt<14&&(type==='air'||type==='ship')){_bxv.setFromMatrixColumn(camera.matrixWorld,0);const dx=p.x-camera.position.x,dz=p.z-camera.position.z,dl=Math.hypot(dx,p.y-camera.position.y,dz)||1;playBuf(k>.45?SBUF.splashBig:SBUF.splashSmall,{d:dl,pan:(dx*_bxv.x+dz*_bxv.z)/dl,vol:1.3*Math.min(1.2,k+.3),delay:.05});}
   // 揺れと音は距離で弱める
   const dc=camera.position.distanceTo(p),near=sat(1-dc/1800);
   // 音：距離と左右を付けて鳴らす（遠いほど遅れて届き、こもる）
