@@ -118,7 +118,7 @@ function causeText(){
 }
 function damage(n,cause){
   if(P.inv>0||G.mode!=='play')return;n*=DF().dmg;hurtBy(srcOf(cause),n);
-  P.hull=Math.max(0,P.hull-n);P.inv=1.3;G.hurt=1;G.shake=1;if(IS_TOUCH&&navigator.vibrate)navigator.vibrate(n>15?[60,30,90]:[40]);G.stats.dmg+=n;SFX.hit();glitch();shedArmor(false);
+  P.hull=Math.max(0,P.hull-n);P.inv=1.3;G.hurt=1;G.shake=1;if(IS_TOUCH&&navigator.vibrate)navigator.vibrate(n>15?[60,30,90]:[40]);G.stats.dmg+=n;if(!G.quietHit)SFX.hit();glitch();shedArmor(false);
   if(P.hull<=0){G.mode='dying';G.dieT=0;G.cause=cause;setAlarm(false);clearRadio();
     say(W[1].state!=='gone'?'H':'C','隊長！　応答してください、隊長！');}
   else if(P.hull<=30&&!G.flags.lowHull){G.flags.lowHull=1;say('S','機体損傷が限界に近い。これ以上の被弾は危険');}
@@ -232,7 +232,7 @@ function updatePlayer(dt){
   {const lx=P.pos.x-BASE.x,lz=P.pos.z-BASE.z;let gy=5.5,why='海面に突っ込んだ',land=false;
     if(Math.abs(lx)<2700&&Math.abs(lz)<3100){const h=islandH(lx,lz);if(h>4){land=true;gy=h+3.2;
       why=Math.abs(lx)<60&&Math.abs(lz-HANGAR_Z)<95?'格納庫に激突した':Math.abs(lx-30)<150&&Math.abs(lz-130)<1180?'滑走路に激突した':Math.abs(lx-250)<380&&Math.abs(lz-150)<480?'基地の地面に激突した':h>70?'島の山肌に激突した':'島の地面に激突した';}}
-    if(P.pos.y<gy){P.pos.y=gy+2;P.pitch=.32;if(land)SFX.hit();else SFX.splash();damage(18,why);P.fling.y=30;}}
+    if(P.pos.y<gy){P.pos.y=gy+2;P.pitch=.32;if(land){SFX.scrape();SFX.hit();}else SFX.splash();G.quietHit=1;damage(18,why);G.quietHit=0;P.fling.y=30;}}
   // 建物・港の施設・灯台・格納庫の外殻への衝突。細長い柱は、胴体に当たれば即爆発、主翼に当たればその翼がもげる
   {const hit=hitTest();if(hit&&G.mode==='play'){if(hit.wing)loseWing(hit.wing,hit.why);else crashExplode(hit.why);}}
   P.inv=Math.max(0,P.inv-dt);
