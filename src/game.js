@@ -149,7 +149,7 @@ function groundAt(x,z){const lx=x-BASE.x,lz=z-BASE.z;return Math.abs(lx)<2700&&M
 function shipHit(){if(P.pos.y>60)return null;for(const s of ships){if(s.dead)continue;const L=s.m.userData.len,B=s.m.userData.beam,dx=P.pos.x-s.x,dz=P.pos.z-s.z;if(Math.abs(dx)>L||Math.abs(dz)>L)continue;
     const c=Math.cos(s.h),sn=Math.sin(s.h),lx=dx*c-dz*sn,lz=dx*sn+dz*c,k=s.m.userData.kind;
     const top=k==='cargo'?(lz>55&&lz<80?48:Math.abs(lz)<70?26:14):k==='patrol'?(Math.abs(lz+5)<10?16:8):(Math.abs(lz-1)<3?7:4.5);
-    if(Math.abs(lx)<B/2+2&&Math.abs(lz)<L/2+2&&P.pos.y<top+2)return{why:{cargo:'貨物船',patrol:'巡視船',fish:'漁船'}[k]+'に激突した'};}return null;}
+    if(Math.abs(lx)<B/2+2&&Math.abs(lz)<L/2+2&&P.pos.y<top+2)return{why:{cargo:'貨物船',patrol:'巡視船',fish:'漁船'}[k]+'に激突した',ship:s};}return null;}
 function hitTest(){
   {const sh=shipHit();if(sh)return sh;}
   const lx=P.pos.x-BASE.x,lz=P.pos.z-BASE.z,ly=P.pos.y-RWY_Y;if(!(Math.abs(lx)<2300&&Math.abs(lz)<2600&&P.pos.y<460))return null;
@@ -164,6 +164,8 @@ function hitTest(){
   return null;
 }
 // その場で爆発して機体を失う
+// 機体が建物・船にぶつかったとき、その相手にもミサイル 1 発分の打撃を与える（壊れれば崩れる・沈む）
+function ramHit(hit){if(!STR.init)strInit();if(hit&&hit.ship){const s=hit.ship,L=s.m.userData.len;if(s.hp===undefined)s.hp=L>100?70:L>50?28:10;s.hp-=45;if(s.hp<=0&&!s.dead)strSink(s);return;}fwdOf(P.yaw,P.pitch,tA);const q={pos:P.pos.clone().addScaledVector(tA,12),dir:tA.clone()};q.pos.y-=2.5;tB.copy(P.pos).addScaledVector(tA,-4);tB.y-=2.5;strHit(q,tB,16,45);   /* 当たり判定の上端の余白（2m）ぶん下げて、相手の箱に確実に入れる */}
 function crashExplode(why){
   if(G.mode!=='play')return;P.inv=0;P.hull=Math.min(P.hull,1);damage(999,why);if(G.mode!=='dying')return;
   G.crash=1;G.dieT=0;P.speed=0;P.mesh.visible=false;explode(P.pos,1);
@@ -187,7 +189,7 @@ function fallNoWing(dt){
   if(Math.random()<dt*40){tB.set(tA.z*-1,0,tA.x).multiplyScalar(-sd);puff(P.pos.x+tB.x*4,P.pos.y+1,P.pos.z+tB.z*4,P.vel.x*.3,P.vel.y*.3+4,P.vel.z*.3,5+Math.random()*4,1.4,.8);}
   const lx=P.pos.x-BASE.x,lz=P.pos.z-BASE.z;let gy=5,land=false;if(Math.abs(lx)<2700&&Math.abs(lz)<3100){const h=islandH(lx,lz);if(h>2){gy=h+2.5;land=true;}}
   const hit=hitTest();syncAC(P);
-  if(hit&&!hit.wing){crashExplode('主翼を失い、'+hit.why);return;}
+  if(hit&&!hit.wing){ramHit(hit);crashExplode('主翼を失い、'+hit.why);return;}
   if(P.pos.y<gy){P.pos.y=gy;crashExplode(P.wlWhat+'に主翼をぶつけて失い、'+(land?'地面に激突した':'海面に突っ込んだ'));}
 }
 function brEvade(){let ok=false;for(const m of ICP.mis){if(m.life<=0||m.tgt||m.lost)continue;const d=m.pos.distanceTo(P.pos);if(d<750&&Math.random()<(d>150?.65:.3)){m.lost=true;ok=true;if(G.stats)G.stats.evade=(G.stats.evade||0)+1;}}
@@ -234,7 +236,7 @@ function updatePlayer(dt){
       why=Math.abs(lx)<60&&Math.abs(lz-HANGAR_Z)<95?'格納庫に激突した':Math.abs(lx-30)<150&&Math.abs(lz-130)<1180?'滑走路に激突した':Math.abs(lx-250)<380&&Math.abs(lz-150)<480?'基地の地面に激突した':h>70?'島の山肌に激突した':'島の地面に激突した';}}
     if(P.pos.y<gy){P.pos.y=gy+2;P.pitch=.32;if(land){SFX.scrape();SFX.hit();}else SFX.splash();G.quietHit=1;damage(18,why);G.quietHit=0;P.fling.y=30;}}
   // 建物・港の施設・灯台・格納庫の外殻への衝突。細長い柱は、胴体に当たれば即爆発、主翼に当たればその翼がもげる
-  {const hit=hitTest();if(hit&&G.mode==='play'){if(hit.wing)loseWing(hit.wing,hit.why);else crashExplode(hit.why);}}
+  {const hit=hitTest();if(hit&&G.mode==='play'){ramHit(hit);if(hit.wing)loseWing(hit.wing,hit.why);else crashExplode(hit.why);}}
   P.inv=Math.max(0,P.inv-dt);
   syncAC(P);P.mesh.userData.ctlR=ix;P.mesh.userData.ctlP=iy;
   // 翼端雲
@@ -1608,11 +1610,14 @@ function updateCommon(dt){
   {const bd=Math.hypot(camera.position.x-BASE.x,camera.position.z-BASE.z);baseGroup.userData.trees.visible=bd<14000;baseGroup.userData.palms.forEach(p=>{p.visible=bd<7000;});baseGroup.userData.avenue.forEach(p=>{p.visible=bd<6000;});baseGroup.userData.hangar.visible=bd<6000;baseGroup.userData.lod.visible=bd<8000;baseGroup.userData.lodLH.visible=bd<8000;baseGroup.userData.detail.visible=bd<9000&&!(G.indoor>.6);}
   baseGroup.userData.spin.forEach(o=>{if(!o.userData.brkDead)o.rotation[o.userData.ax]+=dt*o.userData.sp;});
   {let best=null,bd=1e9;W.forEach((w,i)=>{if(w.state==='gone')return;const d=camera.position.distanceTo(w.pos);if(d<bd){bd=d;best=i;}});
-    if(best!==null&&inGame){const w=W[best];setWingVoice(w.state==='stall'?.08:(G.mode==='cut'?(w.power===undefined?.8:w.power):.8),spatial(w,spW[best]));}else setWingVoice(0,{prox:0,pan:0,dop:1,muf:1});}
+    if(best!==null&&inGame){const w=W[best];{const sw=spatial(w,spW[best]);if(G.mode!=='cut')sw.dop=clamp(sw.dop,.9,1.1);setWingVoice(G.mode==='dying'?0:w.state==='stall'?.08:(G.mode==='cut'?(w.power===undefined?.8:w.power):.8),sw);}}else setWingVoice(0,{prox:0,pan:0,dop:1,muf:1});}
   // 地上では排気が床の埃を吹き飛ばす
   if(inGame&&P.mesh.userData.gear.visible&&P.power>.3&&Math.random()<.5){fwdOf(P.yaw,0,tA);for(const s of[-1,1])puff(P.pos.x+tA.z*s*2.55-tA.x*(14+Math.random()*10),P.pos.y-2.8,P.pos.z-tA.x*s*2.55-tA.z*(14+Math.random()*10),-tA.x*(20+P.power*40),2+Math.random()*5,-tA.z*(20+P.power*40),2+Math.random()*2.5,.7+Math.random()*.5,.22);}
   if(P.elight){const ud=P.mesh.userData;P.elight.intensity=((P.power>=.28?P.power*P.power*1.1:0)+(ud.ign||0)*5)*(.85+.15*Math.sin(G.t*41))*(G.indoor>0?1.6:.6);}
-  setLoops(inGame?sat(P.power*.9+.2)*(P.power<.2?P.power*5:1):0,inGame&&(P.boosting||P.power>1.2)?1:0,inGame?sat(P.wind/55*.7+G.gloom*.3+(P.turb||0)*.2):G.mode==='title'?.25:0,inGame?G.rain:0,inGame?spatial(P,spP):null);
+  // 自機のエンジン：追尾カメラは機体と一緒に動くので、プレイ中・墜落中はドップラーをほぼ掛けない（きりもみでカメラが回り込むと、唸りの音程が速く上下してキュルキュル鳴っていた）。墜落中は止まっていく
+  const spE=inGame?spatial(P,spP):null;if(spE&&G.mode!=='cut')spE.dop=clamp(spE.dop,.97,1.03);
+  const dieK=G.mode==='dying'?(G.crash?0:Math.max(0,1-G.dieT/1.2)):1;
+  setLoops(inGame?sat(P.power*.9+.2)*(P.power<.2?P.power*5:1)*dieK:0,inGame&&(P.boosting||P.power>1.2)?1:0,inGame?sat(P.wind/55*.7+G.gloom*.3+(P.turb||0)*.2):G.mode==='title'?.25:0,inGame?G.rain:0,spE);
 }
 let last=0,fpsAcc=0,fpsN=0;
 function step(dt){
@@ -1944,7 +1949,7 @@ function boot(){
   let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
     i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
-      window.__SR={ships,strHit,explode,BRK,BOOM,setTier,view,renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL,CUT_HAND},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
+      window.__SR={ramHit,ships,strHit,explode,BRK,BOOM,setTier,view,renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL,CUT_HAND},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);
 }
 boot();
