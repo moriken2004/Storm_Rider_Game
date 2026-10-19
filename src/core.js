@@ -396,10 +396,10 @@ const raysMat=new THREE.ShaderMaterial({uniforms:{tSrc:{value:null},uSun:{value:
   for(int i=0;i<18;i++){c+=texture2D(tSrc,uv).rgb*w;w*=0.93;uv+=d;}gl_FragColor=vec4(c/9.0,1.0);}`});
 const finalMat=new THREE.ShaderMaterial({
   uniforms:{tHDR:{value:null},tBloom:{value:null},tRays:{value:null},tDepth:U.tDepth,uTime:U.uTime,uRain:{value:0},uRainAng:{value:0.3},uExp:{value:0.9},uFade:{value:0},uWhite:{value:0},
-    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
+    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uWash:{value:0},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
   vertexShader:FS_VERT,depthTest:false,depthWrite:false,
   fragmentShader:`
-uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
+uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uWash,uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
 varying vec2 vUv;
 float sat(float x){return clamp(x,0.0,1.0);}
 float h1(float n){return fract(sin(n*127.1)*43758.5453);}
@@ -442,6 +442,9 @@ void main(){
   float v=dot(uv,uv);
   vec2 suv=vUv;float drop=0.0;
   if(uLens>0.02){vec2 o=drops(vUv);suv+=o;drop=length(o)*40.0;}
+  // 水を被った直後：画面いっぱいの水の膜が流れ落ちて像がゆがむ
+  float wash=0.0;if(uWash>0.01){float fy=vUv.y+uTime*0.9;vec2 w=vec2(sin(fy*23.0+vUv.x*9.0)+0.6*sin(fy*51.0-vUv.x*31.0),sin(vUv.x*37.0+fy*17.0)+0.5*sin(vUv.x*83.0-uTime*5.0));
+    suv+=w*0.006*uWash;wash=uWash*(0.55+0.45*sin(vUv.x*61.0+fy*7.0)*sin(vUv.x*13.0-fy*3.0));}
   if(uHeatAmt>0.002){vec2 as=vec2(uAspect,1.0),pa=(vUv-uHeat.xy)*as,ba=(uHeat.zw-uHeat.xy)*as;float hh=clamp(dot(pa,ba)/max(dot(ba,ba),1e-6),0.0,1.0);float dd=length(pa-ba*hh)/uHeatR;
     if(dd<1.0){float zz=texture2D(tDepth,vUv).x;float zl=zz>=0.999999?1e5:270000.0/(90000.0-zz*89997.0);
       if(zl>uHeatD-5.0){float f=(1.0-dd)*(1.0-dd)*(1.0-hh*0.65)*uHeatAmt;
@@ -470,6 +473,7 @@ void main(){
   col*=uExp;
   col+=vec3(0.8,0.88,1.0)*uScr;
   col=aces(col);
+  if(wash>0.0)col=mix(col,vec3(luma(col))*0.85+0.14,sat(wash*0.4));   // 水の膜で白っぽくかすむ
   col=pow(col,vec3(1.0/2.2));
   // 階調と色調：晴れは影を青緑・光を暖色に、嵐は彩度を落として冷たく硬く、夕方は暖かく
   col=mix(col,col*col*(3.0-2.0*col),0.22);

@@ -7,7 +7,8 @@ const r=await p.evaluate(()=>{window.requestAnimationFrame=()=>0;const S=__SR,V=
   S.STR.cols.forEach(o=>{if(o.c[7])return;const c=o.c;o.hp=1;S.G.mode='play';S.strHit({pos:new V((c[0]+c[3])/2,c[1]+(c[4]-c[1])*.5,(c[2]+c[5])/2),dir:new V(0,0,1)},new V((c[0]+c[3])/2,c[1]+(c[4]-c[1])*.5,(c[2]+c[5])/2-1),1);});
   const orig=null;S.G.mode='title';for(let i=0;i<30*6;i++)S.step(1/30);
   let rise=0,nan=0,n=0;
-  for(const bk of S.BRK.list){if(bk.kind===1)continue;for(const P0 of bk.parts){const a=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j],y=a[i*3+1],y0=P0.O[j*3+1];if(!Number.isFinite(y)||!Number.isFinite(a[i*3])||!Number.isFinite(a[i*3+2]))nan++;if(y-y0>1){rise++;}n++;}}}
+  // 割れて落ちる建物（frac）：飛んだ塊は元の位置より高くなりうるが、建物の上端は超えない。残骸（role<0）は持ち上がらない
+  for(const bk of S.BRK.list){if(bk.kind===1)continue;for(const P0 of bk.parts){const a=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j],y=a[i*3+1],y0=P0.O[j*3+1];if(!Number.isFinite(y)||!Number.isFinite(a[i*3])||!Number.isFinite(a[i*3+2]))nan++;if(bk.frac&&P0.role&&P0.role[j]>=0){if(y+P0.m.oy>bk.y1+1)rise++;}else if(y-y0>1){rise++;}n++;}}}
   if(rise)bad.push('上へ伸びた頂点 '+rise);if(nan)bad.push('数値の異常 '+nan);
   const dead=S.STR.cols.filter(o=>o.dead).length;
   // タイトルで元に戻るか

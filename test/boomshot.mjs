@@ -16,8 +16,11 @@ const B=await ev(()=>[BASE.x,BASE.z]);
 // 1 空中の機体の爆発（海の上）
 await seq('air',[0,320,B[1]-2400,0,300,B[1]-2600],'explode(new THREE.Vector3(0,300,BASE.z-2600),1,"air")',[0.15,0.5,1.2,3]);
 // 2 建物（基地の施設を壊す）
-const bc=await ev(()=>{strInit();const o=STR.cols.find(o=>!o.dead&&o.c[8]===0&&!o.c[7]&&(o.c[3]-o.c[0])>18&&Math.abs((o.c[0]+o.c[3])/2-BASE.x)<600&&(o.c[4]-o.c[1])>12);const c=o.c;window._bo=o;return[(c[0]+c[3])/2,c[1],(c[2]+c[5])/2,c[4]-c[1]];});
-await seq('bldg',[bc[0]-150,bc[1]+60,bc[2]+150,bc[0],bc[1]+bc[3]*.5,bc[2]],'strKill(window._bo)',[0.15,0.6,2,6]);
+const bc=await ev(()=>{strInit();const o=STR.cols.find(o=>!o.dead&&o.c[8]===0&&!o.c[7]&&(o.c[3]-o.c[0])>18&&(o.c[3]-o.c[0])<70&&(o.c[4]-o.c[1])>10&&Math.abs((o.c[0]+o.c[3])/2-BASE.x)<600&&Math.abs((o.c[2]+o.c[5])/2-BASE.z)<900&&(o.c[4]-o.c[1])>12);const c=o.c;window._bo=o;return[(c[0]+c[3])/2,c[1],(c[2]+c[5])/2,c[4]-c[1]];});
+await seq('bldg',[bc[0]-110,bc[1]+45,bc[2]+110,bc[0],bc[1]+bc[3]*.4,bc[2]],'strKill(window._bo)',[0.3,1,2.5,7]);
+// 2b 倉庫
+const sc2=await ev(()=>{const o=STR.cols.find(o=>!o.dead&&o.c[8]===2&&!o.c[7]&&(o.c[3]-o.c[0])<120&&Math.abs((o.c[2]+o.c[5])/2-BASE.z)<900);const c=o.c;window._so=o;o.hitP=new THREE.Vector3((c[0]+c[3])/2+(c[3]-c[0])*.2,c[4],(c[2]+c[5])/2);return[(c[0]+c[3])/2,c[1],(c[2]+c[5])/2,Math.max(c[3]-c[0],c[5]-c[2])];});
+await seq('shed',[sc2[0]-sc2[3]*1.1,sc2[1]+sc2[3]*.6,sc2[2]+sc2[3]*1.1,sc2[0],sc2[1]+5,sc2[2]],'strKill(window._so)',[0.3,1,2.5,7]);
 // 3 燃料タンク
 const tc=await ev(()=>{const o=STR.cols.find(o=>!o.dead&&o.c[8]===3);const c=o.c;window._to=o;return[(c[0]+c[3])/2,c[1],(c[2]+c[5])/2];});
 await seq('tank',[tc[0]-170,tc[1]+50,tc[2]+130,tc[0],tc[1]+20,tc[2]],'strKill(window._to)',[0.2,0.8,2.5,8]);
@@ -25,5 +28,5 @@ await seq('tank',[tc[0]-170,tc[1]+50,tc[2]+130,tc[0],tc[1]+20,tc[2]],'strKill(wi
 await seq('sea',[300,40,B[1]-2200,0,20,B[1]-2500],'explode(new THREE.Vector3(0,6,BASE.z-2500),.8,"air")',[0.2,0.7,1.5,3]);
 // 5 森の火災
 const T=await ev(()=>{vegInit();let id=-1;for(let j=0;j<VEG.X.length;j+=41)if(VEG.set[j]===0&&VEG.G[j]>25){id=j;break;}return[VEG.X[id],VEG.G[id],VEG.Z[id]];});
-await seq('forest',[T[0]-110,T[1]+45,T[2]+110,T[0],T[1]+8,T[2]],`vegIgnite(${T[0]},${T[2]},20)`,[1,6,15,30]);
+await seq('forest',[T[0]-75,T[1]+40,T[2]+75,T[0],T[1]+10,T[2]],`vegIgnite(${T[0]},${T[2]},20)`,[1,6,15,30]);
 console.log(errs.slice(0,5).join('\n')||'エラーなし');await b.close();
