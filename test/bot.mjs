@@ -104,7 +104,7 @@ for(let chunk=0;chunk<(rec?40000:260)&&!done;chunk++){
   const N=rec?1:120;
   const r=await p.evaluate((N,rec,prof)=>{const S=__SR,G=S.G;const gl=prof&&S.renderer.getContext(),px=new Uint8Array(4);
     const ST=dt=>{if(!prof){S.step(dt);return;}const t0=performance.now();S.step(dt);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);const ms=performance.now()-t0;
-      (window.PROF||(window.PROF=[])).push([+ms.toFixed(1),G.mode,G.phase,G.mode==='cut'&&S.curCut?S.curCut():'',+(G.missionT||0).toFixed(1)]);};
+      (window.PROF||(window.PROF=[])).push([+ms.toFixed(1),G.mode,G.phase,G.mode==='cut'&&S.curCut?S.curCut():'',+(G.missionT||0).toFixed(1),S.renderer.info.render.calls,Math.round(S.renderer.info.render.triangles/1000)+'k',(window.BOT&&BOT.M.log.slice(-1)[0]||'').slice(0,40),S.view.scale.toFixed(2)]);};
     for(let k=0;k<N;k++){
       if(G.mode==='cut'){ST(1/30);continue;}
       if(G.mode==='over'){BOT.M.log.push('失敗:'+G.cause+' @'+G.phase);document.getElementById('bRetry').click();continue;}

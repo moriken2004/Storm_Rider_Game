@@ -7,7 +7,7 @@ const DF=()=>DIFFS[opts.diff||0];
 // 保存した設定：壊れた値や古い版の範囲外の番号でも起動できるよう、型と範囲をそろえる（色と形の個数は読み込み後に fixOpts で確かめる）
 const opts=(()=>{const d={mus:70,sfx:80,inv:false,q:1,diff:0,color:0,shape:0};let s={};try{s=JSON.parse(localStorage.getItem('stormrider_opts')||'{}');}catch(e){}if(!s||typeof s!=='object'||Array.isArray(s))s={};
   const num=(v,lo,hi,def,int)=>{v=Number(v);if(!Number.isFinite(v))return def;v=Math.min(hi,Math.max(lo,v));return int?Math.round(v):v;};
-  return{mus:num(s.mus,0,100,d.mus),sfx:num(s.sfx,0,100,d.sfx),inv:!!s.inv,q:num(s.q,0,2,d.q,1),diff:num(s.diff,0,2,d.diff,1),color:num(s.color,0,99,0,1),shape:num(s.shape,0,99,0,1)};})();
+  return{mus:num(s.mus,0,100,d.mus),sfx:num(s.sfx,0,100,d.sfx),inv:!!s.inv,q:num(s.q,0,2,d.q,1),diff:num(s.diff,0,2,d.diff,1),color:num(s.color,0,99,0,1),shape:num(s.shape,0,99,0,1),sens:num(s.sens,60,140,100,1),calm:!!s.calm};})();
 function fixOpts(){if(typeof SCHEMES!=='undefined'&&!(opts.color<SCHEMES.length))opts.color=0;if(typeof SHAPES!=='undefined'&&!(opts.shape<SHAPES.length))opts.shape=0;}fixOpts();
 const saveOpts=()=>{try{localStorage.setItem('stormrider_opts',JSON.stringify(opts));}catch(e){}};
 const G={mode:'boot',phase:'',t:0,pt:0,missionT:0,retries:0,flags:{},flash:0,scr:0,hurt:0,shake:0,gust:0,down:0,gloom:0,rain:0,gold:0,
@@ -305,7 +305,7 @@ function chaseCam(dt,snap){
   const k=snap?1:1-Math.exp(-dt*3.4);
   P.camYaw=lerp(P.camYaw,P.yaw,k);P.camPitch=lerp(P.camPitch,P.pitch*.62,snap?1:1-Math.exp(-dt*2.4));
   fwdOf(P.camYaw,P.camPitch,tA);
-  const sh=G.shake*2.6+(P.turb||0)*1.3;
+  const sh=(G.shake*2.6+(P.turb||0)*1.3)*(opts.calm?.3:1);
   const lowV=sat(1-(P.pos.y-12)/60);
   const tt=G.t,sx=Math.sin(tt*23.1)*.6+Math.sin(tt*37.7+1.3)*.4,sy=Math.sin(tt*19.3+.7)*.6+Math.sin(tt*41.9+2.1)*.4,sz=Math.sin(tt*29.3+2.9)*.5;
   camera.position.copy(P.pos).addScaledVector(tA,-47).add(tB.set(sx*sh*.5,11.5+lowV*8+sy*sh*.5,sz*sh*.5));
@@ -570,7 +570,7 @@ function warmUp(done){if(G.warmed){if(done!=='sync')done();return;}G.warmed=true
     ...views.map(v=>()=>{camera.position.set(v[0],v[1],v[2]);camera.lookAt(v[3],v[4],v[5]);camera.fov=70;camera.updateProjectionMatrix();renderFrame();}),
     ()=>{for(const o of forced)o.visible=false;TM.forEach(m=>m.visible=false);projChar(0);renderFrame();camera.position.copy(cam0.p);camera.quaternion.copy(cam0.q);camera.fov=cam0.f;camera.updateProjectionMatrix();cloudReset=true;}];
   if(done==='sync'){for(const s of steps){try{s();}catch(e){console.error(e);}}fpsAcc=0;fpsN=0;return;}
-  let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);}i++;bar.style.transform='scaleX('+(i/steps.length)+')';if(i<steps.length)setTimeout(run,16);else{L.hidden=true;fpsAcc=0;fpsN=0;done();}};setTimeout(run,30);}
+  let i=0;const BT=window.__bootT=[];const run=()=>{const _t=performance.now();try{steps[i]();}catch(e){console.error(e);}i++;bar.style.transform='scaleX('+(i/steps.length)+')';if(i<steps.length)setTimeout(run,16);else{L.hidden=true;fpsAcc=0;fpsN=0;done();}};setTimeout(run,30);}
 function setTier(t){const up=t>(view.tier||0);view.tier=t;const B=baseGroup.userData;view.minScale=[.6,.5,.42][t];
   if(up&&view.scale>view.minScale+.001){view.scale=Math.max(view.minScale,view.scale*.85);resize();renderFrame();}   // 大きさを変えると画面が消えるので、同じコマのうちに描き直す
   for(const[im,k]of[[B.trees,[1,.6,.4][t]],[B.shrubs,[1,.5,0][t]]]){if(!im)continue;if(im.userData.n0===undefined)im.userData.n0=im.count;im.count=Math.floor(im.userData.n0*k);}}
@@ -1077,7 +1077,8 @@ function readInput(){
   const gp=navigator.getGamepads?navigator.getGamepads()[0]:null;
   if(gp){if(Math.abs(gp.axes[0])>.15)x+=gp.axes[0];if(Math.abs(gp.axes[1])>.15)y-=gp.axes[1];b=b||gp.buttons[7]?.pressed||gp.buttons[1]?.pressed;a=a||gp.buttons[0]?.pressed;}
   {const gn=!!k.KeyF||!!input.tGun,ms=!!k.KeyR||!!input.tMsl;input.gun=G.armed&&gn;input.mslHit=G.armed&&ms&&!input.msl;input.msl=ms;}
-  input.x=damp(input.x,clamp(x,-1,1),9,.016);input.y=damp(input.y,clamp(y,-1,1),9,.016);input.boost=b;input.actHit=a&&!input.act;input.act=a;
+  {const sk=opts.sens/100,cv=v=>Math.sign(v)*Math.pow(Math.abs(v),1/sk),r=9*sk;   /* 操縦の感度：低いほど中央付近がおだやかで、操作への反応もゆっくり（最大の効きは同じ） */
+    input.x=damp(input.x,cv(clamp(x,-1,1)),r,.016);input.y=damp(input.y,cv(clamp(y,-1,1)),r,.016);}input.boost=b;input.actHit=a&&!input.act;input.act=a;
 }
 function bindInput(){
   for(const ev of['keydown','pointerdown','pointermove','touchstart','wheel'])addEventListener(ev,()=>{lastInput=performance.now();},{passive:true});
@@ -1123,11 +1124,11 @@ function bindInput(){
   click('bRetry',()=>{G.retries++;startRun(G.ckpt?G.ckpt.ph:'approach');});
   click('bAgain',()=>{if(camera.view&&camera.view.enabled)camera.clearViewOffset();strReset();/* 新しい任務：壊した施設・沈めた船・焦げ跡を元に戻す */perfStart();resize();$('res').hidden=true;startCut(CUT_INTRO);});
   $('skip').addEventListener('click',skipCut);
-  $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;
+  $('oMus').value=opts.mus;$('oSfx').value=opts.sfx;$('oInv').checked=opts.inv;$('oQ').value=opts.q;$('oSens').value=opts.sens;$('oCalm').checked=opts.calm;
   $('oFix').addEventListener('click',()=>{restartAudio();setTimeout(()=>SFX.ui(),150);});
-  const ap=()=>{opts.mus=+$('oMus').value;opts.sfx=+$('oSfx').value;opts.inv=$('oInv').checked;opts.q=+$('oQ').value;AU.musVol=opts.mus/100;AU.sfxVol=opts.sfx/100;setVolumes();
+  const ap=()=>{opts.mus=+$('oMus').value;opts.sfx=+$('oSfx').value;opts.inv=$('oInv').checked;opts.q=+$('oQ').value;opts.sens=+$('oSens').value;opts.calm=$('oCalm').checked;AU.musVol=opts.mus/100;AU.sfxVol=opts.sfx/100;setVolumes();
     if(view.q!==opts.q){view.q=opts.q;view.cs=1;cloudSteps();resize(true);}saveOpts();};
-  ['oMus','oSfx','oInv','oQ'].forEach(i=>$(i).addEventListener('input',ap));ap();
+  ['oMus','oSfx','oInv','oQ','oSens','oCalm'].forEach(i=>$(i).addEventListener('input',ap));ap();
   G.armed=false;try{localStorage.removeItem('stormrider_armed');}catch(e){}applyArmed();   // 武装モードは保存しない（読み込み直すと解除）
   {let n=0,t0=0;$('dial').addEventListener('pointerdown',e=>{const t=performance.now();if(t-t0>2500)n=0;t0=t;n++;if(n>=7){n=0;toggleArmed();}});$('dial').style.pointerEvents='auto';}
   fitUI();addEventListener('resize',fitUI);addEventListener('orientationchange',()=>setTimeout(fitUI,250));
@@ -1559,7 +1560,7 @@ function updateCommon(dt){
   {const ip=G.mode==='play';if(ip!==G.inplayCls){G.inplayCls=ip;document.body.classList.toggle('inplay',ip);if(!ip){input.tx=input.ty=0;input.tAct=input.tBoost=input.tGun=input.tMsl=false;}}}
   updateExplosion(dt);
   // 稲光の減衰
-  G.flash*=Math.exp(-dt*5.5);U.uFlashI.value=G.flash*(.55+.45*Math.sin(G.t*63)*Math.sin(G.t*41));
+  G.flash*=Math.exp(-dt*5.5);U.uFlashI.value=opts.calm?G.flash*.4:G.flash*(.55+.45*Math.sin(G.t*63)*Math.sin(G.t*41));   /* 光を抑える設定では明滅（ちらつき）をやめ、明るさも下げる */
   G.scr*=Math.exp(-dt*7);G.white=Math.max(0,G.white-dt*1.1);G.hurt*=Math.exp(-dt*1.6);G.shake*=Math.exp(-dt*2.2);
   updateStrikes(dt);ambientLightning(dt);updateRadio(dt);updateArmor(dt);
   if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('banner').classList.remove('on');}
@@ -1577,7 +1578,7 @@ function updateCommon(dt){
     const dA=camera.position.distanceTo(tB);tB.project(camera);tC.project(camera);
     if(inG&&P.power>=.28&&tB.z<1&&tC.z<1&&dA<400){fu.uHeat.value.set(tB.x*.5+.5,tB.y*.5+.5,tC.x*.5+.5,tC.y*.5+.5);fu.uHeatR.value=3.4*pj*.5/dA;fu.uHeatD.value=dA;fu.uHeatAmt.value=sat(.35+P.power*.6);}else fu.uHeatAmt.value=0;}
   fu.uRain.value=Math.min(1.6,G.rain*1.6);fu.uRainAng.value=.32+P.roll*.5;fu.uExp.value=lerp(.64,.60,G.gloom)*lerp(1,1.12,G.gold)*(1+.5*(G.indoor||0));
-  fu.uScr.value=G.scr;fu.uHurt.value=G.hurt+(P.hull<=30&&G.mode==='play'?.18+.1*Math.sin(G.t*5):0);fu.uWhite.value=G.white;
+  fu.uScr.value=G.scr*(opts.calm?.3:1);fu.uHurt.value=G.hurt+(P.hull<=30&&G.mode==='play'?.18+.1*Math.sin(G.t*5):0);{const wv=fu.uWhite.value;fu.uWhite.value=opts.calm&&G.white>wv?Math.min(G.white,wv+(G.dt||.016)*.9):G.white;}   /* 光を抑える設定：白い閃光は急に立ち上げず、ゆっくり明るくする（場面転換の白いフェードはそのまま） */
   {const wet=smooth(.15,.7,G.rain)*(1-(G.indoor||0));if(Math.abs(wet-(G.wet||0))>.01||G.wet===undefined){G.wet=wet;for(const m of WETM){m.roughness=lerp(m.userData.r0,m.userData.r0*.4,wet);m.color.copy(m.userData.c0).multiplyScalar(1-.2*wet);}}}
   {const inR=(G.mode==='play'&&G.phase==='ret')||(G.mode==='cut'&&CUT&&CUT.def===CUT_LAND)||G.mode==='result';const d=Math.hypot(P.pos.x-BASE.x,P.pos.z-BASE.z);applyDusk(inR&&U.uStorm.value<.2?.85*(1-smooth(2500,15000,d)):0);}
   const vis=sunVisAt(P.pos),sd=U.uSunDir.value,scol=U.uSunCol.value;
@@ -1912,7 +1913,7 @@ function fighterHit(f,dmg){if(f.dead)return;f.hp-=dmg;if(f.hp>0){if(Math.random(
   if(ICP.f.every(q=>q.dead||!q.mesh.visible)){setAlarm(false);G.prompt=null;say('C','迎撃機、2 機とも撃墜を確認…。隊長、これは国際問題になりますよ',4);ICP.cleared=true;ICP.st=5;ICP.t=0;G.lockF=null;}}
 function boot(){
   const steps=[
-    ()=>{view.q=opts.q;resize(true);U.tNoise.value=makeNoise3D(IS_TOUCH?96:128);},   /* 雲の形の解像度（タッチ端末は読み込み時間を優先） */
+    ()=>{view.q=opts.q;resize(true);const N=IS_TOUCH?96:128;NOISE_JOB=noise3DAsync(N).then(d=>{U.tNoise.value=tex3D(d,N);});},   /* 雲の形の解像度（タッチ端末は読み込み時間を優先） */   /* 雲の形の解像度（タッチ端末は読み込み時間を優先） */
     ()=>{U.tDetail.value=makeDetail3D(32);},
     ()=>{buildGroundTex();},
     ()=>{U.tNoise2.value=makeNoise2D(256);GLOWTEX=glowTexture();buildEnv();buildOcean();},
@@ -1943,11 +1944,13 @@ function boot(){
       trails=[makeTrail(),makeTrail()];initSeaLife();strikeGlow=makeBillboard(new V3(9,10,15));strikeGlow.userData.t=0;
       const pg=new THREE.Group(),pd=buildDiffuser();pd.rotation.y=Math.PI;pg.add(pd);pg.visible=false;scene.add(pg);proj={g:pg,d:pd,glow:makeBillboard(new V3(.9,2.8,4.4)),trail:makeTrail(),from:new V3(),T:0};
             proj.trail.mesh.material.uniforms.uColor.value.set(.5,1.4,2.2);},
+    ()=>NOISE_JOB,   /* 雲の形のノイズができるのを待つ（最初の描画より前に） */
     ()=>{rctx=$('radar').getContext('2d');hctx=$('fhud').getContext('2d');bindInput();showTitle();renderer.compile(scene,camera);step(.016);boomWarm();},
     ()=>{warmUp('sync');showTitle();step(.016);},   /* 任務で使う物をすべて先に描いておく（出撃カットを飛ばしても重くならない） */
   ];
-  let i=0;const run=()=>{try{steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
-    i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
+  let i=0,NOISE_JOB=null;const BT=window.__bootT=[];const run=()=>{const _t=performance.now();let r;try{r=steps[i]();}catch(e){console.error(e);$('load').firstElementChild.textContent='起動に失敗しました：'+e.message;return;}
+    if(r&&r.then&&!run.waited){run.waited=1;r.then(()=>{BT.push('wait'+Math.round(performance.now()-_t));run();},e=>{console.error(e);});return;}run.waited=0;
+    BT.push(Math.round(performance.now()-_t));i++;$('loadBar').style.transform=`scaleX(${i/steps.length})`;
     if(i<steps.length)setTimeout(run,30);else{$('load').hidden=true;last=performance.now();requestAnimationFrame(frame);
       window.__SR={ramHit,ships,strHit,explode,BRK,BOOM,setTier,view,renderer,rings,gateRings,core:()=>coreShell,ICP,ships,STR,buildFighter,cloudMat,setCam,showTitle,damage,spouts,cloudCut:()=>{cloudReset=true;},setDoors,hangarLight,resize,opts,strikes,input,endCut:()=>{if(CUT)endCut();},G,P,W,U,step,camera,startRun,startCut,skipCut,curCut:()=>{if(!CUT)return "";for(const[k,v]of Object.entries({CUT_INTRO,CUT_FIRE1,CUT_HAND,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL}))if(CUT===v||CUT.def===v)return k+":"+(CUT.i|0);return "other";},CUTS:{CUT_INTRO,CUT_FIRE1,CUT_FIRE2,CUT_LAND,CUT_ICP,CUT_KILL,CUT_HAND},togglePause,fail,view,tick(n,dt){for(let k=0;k<n;k++)step(dt||1/30);}};}};
   setTimeout(run,30);

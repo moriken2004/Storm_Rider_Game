@@ -74,7 +74,8 @@ function tex3D(data,N){
   t.wrapS=t.wrapT=t.wrapR=THREE.RepeatWrapping;t.unpackAlignment=1;t.needsUpdate=true;return t;
 }
 // 雲の大きな形（Perlin‐Worley）
-function makeNoise3D(N){
+function makeNoise3D(N){return tex3D(noise3DData(N),N);}
+function noise3DData(N){
   const{lat,vn,wp,wor}=noiseTools(7);
   const L1=lat(4),L2=lat(8),L3=lat(16),L4=lat(32),W1=wp(3),W2=wp(6),W3=wp(12),W4=wp(24);
   const R=new Float32Array(N*N*N),G=new Float32Array(N*N*N);let mn=9,mx=-9;
@@ -86,7 +87,16 @@ function makeNoise3D(N){
     const r=f*.5+billow*.62;R[o]=r;if(r<mn)mn=r;if(r>mx)mx=r;G[o]=f;}
   const data=new Uint8Array(N*N*N*4);
   for(let o=0;o<R.length;o++){data[o*4]=255*sat((R[o]-mn)/(mx-mn));data[o*4+1]=255*sat(G[o]);data[o*4+2]=0;data[o*4+3]=255;}
-  return tex3D(data,N);
+  return data;
+}
+// 起動を速くするため、雲の形のノイズ（約 1.4 秒かかる）を別スレッドで作り、ほかの読み込みと並行させる。
+// 別スレッドが使えない環境では、待つ段で同じ計算をその場で行う
+function noise3DAsync(N){
+  return new Promise(res=>{let done=false;const fin=d=>{if(done)return;done=true;res(d);};
+    try{const src='const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),sat=x=>clamp(x,0,1);'+mulberry+noiseTools+noise3DData+'onmessage=e=>{const d=noise3DData(e.data);postMessage(d,[d.buffer]);};';
+      const url=URL.createObjectURL(new Blob([src],{type:'text/javascript'})),w=new Worker(url);
+      w.onmessage=e=>{fin(e.data);w.terminate();URL.revokeObjectURL(url);};w.onerror=()=>{fin(null);w.terminate();};w.postMessage(N);
+      setTimeout(()=>fin(null),15000);}catch(e){fin(null);}}).then(d=>d||noise3DData(N));
 }
 // 縁を削る細かい Worley
 function makeDetail3D(N){
@@ -172,10 +182,29 @@ float hazeAmt(vec3 ro,vec3 rd,float t,float k){
   return 1.0-exp(-k*od);
 }
 // 遠くの雲による日陰（壁雲が目の底に落とす影など）
+// 光の標本・遠くの影用の軽い版：大きな構造（目の壁・CDO・帯）だけ。細かいノイズ・孤立積乱雲・壁の棚は省く（陰の濃さにはほとんど効かない）
+vec4 stormCoverL(vec3 p){
+  float r=length(p.xz);
+  float er=EYE_R*uEye+max(p.y-200.0,0.0)*0.45;
+  float life=smoothstep(0.0,1.0,uStorm*1.8-0.8*(1.0-sat(r/RO)));
+  float inEye=smoothstep(er-150.0,er+350.0,r);
+  float wall=inEye*(1.0-smoothstep(WALL_OUT-500.0,WALL_OUT+1400.0,r));
+  float th=atan(p.z,p.x)+uSpin,lr=log(max(r,300.0)/EYE_R);
+  float nA=vn2(p.xz/2700.0);
+  float cdo=1.0-smoothstep(4600.0+900.0*nA,7600.0+1800.0*nA,r);
+  float wb=mix(1.05,0.55,sat(r/RO))*(0.75+0.5*nA);
+  float b1=spBand(th,lr,3.5,0.0,wb)*(1.0-smoothstep(10500.0,16250.0,r));
+  float b2=spBand(th,lr,3.9,2.4,wb*0.75)*(1.0-smoothstep(7500.0,12500.0,r))*0.9;
+  float bands=max(b1,b2)*smoothstep(4200.0,6000.0,r)*mix(1.0,0.62,smoothstep(6500.0,13500.0,r));
+  float outer=1.0-smoothstep(RO*0.82,RO*1.1,r);
+  float c=max(max(wall,cdo*0.97),max(bands,outer*0.04))*inEye*life;
+  float top=mix(mix(2200.0,3700.0,max(cdo,bands*0.6)),4300.0+3600.0*(1.0-smoothstep(er+300.0,WALL_OUT+600.0,r)),wall);
+  return vec4(c,wall*life,max(wall,bands*0.8+cdo*0.35)*inEye*life,top);
+}
 float farShadow(vec3 p){
   float v=1.0;
-  vec3 q=p+uSunDir*2500.0;vec4 s=stormCover(q);if(q.y<s.w)v*=1.0-0.9*s.x;
-  q=p+uSunDir*6500.0;s=stormCover(q);if(q.y<s.w)v*=1.0-0.9*s.x;
+  vec3 q=p+uSunDir*2500.0;vec4 s=stormCoverL(q);if(q.y<s.w)v*=1.0-0.9*s.x;
+  q=p+uSunDir*6500.0;s=stormCoverL(q);if(q.y<s.w)v*=1.0-0.9*s.x;
   return v;
 }
 `;
@@ -194,8 +223,8 @@ ${GLSL_COMMON}
 const float SLAB=9000.0;
 const float DENSE=0.0016;
 // 消散係数（1/m）。hi=true で縁の細部まで計算
-float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
-  sc=stormCover(p);hf=0.0;rnE=0.0;
+float extK(vec3 p,bool hi,bool lite,out vec4 sc,out float hf,out float rnE){
+  sc=lite?stormCoverL(p):stormCover(p);hf=0.0;rnE=0.0;
   float wall=sc.y;
   float base=mix(720.0,210.0,wall);
   vec3 q=p*vec3(1.0,1.3,1.0)/6200.0+vec3(uTime*0.0011,0.0,uTime*0.0006);
@@ -238,6 +267,7 @@ float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){
   }
   return e;
 }
+float ext(vec3 p,bool hi,out vec4 sc,out float hf,out float rnE){return extK(p,hi,false,sc,hf,rnE);}
 float hg(float mu,float g){float g2=g*g;return (1.0-g2)/pow(1.0+g2-2.0*g*mu,1.5);}
 void main(){
   vec4 w1=uInvPV*vec4(vUv*2.0-1.0,1.0,1.0);vec3 rd=normalize(w1.xyz/w1.w-uCam);
@@ -284,7 +314,8 @@ void main(){
       if(wD>0.0){
         // 光の標本点も画素ごとにずらす（一定の間隔だと雲の表面に年輪のような縞が出る）
         float od=0.0,st=50.0*(0.6+0.8*fract(jit+float(i)*0.618));vec3 q=p;vec4 s2;float h2,r2;
-        for(int k=0;k<3;k++){q+=uSunDir*st;od+=ext(q,false,s2,h2,r2)*st;st*=2.7;}
+        int nk=t>5000.0?2:3;   // 遠い雲は光の標本を 2 つに（細部が見えない距離なので差は出ない）
+        for(int k=0;k<3;k++){if(k>=nk)break;q+=uSunDir*st;od+=extK(q,false,true,s2,h2,r2)*st;st*=nk==2?4.4:2.7;}
         float tr=exp(-od)*ph1+0.42*exp(-od*0.28)*ph2+0.16*exp(-od*0.07);
         float pw=1.0-0.7*exp(-e*90.0-od*2.0);
         float sT=sunT*farShadow(p);
@@ -299,7 +330,7 @@ void main(){
       S=mix(S,haze,hazeAmt(uCam,rd,t,uHaze));
       float a=1.0-exp(-e*ds);
       L+=T*a*S;T*=1.0-a;
-      if(T<0.01){T=0.0;break;}
+      if(T<0.03){T=0.0;break;}   // ほぼ不透明になったら打ち切る
     }else if(!coarse&&!forced){zero++;if(zero>4)coarse=true;}
     t+=ds;
   }
