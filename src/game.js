@@ -2054,7 +2054,7 @@ function strHit(t,a,st,dmg){dmg=dmg||1;
     for(const s of ships){if(s.dead)continue;const L=s.m.userData.len,B=s.m.userData.beam,dx=q.x-s.x,dz=q.z-s.z;if(Math.abs(dx)>L||Math.abs(dz)>L)continue;
       const c=Math.cos(s.h),sn=Math.sin(s.h),lx=dx*c-dz*sn,lz=dx*sn+dz*c,top=L>100?30:L>50?15:7;
       if(Math.abs(lx)<B/2+1&&Math.abs(lz)<L/2+1&&q.y<top){
-        puff(q.x,q.y,q.z,0,3,0,1.6,.5,.9);if(Math.random()<.5&&q.distanceTo(camera.position)<500)SFX.ting();
+        puff(q.x,q.y,q.z,0,3,0,1.6,.5,.9);if(Math.random()<.5&&q.distanceTo(camera.position)<500)SFX.ting(true);
         {const pt=s.m.userData.kind==='patrol';strSay(pt?'patrol':'ship','C',pt?'自国の巡視船を撃っています！　射撃を中止してください':'民間船への発砲を確認。ただちに射撃を中止してください');}
         strShipDmg(s,dmg);if(big)strBlast(q.clone(),24,dmg*.6,s);return true;}}
     const lx=q.x-BASE.x,lz=q.z-BASE.z;

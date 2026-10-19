@@ -23,7 +23,7 @@ const skim=()=>{const S=__SR,G=S.G,P=S.P;S.startRun('approach');if(G.mode==='cut
 // 効果音を 1 つずつオフライン合成
 const stems=[['B1_爆発_自機の墜落(近く・大)',"boomAt(40,0,1,'air')"],['B2_爆発_建物',"boomAt(150,.3,1,'bldg')"],['B3_爆発_小(遠く)',"boomAt(700,-.4,.3,'air')"],
   ['B4_激突(hit)','SFX.hit()'],['B5_外板がはがれる(rip)','SFX.rip()'],['B6_地面をこする(scrape)','SFX.scrape()'],['B7_着水_小(splash)','SFX.splash()'],['B8_着水_大',"playBuf(SBUF.splashBig,{vol:1.3})"],
-  ['B9_建物に当たる金属音(ting)','SFX.ting&&SFX.ting()'],['B10_爆縮(implode)','SFX.implode&&SFX.implode()']];
+  ['B9_建物への着弾(ting)','SFX.ting()'],['B11_船への着弾','SFX.ting(true)'],['B12_ディフューザー発射','playBuf(SBUF.launch,{vol:1})'],['B10_爆縮(implode)','SFX.implode&&SFX.implode()']];
 for(const[name,call]of stems){const b64=await p.evaluate(async call=>{const real={ctx:AU.ctx,sfx:AU.sfx,rev:AU.rev};const sr=real.ctx.sampleRate,off=new OfflineAudioContext(2,sr*7,sr);
     AU.ctx=off;AU.sfx=off.createGain();AU.sfx.gain.value=.8;AU.sfx.connect(off.destination);const len=sr*3.2,ir=off.createBuffer(2,len,sr);for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6);}
     AU.rev=off.createConvolver();AU.rev.buffer=ir;const rg=off.createGain();rg.gain.value=.55;AU.rev.connect(rg);rg.connect(off.destination);for(const k of['hitT','ripT','scrT','splT'])AU[k]=undefined;
@@ -33,5 +33,5 @@ for(const[name,call]of stems){const b64=await p.evaluate(async call=>{const real
     const L=buf.getChannelData(0),R=buf.getChannelData(1);for(let i=0;i<n;i++){dv.setInt16(44+i*4,Math.max(-1,Math.min(1,L[i]*g))*32767,true);dv.setInt16(46+i*4,Math.max(-1,Math.min(1,R[i]*g))*32767,true);}
     const ab=new Uint8Array(dv.buffer);let s='';for(let i=0;i<ab.length;i+=8192)s+=String.fromCharCode(...ab.subarray(i,i+8192));return [btoa(s),pk,err];},call);
   console.log('  peak',b64[1].toFixed(3),b64[2]);save(name,b64[0],'wav');}
-if(!process.env.SKIPREC){await rec('A1_地面へ墜落_全部',ground);await rec('A2_海へ墜落_全部',sea);await rec('A3_海面に接触_全部',skim);await rec('A4_地面へ墜落_ループ音だけ(エンジン・風)',ground,'loops');}
+if(!process.env.SKIPREC){await rec('A1_地面へ墜落_全部',ground);await rec('A2_海へ墜落_全部',sea);await rec('A3_海面に接触_全部',skim);await rec('A4_地面へ墜落_ループ音だけ(エンジン・風)',ground,'loops');const boost=()=>{const S=__SR,G=S.G,P=S.P;S.startRun('approach');if(G.mode==='cut')S.endCut();P.inv=999;P.hull=100;P.pos.set(0,300,23000);P.yaw=Math.PI;P.pitch=0;window._ty=0;S.input.tBoost=true;};await rec('A5_ブーストで飛行',boost);await p.evaluate(()=>{__SR.input.tBoost=false;});}
 await b.close();
