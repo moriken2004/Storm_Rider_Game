@@ -8,6 +8,7 @@ const T=[
   ['でたらめ操作','chaos.mjs',[],o=>/^=== 問題 0 件/m.test(o),true],
   ['変なプレイ','abuse.mjs',[],o=>/^問題なし/m.test(o)],
   ['建物の崩壊','wreck.mjs',[],o=>/^問題なし/m.test(o)],
+  ['木の火災と爆風','fire.mjs',[],o=>/木に命中 true/.test(o)&&/"roofDead":true,"wallDead":true/.test(o)&&/"dead":true\}/.test(o)&&/やり直し後 \{"burn":0,"burnt":0,"brk":0,"dead":0\}/.test(o)&&/エラーなし/.test(o)],
   ['港の破壊（係留船・クレーン・コンテナ）','portwreck.mjs',[],o=>/✓ 船として沈む/.test(o)&&/"kind":1/.test(o)&&/やり直し後 \{"brk":0,"deb":0,"broken":0,"cargo":false,"crane":false\}/.test(o)&&/エラーなし/.test(o)],
   ['目標の印','mark.mjs',[],o=>(o.match(/おかしいもの 0/g)||[]).length===3],
   ['スマートフォン表示','mtest.mjs',[],o=>/重なり: なし/.test(o)&&!/PAGEERR/.test(o)],
