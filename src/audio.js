@@ -135,7 +135,7 @@ function renderBoom(sr,big,seed){
       br=(br+.02*(R()*2-1))/1.02;rl+=.004*(br*3.5-rl);s+=rl*Math.min(1,t/.05)*Math.exp(-t/tr)*(big?5:2.5);
       // 破片がはぜる音
       if(t>.04&&t<crk&&R()<(big?260:160)/sr*Math.exp(-t/(crk*.45))){pa=(R()*.6+.2)*Math.exp(-t/crk);pf=(1500+R()*3200)/sr*2*Math.PI;pd=0;}
-      if(pa>1e-4){s+=pa*Math.sin(pd*pf)*Math.exp(-pd/(sr*.0025));pd++;if(pd>sr*.012)pa=0;}
+      if(pa>1e-4){s+=pa*1.3*(R()*2-1)*Math.exp(-pd/(sr*.0011));   /* 破片の音は音程のないカチッという粒（正弦波だと泡のように鳴いた） */pd++;if(pd>sr*.012)pa=0;}
       o[i]=s;}}
   // 柔らかく飽和させて揃える
   let pk=0;for(const o of out)for(let i=0;i<n;i++){o[i]=Math.tanh(o[i]*1.5);pk=Math.max(pk,Math.abs(o[i]));}
@@ -192,13 +192,13 @@ function renderLaunch(sr,seed){const R=mulberry(seed),n=Math.floor(sr*3.8),out=[
         const env=Math.min(1,tm/.06)/(1+Math.max(0,tm-.3)*1.25);s+=l2*env*am*2.6;
         // はぜる音（点火直後に密、だんだんまばらに）
         if(R()<(900*Math.exp(-tm/.35)+90)/sr){pa=(.2+R()*.5)*Math.min(1,1/(1+tm*1.5));pf=(1200+R()*4000)/sr*2*Math.PI;pd=0;}
-        if(pa>1e-4){s+=pa*Math.sin(pd*pf)*Math.exp(-pd/(sr*.0018));pd++;if(pd>sr*.008)pa=0;}}
+        if(pa>1e-4){s+=pa*1.3*(R()*2-1)*Math.exp(-pd/(sr*.0009));pd++;if(pd>sr*.008)pa=0;}}
       o[i]=s;}}
   return normOut(out,.3);}
-// 水への衝突：叩く音（水面を打つ短い衝撃）＋水の塊が動く低いうねり＋取り込まれた泡の共鳴（ミナート周波数、上がっていく短い正弦波）＋落ちてくるしぶきの細かい音
+// 水への衝突：叩く音（水面を打つ短い衝撃）＋水の塊が動く低いうねり＋落ちてくるしぶきの細かい音（ノイズの粒）。
+// 泡の共鳴（上がっていく短い正弦波）は水中で聞こえる音で、空中では「キュルキュル」と鳴いて聞こえたので使わない
 function renderSplash(sr,big,seed){const R=mulberry(seed),dur=big?4.2:1.6,n=Math.floor(sr*dur),out=[new Float32Array(n),new Float32Array(n)];
-  const NB=big?520:110,bub=[];for(let k=0;k<NB;k++){const t0=.012+(-Math.log(1-R()*.995))*(big?.32:.12),f=Math.exp(Math.log(big?220:380)+R()*Math.log(big?16:12)),tau=Math.min(.06,1.8/f*(2+R()*3));bub.push([t0,f,tau,(.15+R()*.85)*Math.min(1,600/f+.25)]);}
-  const NR=big?700:120,rain=[];for(let k=0;k<NR;k++){const t0=(big?.5:.25)+R()*(big?2.6:1.0),f=1500+R()*5000;rain.push([t0,f,.002+R()*.004,(.05+R()*.18)*Math.exp(-(t0-.4)/(big?1.4:.6))]);}
+  const NR=big?700:120,rain=[];for(let k=0;k<NR;k++){const t0=(big?.5:.25)+R()*(big?2.6:1.0),k2=.25+R()*.6;rain.push([t0,k2,.003+R()*.008,(.05+R()*.18)*Math.exp(-(t0-.4)/(big?1.4:.6))]);}
   for(let ch=0;ch<2;ch++){const o=out[ch];let l1=0,l2=0,b1=0,hp=0,lw=0;
     for(let i=0;i<n;i++){const t=i/sr,w=R()*2-1;let s=0;
       // 叩く音：帯域を絞ったノイズの急な立ち上がり
@@ -210,8 +210,8 @@ function renderSplash(sr,big,seed){const R=mulberry(seed),dur=big?4.2:1.6,n=Math
       // しぶきが降るさーっという音
       s+=hp*.05*Math.exp(-Math.pow((t-(big?1.2:.45))/(big?.9:.35),2))*(big?1:.6);
       o[i]=s;}
-    for(const[t0,f,tau,a]of bub){const i0=Math.floor((t0+(ch?R()*.002:0))*sr),len=Math.min(n-i0,Math.floor(tau*6*sr));for(let j=0;j<len;j++){const tt=j/sr;o[i0+j]+=a*.35*Math.sin(2*Math.PI*f*(tt+tt*tt/(tau*8)))*Math.exp(-tt/tau)*Math.min(1,j/12);}}
-    for(const[t0,f,tau,a]of rain){const i0=Math.floor(t0*sr),len=Math.min(n-i0,Math.floor(tau*6*sr));for(let j=0;j<len;j++){const tt=j/sr;o[i0+j]+=a*Math.sin(2*Math.PI*f*(tt+tt*tt/(tau*6)))*Math.exp(-tt/tau);}}}
+    // しぶきの粒：高域寄りのノイズを短く鳴らす（音程を持たせない）
+    for(const[t0,k2,tau,a]of rain){const i0=Math.floor((t0+(ch?R()*.003:0))*sr),len=Math.min(n-i0,Math.floor(tau*5*sr));let lw2=0,lp2=0;for(let j=0;j<len;j++){const w=R()*2-1,h=w-lw2;lw2=w;lp2+=k2*(h-lp2);o[i0+j]+=a*1.4*lp2*Math.exp(-j/sr/tau)*Math.min(1,j/24);}}}
   return normOut(out,.25);}
 function normOut(out,fade){let pk=0;for(const o of out)for(let i=0;i<o.length;i++){o[i]=Math.tanh(o[i]*1.2);pk=Math.max(pk,Math.abs(o[i]));}
   for(const o of out){for(let i=0;i<o.length;i++)o[i]*=.95/pk;const f=Math.floor(o.length*fade*.3);for(let i=0;i<f;i++)o[o.length-1-i]*=i/f;}return out;}
@@ -299,7 +299,8 @@ const SFX={
   horn(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.4;for(const f of[98,147,99.5]){tone(AU.sfx,'sawtooth',f,f,t,2.6,.1,.25,{lp:520,rev:.8});}tone(AU.sfx,'sawtooth',98,98,t+3.1,1.1,.09,.2,{lp:520,rev:.8});},
   ignite(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',70,34,t,.7,.9,.004);burst(AU.sfx,t,.5,.8,'lowpass',1400,160,.7,.4);burst(AU.sfx,t+.03,1.6,.4,'bandpass',500,1600,.8,.3,.1);for(let i=0;i<6;i++)burst(AU.sfx,t+.1+i*.09,.05,.18,'bandpass',900+Math.random()*1400,500,3);},
   // 主翼がちぎれる：金属が裂ける広い帯域の雑音と低い衝撃（音程の動く音は使わない）
-  rip(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.45,.8,'bandpass',1600,900,.8,.3);burst(AU.sfx,t+.03,.6,.45,'highpass',2800,2200,.6,.3);tone(AU.sfx,'sine',140,55,t,.35,.6,.003);for(let i=0;i<6;i++)burst(AU.sfx,t+.06+i*.05+Math.random()*.03,.04,.2,'bandpass',600+Math.random()*1800,600+Math.random()*1800,.8,.2);},
+  // 外板がはがれる：短い破断音と低い衝撃だけ。以前は細い帯域の音を 50ms おきに音程を動かして並べていたため「キュルキュル」と鳴き、こだまのように聞こえた
+  rip(){if(!AU.ctx)return;const t=AU.ctx.currentTime;if(t-(AU.ripT||-9)<1.2)return;AU.ripT=t;burst(AU.sfx,t,.32,.7,'lowpass',2400,700,.5,.08);burst(AU.sfx,t,.12,.3,'highpass',2000,2000,.5,0);tone(AU.sfx,'sine',120,55,t,.3,.55,.003);},
   // 機銃：低い発射の衝撃＋乾いた破裂音（連射で重なる）
   gun(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',140,48,t,.07,.32,.002);burst(AU.sfx,t,.05,.34,'bandpass',2600,1200,1.2,.08);burst(AU.sfx,t,.09,.22,'lowpass',900,200,.7);},
   // 弾が金属に当たる：短い打撃と高い響き
@@ -319,13 +320,12 @@ const SFX={
   door(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.8;burst(AU.sfx,t,5.2,.55,'lowpass',170,120,1.2,.5,.5);tone(AU.sfx,'sawtooth',44,52,t,5.2,.14,.4,{lp:200});for(let i=0;i<10;i++)burst(AU.sfx,t+i*.5,.05,.12,'bandpass',1700,900,6,.4);burst(AU.sfx,t+5.1,.5,.9,'lowpass',900,120,.8,.7);tone(AU.sfx,'sine',70,34,t+5.1,.6,.8,.004);},
   spool(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sawtooth',40,260,t,6,.16,2,{lp:1300,rev:.3});tone(AU.sfx,'sine',300,3400,t,6.5,.05,3,{rev:.3});burst(AU.sfx,t+1,6,.3,'bandpass',300,2400,1,.3,3);burst(AU.sfx,t+.1,.25,.5,'lowpass',700,150,1,.3);},
   // 被弾・衝突：機体を打つ低い衝撃と、外板がへこむ金属音（減衰の速い不協和な固有振動。音程は動かさない）、ばらばらの破片音
-  hit(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.35,1,'lowpass',2600,220,.5,.3);tone(AU.sfx,'sine',95,60,t,.4,.8,.003);
-    [[173,.12],[412,.07],[687,.05],[1093,.035],[1641,.025]].forEach(([f,d])=>tone(AU.sfx,'triangle',f*(.97+Math.random()*.06),f*.98,t,d*4,.09,.0015));
-    for(let i=0;i<4;i++)burst(AU.sfx,t+.04+i*.05+Math.random()*.03,.03,.16,'highpass',2500,2500,.5,.2);},
+  // 激突：鈍い衝撃と砕ける音（音程のある響きや等間隔の粒は鳴きやこだまに聞こえるので入れない）
+  hit(){if(!AU.ctx)return;const t=AU.ctx.currentTime;if(t-(AU.hitT||-9)<.35)return;AU.hitT=t;burst(AU.sfx,t,.35,1,'lowpass',2600,220,.5,.12);tone(AU.sfx,'sine',95,60,t,.4,.8,.003);burst(AU.sfx,t,.18,.35,'bandpass',1200,500,.4,0);},
   // 地面をこする：ざらついた摩擦音（低めの帯域、粒のある振幅）
-  scrape(){if(!AU.ctx)return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.7,.6,'bandpass',900,320,.6,.3,.01);burst(AU.sfx,t,.5,.35,'highpass',1800,1200,.5,.2);for(let i=0;i<9;i++)burst(AU.sfx,t+i*.06+Math.random()*.03,.05,.22,'lowpass',1400,600,.5,.1);tone(AU.sfx,'sine',70,45,t,.35,.6,.003);},
+  scrape(){if(!AU.ctx)return;const t=AU.ctx.currentTime;if(t-(AU.scrT||-9)<.8)return;AU.scrT=t;burst(AU.sfx,t,.7,.6,'bandpass',900,320,.6,.3,.01);burst(AU.sfx,t,.5,.35,'highpass',1800,1200,.5,.2);for(let i=0;i<9;i++)burst(AU.sfx,t+i*.06+Math.random()*.03,.05,.22,'lowpass',1400,600,.5,.1);tone(AU.sfx,'sine',70,45,t,.35,.6,.003);},
   zap(){if(!AU.ctx)return;const t=AU.ctx.currentTime;tone(AU.sfx,'sine',60,28,t,1.1,.9,.003);burst(AU.sfx,t,.9,.7,'lowpass',2600,120,.6,.6);burst(AU.sfx,t,.3,.7,'bandpass',3200,600,2.5,.2);for(let i=0;i<5;i++)tone(AU.sfx,'sawtooth',900+Math.random()*1800,200,t+i*.035,.06,.1,.002,{lp:5000});},
-  splash(){if(!AU.ctx)return;if(playBuf(SBUF.splashSmall,{vol:1.2}))return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.25,.8,'lowpass',500,90,.8,.3);burst(AU.sfx,t+.1,1.4,.4,'highpass',2600,4800,.6,.4,.2);burst(AU.sfx,t,.9,.8,'bandpass',900,300,.6,.4,.02);},
+  splash(){if(!AU.ctx)return;{const t=AU.ctx.currentTime;if(t-(AU.splT||-9)<.8)return;AU.splT=t;}   /* 跳ねるたびに重ねて鳴らさない */if(playBuf(SBUF.splashSmall,{vol:1.2}))return;const t=AU.ctx.currentTime;burst(AU.sfx,t,.25,.8,'lowpass',500,90,.8,.3);burst(AU.sfx,t+.1,1.4,.4,'highpass',2600,4800,.6,.4,.2);burst(AU.sfx,t,.9,.8,'bandpass',900,300,.6,.4,.02);},
   // 画面のボタン：決定（2 音の鐘）、出撃（低い打音＋上がる和音）、カーソルが乗ったとき（短い刻み）
   ui(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.03;tone(AU.sfx,'triangle',2400,1200,t,.03,.16,.002);tone(AU.sfx,'sine',880,880,t,.16,.3,.004,{rev:.35});tone(AU.sfx,'sine',1318.5,1318.5,t+.07,.26,.26,.004,{rev:.45});},
   uiStart(){if(!AU.ctx)return;const t=AU.ctx.currentTime+.03;tone(AU.sfx,'sine',150,55,t,.3,.5,.004);[587.3,740,880,1174.7].forEach((f,i)=>tone(AU.sfx,'triangle',f,f,t+i*.07,.5,.2,.006,{rev:.5}));},

@@ -543,7 +543,7 @@ function makeRT(w,h,depth){
 function resize(force){
   const cw=window.innerWidth||800,ch=window.innerHeight||600;
   const dpr=Math.min(window.devicePixelRatio||1,(view.touch?[1.3,1.6,2]:[1,1.5,2])[view.q]);
-  const w=Math.max(320,Math.round(cw*dpr*view.scale)),h=Math.max(200,Math.round(ch*dpr*view.scale));
+  const w0=cw*dpr*view.scale,h0=ch*dpr*view.scale,mk=Math.max(1,320/w0,200/h0),w=Math.round(w0*mk),h=Math.round(h0*mk);   // 最小の大きさは縦横比を保って広げる（縦長の画面で横だけ広げると像が伸びた）
   view.cssW=cw;view.cssH=ch;
   if(!force&&w===RW&&h===RH)return;
   RW=w;RH=h;

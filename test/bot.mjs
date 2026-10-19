@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import {execFileSync} from 'child_process';
 const diff=+(process.argv.find(a=>/^d[0-2]$/.test(a))||'d2')[1],rec=process.argv.includes('record');
+const prof=process.argv.includes('prof');   // prof：1 コマごとの処理時間（GPU 完了まで）を測り、引っかかりを場面つきで一覧にする
 const OUT=new URL('../bot/out/',import.meta.url).pathname,FR=OUT+'frames/';
 if(rec){fs.mkdirSync(FR,{recursive:true});for(const f of fs.readdirSync(FR))fs.unlinkSync(FR+f);}
 const W=rec?1280:960,H=rec?720:540,FROM=(process.argv.find(a=>/^from=/.test(a))||'').slice(5);
@@ -101,12 +102,15 @@ if(FROM)await p.evaluate(ph=>{__SR.G.ckpt=null;__SR.startRun(ph);},FROM);else aw
 let frame=0,done=false,res=null;const shot=async()=>{await p.screenshot({path:FR+String(frame++).padStart(6,'0')+'.jpg',type:'jpeg',quality:82});};
 for(let chunk=0;chunk<(rec?40000:260)&&!done;chunk++){
   const N=rec?1:120;
-  const r=await p.evaluate((N,rec)=>{const S=__SR,G=S.G;for(let k=0;k<N;k++){
-      if(G.mode==='cut'){if(!rec&&S.CUTS&&G.cutIntro!==false){}S.step(1/30);continue;}
+  const r=await p.evaluate((N,rec,prof)=>{const S=__SR,G=S.G;const gl=prof&&S.renderer.getContext(),px=new Uint8Array(4);
+    const ST=dt=>{if(!prof){S.step(dt);return;}const t0=performance.now();S.step(dt);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);const ms=performance.now()-t0;
+      (window.PROF||(window.PROF=[])).push([+ms.toFixed(1),G.mode,G.phase,G.mode==='cut'&&S.curCut?S.curCut():'',+(G.missionT||0).toFixed(1)]);};
+    for(let k=0;k<N;k++){
+      if(G.mode==='cut'){ST(1/30);continue;}
       if(G.mode==='over'){BOT.M.log.push('失敗:'+G.cause+' @'+G.phase);document.getElementById('bRetry').click();continue;}
       if(G.mode==='result')return{done:true,rank:document.getElementById('rank').textContent,res:document.getElementById('resT').innerText,log:BOT.M.log};
-      if(G.mode==='play'){BOT.step();S.step(1/30);}else S.step(1/30);}
-    return{done:false,mode:G.mode,ph:G.phase,t:+(G.missionT||0).toFixed(0)};},N,rec);
+      if(G.mode==='play'){BOT.step();ST(1/30);}else ST(1/30);}
+    return{done:false,mode:G.mode,ph:G.phase,t:+(G.missionT||0).toFixed(0)};},N,rec,prof);
   if(rec)await shot();
   if(r.done){done=true;res=r;break;}
   if(!rec&&chunk%3===0)console.log(JSON.stringify(r)+" "+await p.evaluate(()=>BOT.M.log.slice(-4).join(" | ")+" "+(BOT.M.cdbg||'')+" dmg="+JSON.stringify(__SR.G.dmgBy||{})+" hull="+__SR.P.hull.toFixed(0)+" y="+__SR.P.pos.y.toFixed(0)+" r="+Math.hypot(__SR.P.pos.x,__SR.P.pos.z).toFixed(0)));
@@ -116,5 +120,9 @@ for(let chunk=0;chunk<(rec?40000:260)&&!done;chunk++){
 if(rec&&done){for(let i=0;i<120;i++){await p.evaluate(()=>__SR.step(1/30));await shot();}}
 console.log(done?'RESULT '+res.rank+'\n'+res.res+'\n'+res.log.join('\n'):'NOT FINISHED');
 if(errs.length)console.log(errs.slice(0,5).join('\n'));
+if(prof){const P=await p.evaluate(()=>window.PROF||[]);const by={};for(const[ms,m,ph,c]of P){const k=m==='cut'?'cut:'+(c||'?'):m+':'+ph;(by[k]||(by[k]=[])).push(ms);}
+  const q=(a,f)=>{const b=[...a].sort((x,y)=>x-y);return b[Math.min(b.length-1,Math.floor(b.length*f))];};
+  console.log('PROF 場面  コマ数  中央値  95%  最大  50ms超');for(const[k,a]of Object.entries(by))console.log('PROF',k,a.length,q(a,.5),q(a,.95),Math.max(...a),a.filter(x=>x>50).length);
+  console.log('PROF 引っかかり上位');for(const r of [...P].map((r,i)=>[...r,i]).sort((x,y)=>y[0]-x[0]).slice(0,25))console.log('SPIKE',JSON.stringify(r));}
 await b.close();
 if(rec&&done){const mp4=OUT+'play_d'+diff+'.mp4';execFileSync('/opt/homebrew/bin/ffmpeg',['-loglevel','error','-y','-framerate','30','-i',FR+'%06d.jpg','-c:v','libx264','-pix_fmt','yuv420p','-crf','20','-preset','medium',mp4]);console.log('動画',mp4);}
