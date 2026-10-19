@@ -1434,7 +1434,7 @@ function bfade(f,dt){f.t+=dt;const tt=f.t-f.delay;if(tt<0)return -1;const u=tt/f
   f.vel.multiplyScalar(Math.exp(-dt*f.dr));f.vel.y+=f.g*dt;f.sp.position.addScaledVector(f.vel,dt);f.sp.material.rotation+=f.rs*dt;return u;}
 function updateExplosion(dt){
   for(let i=BOOM.q.length-1;i>=0;i--){const e=BOOM.q[i];e.t-=dt;if(e.t<=0){BOOM.q.splice(i,1);e.fn();}}
-  updateDebris(dt);brkUpdate(dt);
+  updateDebris(dt);brkUpdate(dt);contUpdate(dt);
   if(!BOOM.init)return;
   const amb=lerp(1,.45,G.gloom||0)*(1-.5*(G.indoor||0)),sun=U.uSunCol.value;
   for(const f of BOOM.flash){if(!f.sp.visible&&f.t>=f.life)continue;const u=bfade(f,dt);if(u<0)continue;const s=lerp(f.s0,f.s1,u);f.sp.scale.set(s,s,1);f.sp.material.color.copy(f.c).multiplyScalar(Math.pow(1-u,1.5));}
@@ -1480,11 +1480,11 @@ function brkMeshes(){if(BRK.meshes)return BRK.meshes;const ref=new Map(),all=[];
   BRK.meshes=all.filter(o=>{const e=o.matrixWorld.elements;return ref.get(o.geometry)===1&&Math.abs(e[0]-1)<1e-4&&Math.abs(e[5]-1)<1e-4&&Math.abs(e[10]-1)<1e-4&&Math.abs(e[1])<1e-4&&Math.abs(e[2])<1e-4&&Math.abs(e[4])<1e-4;}).map(o=>({o,a:o.geometry.attributes.position,ox:o.matrixWorld.elements[12],oy:o.matrixWorld.elements[13],oz:o.matrixWorld.elements[14]}));
   return BRK.meshes;}
 const bhash=(x,z)=>{const v=Math.sin(x*127.1+z*311.7)*43758.5453;return v-Math.floor(v);};
-function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.cols[0]){G.hgDead=true;hangarLight(0);}
+function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(c[10])c[10].userData.dead=true;   /* クレーン：倒れたら荷役の動きを止める */if(o===STR.cols[0]){G.hgDead=true;hangarLight(0);}
   // 上に載っている部品（管制塔の上の管制室、柱の上の照明など）をたどって、ひとまとめに壊す
   const asm=[o],cu=c.slice(0,6);
   for(let k=0;k<asm.length&&asm.length<40;k++){const s=asm[k].c;
-    for(const q of STR.cols){if(q.dead||q.c[7]||asm.includes(q))continue;const e=q.c,qx=(e[0]+e[3])/2,qz=(e[2]+e[5])/2;
+    for(const q of STR.cols){if(q.dead||q.c[7]||q.c[8]===5||q.c[10]||asm.includes(q))continue;const e=q.c,qx=(e[0]+e[3])/2,qz=(e[2]+e[5])/2;
       if(e[1]>=s[1]+.5&&e[1]<=s[4]+2&&qx>s[0]-2&&qx<s[3]+2&&qz>s[2]-2&&qz<s[5]+2){asm.push(q);for(let i=0;i<3;i++){cu[i]=Math.min(cu[i],e[i]);cu[i+3]=Math.max(cu[i+3],e[i+3]);}}}}
   for(const q of asm){q.dead=true;q.hp=Math.min(q.hp,0);}
   const topM=kind===1?Math.max(3,(c[3]-c[0])*1.2):M;   // 倒れる塔は上に載った照明の頭なども一緒に倒す
@@ -1497,7 +1497,7 @@ function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.col
     {let cl=BRK.claim.get(m.a);if(!cl){cl=new Uint8Array(a.count);BRK.claim.set(m.a,cl);}let w=0;for(const i of idx)if(!cl[i]){cl[i]=1;idx[w++]=i;}idx.length=w;}
     if(!idx.length)continue;const I=new Int32Array(idx),O=new Float32Array(idx.length*3);for(let j=0;j<idx.length;j++){O[j*3]=arr[idx[j]*3];O[j*3+1]=arr[idx[j]*3+1];O[j*3+2]=arr[idx[j]*3+2];}
     parts.push({m,I,O,lo:idx[0],hi:idx[idx.length-1]});}
-  const a=Math.random()*6.283,gy=groundAt((c[0]+c[3])/2,(c[2]+c[5])/2),fl=Math.max(gy,3.5);
+  const a=c[10]?(Math.random()<.65?0:Math.PI)+(Math.random()-.5)*.7:Math.random()*6.283,gy=groundAt((c[0]+c[3])/2,(c[2]+c[5])/2),fl=Math.max(gy,3.5);   // クレーンは海側か陸側へ倒れる
   // 地面から浮いた部品（クレーンの梁など）はその場で崩さず、傾きながら地面へ落とす
   // ただし真下に別の建物があって支えられている部品（屋上のドームなど）は、その場で崩す
   const sup=c[1]-fl>6&&STR.cols.some(q=>!asm.includes(q)&&!q.c[7]&&q.c[0]<c[3]&&q.c[3]>c[0]&&q.c[2]<c[5]&&q.c[5]>c[2]&&q.c[1]<c[1]-.5&&q.c[4]>=c[1]-3);
@@ -1520,8 +1520,42 @@ function brkStart(o){const c=o.c,kind=c[8]||0,M=.4;const parts=[];if(o===STR.col
   if(BRK.sc<24){const i=BRK.sc++;b.sc=i;U.uScA.value[i].set(cu[0],cu[1],cu[2],0);U.uScB.value[i].set(cu[3],cu[4],cu[5],0);U.uScN.value=BRK.sc;}
   BRK.list.push(b);return b;}
 const _bw=new V3(),_bq=new THREE.Quaternion(),_bax=new V3();
+// ── コンテナ区画の破壊：爆風で上の段のコンテナが飛ばされ（回りながら落ち、岸壁で跳ねるか海に沈む）、残りは崩れて傾く
+const CBRK={deb:[],geo:null,broken:[]},_cm=new THREE.Matrix4(),_cp=new V3(),_cq=new THREE.Quaternion(),_cs=new V3(),_cc=new THREE.Color();
+function contBreak(o){const L=baseGroup.userData.lodPort,cn=L&&L.userData.cont;if(!cn)return;const blk=cn.blocks[o.c[11]];if(!blk||blk.dead)return;blk.dead=true;CBRK.broken.push(blk);
+  const im=cn.im,arr=im.instanceMatrix.array;blk.orig=arr.slice(blk.i0*16,blk.i1*16);if(!cn.colors0&&im.instanceColor)cn.colors0=im.instanceColor.array.slice();
+  if(!CBRK.geo){CBRK.geo=new THREE.BoxGeometry(2.44,2.59,6.06);const cm=containerMat();for(let i=0;i<90;i++){const m=new THREE.Mesh(CBRK.geo,cm.clone());m.castShadow=true;m.visible=false;scene.add(m);CBRK.deb.push({m,v:new V3(),av:new V3(),on:false});}}
+  const c=o.c,cx=(c[0]+c[3])/2,cz=(c[2]+c[5])/2,top=c[4];L.updateMatrixWorld(true);
+  for(let i=blk.i0;i<blk.i1;i++){im.getMatrixAt(i,_cm);_cm.decompose(_cp,_cq,_cs);const w=_cp.clone().applyMatrix4(L.matrixWorld),hi=w.y>top-3,lay=Math.round((w.y-c[1]-1.3)/2.62);
+    const near=1-Math.min(1,Math.hypot(w.x-cx,w.z-cz)/26);
+    const d=Math.random()<(hi?.5+near*.45:lay>=1?.12+near*.4:.03+near*.1)?CBRK.deb.find(q=>!q.on):null;   // 爆心に近い・上の段ほど飛ばされやすい
+    if(d){// 飛ばされる：インスタンスは消して、本物の箱を飛ばす
+      _cs.set(0,0,0);_cm.compose(_cp,_cq,_cs);im.setMatrixAt(i,_cm);im.getColorAt(i,_cc);d.m.material.color.copy(_cc).multiplyScalar(.75);
+      d.on=true;d.m.visible=true;d.m.position.copy(w);d.m.quaternion.identity();const ox=w.x-cx,oz=w.z-cz,ol=Math.hypot(ox,oz)||1;
+      d.v.set(ox/ol*(6+Math.random()*16),12+Math.random()*16,oz/ol*(6+Math.random()*16));d.av.set((Math.random()-.5)*4,(Math.random()-.5)*2,(Math.random()-.5)*4);d.rest=false;d.sink=0;d.t=0;}
+    else{// 残る：上の段ほど大きく崩れてずれ、傾く。焼けて少し黒ずむ
+      const k=Math.max(0,Math.round((_cp.y-c[1]-1.3)/2.62)),dr=k*Math.random()*1.4,tilt=(Math.random()-.5)*.25*(1+k*.5);
+      _cp.y-=dr;_cp.x+=(Math.random()-.5)*k*.8;_cp.z+=(Math.random()-.5)*k*1.2;_cq.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt*.4,(Math.random()-.5)*.3*k,tilt)));
+      _cm.compose(_cp,_cq,_cs);im.setMatrixAt(i,_cm);im.getColorAt(i,_cc);_cc.multiplyScalar(.55+Math.random()*.25);im.setColorAt(i,_cc);}}
+  im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;
+  if(c.cy0===undefined)c.cy0=c[4];c[4]=c[1]+Math.max(2.6,(c[4]-c[1])*.55);}   // 崩れたあとの当たりの高さ
+function contUpdate(dt){if(!CBRK.deb.length)return;
+  for(const d of CBRK.deb){if(!d.on||d.rest)continue;d.t+=dt;const m=d.m,p=m.position;
+    if(d.sink>0){// 海に落ちた：ゆっくり傾きながら沈む
+      d.sink+=dt;p.y-=dt*(.5+d.sink*.08);m.rotateX(dt*.05);if(p.y<-6){m.visible=false;d.rest=true;}continue;}
+    d.v.y-=dt*16;p.addScaledVector(d.v,dt);m.rotateX(d.av.x*dt);m.rotateY(d.av.y*dt);m.rotateZ(d.av.z*dt);
+    const gy=groundAt(p.x,p.z);
+    if(gy<1.2&&p.y<.6){d.sink=.01;d.v.set(0,0,0);seaHit(p.x,p.z);if(p.distanceTo(camera.position)<600)SFX.splash();continue;}
+    if(gy>=1.2&&p.y<gy+1.3){p.y=gy+1.3;if(Math.abs(d.v.y)>5){d.v.y*=-.22;d.v.x*=.5;d.v.z*=.5;d.av.multiplyScalar(.45);puff(p.x,gy+.5,p.z,0,2,0,1.6,.6,.9);if(p.distanceTo(camera.position)<500)SFX.scrape();}
+      else{// 止まる：ほぼ水平に寝かせる
+        d.rest=true;const e=new THREE.Euler().setFromQuaternion(m.quaternion,'YXZ');m.rotation.set(Math.round(e.x/(Math.PI/2))*(Math.PI/2)*0+(Math.random()-.5)*.06,e.y,(Math.random()-.5)*.08,'YXZ');}}}}
+function contReset(){const L=baseGroup.userData.lodPort,cn=L&&L.userData.cont;if(cn){const arr=cn.im.instanceMatrix.array;
+    for(const blk of CBRK.broken){arr.set(blk.orig,blk.i0*16);blk.dead=false;}
+    if(CBRK.broken.length){cn.im.instanceMatrix.needsUpdate=true;if(cn.colors0){cn.im.instanceColor.array.set(cn.colors0);cn.im.instanceColor.needsUpdate=true;}}}
+  CBRK.broken.length=0;for(const d of CBRK.deb){d.on=false;d.m.visible=false;}
+  for(const c of baseGroup.userData.colliders)if(c[8]===5&&c.cy0!==undefined)c[4]=c.cy0;}
 // 1 頂点の崩れ方（ワールド座標で計算）。塔は柱（b.c）の根元を支点に、ほかはひとまとめの範囲（b.cu）で崩す
-function brkPos(b,X,Y,Z,u,out){const c=b.kind===1?b.c:b.cu,x0=c[0],x1=c[3],z0=c[2],z1=c[5],y0=c[1],h=Math.max(1,b.y1-y0),w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2,ny=sat((Y-y0)/h);
+function brkPos(b,X,Y,Z,u,out){const c=b.kind===1?b.c:b.cu,pv=b.kind===1&&b.c[9],x0=pv?pv[0]:c[0],x1=pv?pv[2]:c[3],z0=pv?pv[1]:c[2],z1=pv?pv[3]:c[5],y0=c[1],h=Math.max(1,b.y1-y0),w=x1-x0,d=z1-z0,cx=(x0+x1)/2,cz=(z0+z1)/2,ny=sat((Y-y0)/h);
   if(b.kind===1){// 塔：根元の端を支点に倒れる（加速しながら）
     const th=1.48*Math.min(1,u*u),px=cx+b.dx*w*.5,pz=cz+b.dz*d*.5,kx=b.dz,kz=-b.dx,vx=X-px,vy=Y-y0,vz=Z-pz,cs=Math.cos(th),sn=Math.sin(th),kd=kx*vx+kz*vz;
     // v cos + (k×v) sin + k(k·v)(1-cos)　k=(kx,0,kz)
@@ -1554,6 +1588,7 @@ function brkUpdate(dt){if(!BRK.list.length)return;const rng=new Map();
     if(u>=1){b.done=true;for(const q of b.asm){const c=q.c;c[4]=b.kind===1||b.kind===4?c[1]+2:c[1]+(q.y1-c[1])*(b.kind===2?.5:.32);}}}
   for(const[a,r]of rng){a.updateRange.offset=r[0]*3;a.updateRange.count=(r[1]-r[0]+1)*3;a.needsUpdate=true;}}
 function brkReset(){for(let k=BRK.list.length-1;k>=0;k--){const b=BRK.list[k];for(const P0 of b.parts){const arr=P0.m.a.array;for(let j=0;j<P0.I.length;j++){const i=P0.I[j];arr[i*3]=P0.O[j*3];arr[i*3+1]=P0.O[j*3+1];arr[i*3+2]=P0.O[j*3+2];}P0.m.a.updateRange.offset=0;P0.m.a.updateRange.count=-1;P0.m.a.needsUpdate=true;}
+    if(b.c[10])b.c[10].userData.dead=false;
     for(const q of b.asm)q.c[4]=q.y1;for(const h of b.hide){h.x.visible=h.v;h.x.userData.brkDead=false;}for(const t of b.att){t.x.position.copy(t.p0);t.x.quaternion.copy(t.q0);t.x.userData.brkDead=false;}}
   BRK.list.length=0;BRK.sc=0;U.uScN.value=0;BRK.claim.clear();if(G.hgDead){G.hgDead=false;hangarLight(1);}}
 function updateCommon(dt){
@@ -1711,6 +1746,10 @@ function initSeaLife(){
   const spm=sprayMat();
   for(let i=0;i<200;i++){const m=new THREE.Mesh(quad1(),spm.clone());m.material.uniforms.map=spm.uniforms.map;m.material.uniforms.uSun=U.uSunCol;m.material.uniforms.tDepth=U.tDepth;m.material.uniforms.uRes=U.uRes;m.frustumCulled=false;m.visible=false;overlay.add(m);sprays.push({m,life:0,max:1,vel:new V3(),s:1,spray:1});}
   for(const[k,x,z,h,sp]of[['cargo',-1100,BASE.z-3600,2.5,7],['fish',420,BASE.z-2300,.6,4],['cargo',1700,BASE.z-5400,-.4,7],['fish',-380,BASE.z-4700,3.6,4],['patrol',900,BASE.z-1900,1.9,11],['fish',260,BASE.z-6100,5.2,4]]){const m=buildShip(k);if(m.userData.radar)m.userData.radar.userData.dyn=1;mergeStatic(m);scene.add(m);overlay.add(m.userData.wake);overlay.add(m.userData.bow);ships.push({m,x,z,h,sp,ph:x});}
+  // 港に止まっている船（貨物船・巡視船・漁船・作業船）：動かないが、撃てば航行中の船と同じように沈む
+  {const L=baseGroup.userData.lodPort;L.updateMatrixWorld(true);for(const[k,lx,lz,ry]of L.userData.moored||[]){const m=buildShip(k);if(m.userData.radar)m.userData.radar.userData.dyn=1;mergeStatic(m);scene.add(m);
+    overlay.add(m.userData.wake);overlay.add(m.userData.bow);m.userData.wake.visible=m.userData.bow.visible=false;if(m.userData.foam){m.userData.foam.rb.uniforms.uAlpha.value=0;m.userData.foam.sw.uniforms.uAlpha.value=0;}
+    const wp=L.localToWorld(new V3(lx,0,lz));ships.push({m,x:wp.x,z:wp.z,h:ry,sp:0,ph:lx*.37,moored:true,rope:(L.userData.ropes||{})[k]});}}
   for(const[x,z]of[[-55,BASE.z-3350],[70,BASE.z-4600],[35,BASE.z-1750]]){const pod={x,z,z0:z,d:[]};for(let i=0;i<5;i++){const m=buildDolphin();m.visible=false;scene.add(m);pod.d.push({m,ox:(i-2)*4.5+((i*7)%3),oz:(i%2)*6+i*2.2,ph:i*.37+x*.01,was:false});}dpods.push(pod);}
   const tg=new THREE.CylinderGeometry(.2,.2,1,6);tg.rotateX(Math.PI/2);tether=new THREE.Mesh(tg,glowMat(new V3(.5,2.6,3.6),0));tether.visible=false;tether.frustumCulled=false;overlay.add(tether);
 }
@@ -1724,7 +1763,7 @@ function strInit(){STR.init=true;
   for(let i=0;i<10;i++)STR.fire.push(makeBillboard(new V3(3.2,1.3,.35)));}
 function strReset(){brkReset();boomReset();if(!STR.init)return;STR.cols.forEach(o=>{o.dead=false;if(o.c[7])return;o.hp=Math.max(8,Math.min(56,Math.round((o.c[3]-o.c[0])*(o.c[5]-o.c[2])/90)));});STR.burn.length=0;STR.said={};
   STR.smoke.forEach(p=>{p.life=0;p.m.visible=false;});STR.fire.forEach(m=>m.visible=false);
-  for(const s of ships){if(s.x0===undefined){s.x0=s.x;s.z0=s.z;s.sp0=s.sp;}s.dead=false;s.hp=undefined;s.x=s.x0;s.z=s.z0;s.sp=s.sp0;s.m.visible=s.m.userData.wake.visible=s.m.userData.bow.visible=true;}}
+  for(const s of ships){if(s.x0===undefined){s.x0=s.x;s.z0=s.z;s.sp0=s.sp;}s.dead=false;s.hp=undefined;s.x=s.x0;s.z=s.z0;s.sp=s.sp0;s.m.visible=true;s.m.userData.wake.visible=s.m.userData.bow.visible=!s.moored;if(s.rope)s.rope.visible=true;}contReset();}
 const strSay=(k,who,t)=>{if(STR.said[k])return;STR.said[k]=1;say(who,t);};
 // 弾の線分 a→p が船・施設・地面に当たったら true
 function strHit(t,a,st,dmg){dmg=dmg||1;
@@ -1741,14 +1780,14 @@ function strHit(t,a,st,dmg){dmg=dmg||1;
       for(const o of STR.cols){const c=o.c;if(q.x>c[0]-1&&q.x<c[3]+1&&q.z>c[2]-1&&q.z<c[5]+1&&q.y>c[1]-1&&q.y<c[4]+1){
         puff(q.x,q.y,q.z,0,2,0,1.6,.5,.9);if(Math.random()<.5&&q.distanceTo(camera.position)<500)SFX.ting();
         if(!o.dead&&!c[7]){o.hp-=dmg;strSay('base','G',lx>1050?'おい、港を撃つな！　何やってる！':'おい！　そこは味方の基地だぞ！');
-          if(o.hp<=0){o.dead=true;if(G.stats)G.stats.wreck=(G.stats.wreck||0)+1;const kd=c[8]||0,wd=Math.max(c[3]-c[0],c[5]-c[2]);_sq.set((c[0]+c[3])/2,kd===1?c[1]+4:c[4]+2,(c[2]+c[5])/2);/* 中心は屋根の上（建物の中だと壁に隠れて火球が見えない） */explode(_sq.clone(),kd===3?1:kd===1?.45:Math.min(1,.45+wd/70),['bldg','tower','shed','tank'][kd]);brkStart(o);
+          if(o.hp<=0){o.dead=true;if(G.stats)G.stats.wreck=(G.stats.wreck||0)+1;const kd=c[8]||0,wd=Math.max(c[3]-c[0],c[5]-c[2]);_sq.set((c[0]+c[3])/2,kd===1?c[1]+4:c[4]+2,(c[2]+c[5])/2);/* 中心は屋根の上（建物の中だと壁に隠れて火球が見えない） */explode(_sq.clone(),kd===3?1:kd===1?.45:Math.min(1,.45+wd/70),['bldg','tower','shed','tank','bldg','shed'][kd]);if(kd===5)contBreak(o);else brkStart(o);
             {const kd=c[8]||0;if(kd!==1)STR.burn.push({x:_sq.x,y:c[1]+(c[4]-c[1])*(kd===2?.45:.3),z:_sq.z,r:Math.min(kd===3?22:14,(c[3]-c[0])/4+3),t:0,max:kd===3?140:90});}strSay('baseK','C','施設の損壊を確認……すべて記録しています');}}
         return true;}}
       if(q.y<Math.max(islandH(lx,lz),3.5)){puff(q.x,Math.max(islandH(lx,lz),3.5),q.z,0,5,0,1.4,.6,.8);return true;}}
     else if(q.y<3.5){puff(q.x,3.6,q.z,0,7,0,1.3,.6);if(Math.random()<.25&&q.distanceTo(camera.position)<400)SFX.plip();return true;}}
   return false;
 }
-function strSink(s){s.dead=true;if(G.stats)G.stats.sunk=(G.stats.sunk||0)+1;s.sinkT=0;const L=s.m.userData.len,dk=L>100?31:L>50?9:4;_sq.set(s.x,dk,s.z);explode(_sq.clone(),L>100?1:L>50?.7:.45,'ship');
+function strSink(s){s.dead=true;if(s.rope)s.rope.visible=false;   /* 係留索は切れる */if(G.stats)G.stats.sunk=(G.stats.sunk||0)+1;s.sinkT=0;const L=s.m.userData.len,dk=L>100?31:L>50?9:4;_sq.set(s.x,dk,s.z);explode(_sq.clone(),L>100?1:L>50?.7:.45,'ship');
   // 船体に沿って誘爆が続く（大きい船ほど多く、長く）
   {const n=L>100?5:L>50?3:1;for(let i=0;i<n;i++){const t=.5+i*(L>100?.85:.7)+Math.random()*.4,f=(Math.random()-.5)*L*.8;BOOM.q.push({t,fn:()=>{if(!s.dead)return;explode(new V3(s.x-Math.sin(s.h)*f,dk+Math.random()*4-s.sinkT*(L>100?.35:.7),s.z-Math.cos(s.h)*f),(L>100?.6:.4)*(.7+Math.random()*.5),'ship');}});}}STR.burn.push({ship:s,x:s.x,y:6,z:s.z,r:Math.min(14,L/8+3),t:0,max:L>100?80:45});
   strSay('sink','G',L>100?'貨物船が……沈んでいく。乗組員は無事なのか':'……船が沈んだ。何をしてるんだ、隊長');}
@@ -1768,7 +1807,7 @@ function strUpdate(dt){
 function puff(x,y,z,vx,vy,vz,s,life,a,pool){const p=(pool||puffs).find(q=>q.life<=0);if(!p)return;p.a=a||1;p.life=p.max=life;p.m.position.set(x,y,z);p.vel.set(vx,vy,vz);p.s=s;p.m.visible=true;}
 // ── 港の動き：岸壁クレーンの荷役、RTG の走行、トレーラーの周回
 function animPort(dt){const B=baseGroup.userData.lodPort;if(!B)return;if(camera.position.distanceTo(_fv.set(BASE.x+1250,0,BASE.z+150))>4000)return;const t=G.t;
-  for(const c of B.userData.cranes||[]){const a=c.userData.anim,T=(t*.035+a.ph)%1;
+  for(const c of B.userData.cranes||[]){if(c.userData.dead)continue;const a=c.userData.anim,T=(t*.035+a.ph)%1;
     // 1 周：船の上で降ろす→巻き上げ→陸側へ→降ろす→巻き上げ→船へ戻る
     const seg=[[0,0,30],[.12,0,21],[.2,0,21],[.3,0,31],[.48,-30,31],[.58,-30,4.5],[.66,-30,4.5],[.76,-30,31],[1,0,31]];let i=0;while(i<seg.length-2&&T>seg[i+1][0])i++;
     const s0=seg[i],s1=seg[i+1],u=ease(sat((T-s0[0])/(s1[0]-s0[0])));a.tro.position.x=lerp(s0[1],s1[1],u);const sy=lerp(s0[2],s1[2],u);a.sp.position.y=sy;a.bx.visible=T>.2&&T<.62;
@@ -1801,6 +1840,7 @@ function updateSeaLife(dt){
       const w=s.m.userData.wake;w.material.uniforms.uAlpha.value=.8*sat(s.sp/4);s.m.userData.bow.visible=false;{const fo=s.m.userData.foam;if(fo){fo.rb.uniforms.uAlpha.value=.3*sat(s.sp/4);fo.sw.uniforms.uAlpha.value=0;}}if(dp>=L*.45)s.m.visible=false;continue;}
     s.x-=Math.sin(s.h)*s.sp*dt;s.z-=Math.cos(s.h)*s.sp*dt;const L=s.m.userData.len;
     if(s.m.userData.radar)s.m.userData.radar.rotation.y+=dt*2;const bw=s.m.userData.bow;bw.position.set(s.x,.8,s.z);bw.rotation.y=s.h;bw.children.forEach(c=>c.material.uniforms.uAlpha.value=.7);
+    if(s.moored){bw.visible=false;s.m.position.set(s.x,Math.sin(G.t*.4+s.ph)*.12,s.z);s.m.rotation.set(0,s.h,Math.sin(G.t*.5+s.ph)*.006,'YXZ');continue;}
     s.horn=(s.horn||0)-dt;if(L>60&&s.horn<=0&&G.mode==='play'&&Math.hypot(P.pos.x-s.x,P.pos.z-s.z)<700&&P.pos.y<500){s.horn=40;SFX.horn();}
     s.m.position.set(s.x,Math.sin(G.t*.5+s.ph)*.4,s.z);s.m.rotation.set(Math.sin(G.t*.4+s.ph)*.012,s.h,Math.sin(G.t*.6+s.ph)*.02,'YXZ');
     const w=s.m.userData.wake;w.position.set(s.x+Math.sin(s.h)*L*2.0,.7,s.z+Math.cos(s.h)*L*2.0);w.rotation.set(-Math.PI/2,s.h,0,'YXZ');w.material.uniforms.uAlpha.value=.6;w.material.uniforms.uSp.value=-s.sp;
