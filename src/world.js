@@ -346,48 +346,90 @@ function hudTex(){if(HUDT)return HUDT;const c=document.createElement('canvas');c
   x.beginPath();x.moveTo(20,10);x.lineTo(108,10);for(let k=0;k<8;k++){x.moveTo(24+k*12,10);x.lineTo(24+k*12,k%2?14:17);}x.stroke();x.strokeRect(6,40,20,14);x.strokeRect(102,40,20,14);
   HUDT=new THREE.CanvasTexture(c);return HUDT;}
 // 射出座席と操縦士。p の座標で、床が y=0、機首が -z。頭と操縦桿は動かせるように返す
+// 操縦士と射出座席。p の中に座席の中心 (x, z) で置く。前が -z、上が +y（単位 m）。返す head は首振り、stick は操縦桿の動きに使う
+// 体は丸い形（楕円体と、関節を球でつないだ先細りの円柱）で作る。飛行服・耐 G スーツ・救命胴衣・サバイバルベスト・ハーネス・手袋・ブーツ・
+// ヘルメット（バイザーの覆い・色付きバイザー・酸素マスクとホース）
 function crewSeat(p,x,z,suit){
-  const dk=std({color:lin(0x15181b),roughness:.7,metalness:.3}),pad=std({color:lin(0x343b33),roughness:.95,metalness:0}),st=std({color:lin(suit),roughness:.85,metalness:0}),hm=std({color:lin(0xe4e7ea),roughness:.28,metalness:.2}),
-    vz=std({color:lin(0x0a0d12),roughness:.06,metalness:.95}),yl=std({color:lin(0xd9a21b),roughness:.6,metalness:.1}),web=std({color:lin(0x8a8f94),roughness:.9,metalness:0}),
-    vest=std({color:lin(0x8a5a22),roughness:.9,metalness:0}),mt=std({color:lin(0x9aa0a6),roughness:.35,metalness:.9}),red=std({color:lin(0xb3261c),roughness:.6,metalness:.1});
-  const A=(geo,m,px,py,pz,rx)=>{const o=new THREE.Mesh(geo,m);o.position.set(x+px,py,z+pz);if(rx)o.rotation.x=rx;p.add(o);return o;};
-  const limb=(a,b,r,m)=>{const d=new V3().subVectors(b,a),o=new THREE.Mesh(new THREE.CylinderGeometry(r,r*.85,d.length(),10),m);o.position.set(x,0,z).add(a).addScaledVector(d,.5);o.quaternion.setFromUnitVectors(new V3(0,1,0),d.normalize());p.add(o);};
-  // 座席：座面と背もたれ（枠＋クッション）、頭当て、レール、頭上の傘収納、射出ハンドル 2 つ
-  A(new THREE.BoxGeometry(.5,.14,.5),dk,0,-.01,.32);A(new THREE.BoxGeometry(.42,.05,.4),pad,0,.075,.3);
-  A(new THREE.BoxGeometry(.48,.74,.09),dk,0,.2,.62,.2);A(new THREE.BoxGeometry(.38,.5,.05),pad,0,.2,.565,.2);
-  for(const s of[1,-1]){A(new THREE.BoxGeometry(.05,.8,.07),mt,s*.27,.2,.7,.2);A(new THREE.BoxGeometry(.06,.3,.2),dk,s*.25,.14,.47,.2);}
-  A(new THREE.BoxGeometry(.3,.2,.13),dk,0,.52,.73);A(new THREE.BoxGeometry(.22,.14,.03),pad,0,.52,.66);
-  A(new THREE.BoxGeometry(.34,.13,.2),dk,0,.44,.86);A(new THREE.BoxGeometry(.2,.02,.12),red,0,.51,.86);
-  const eh=A(new THREE.TorusGeometry(.055,.014,6,14),yl,0,.074,.1);eh.rotation.x=Math.PI/2;
-  // 操縦士：胴、救命胴衣、肩、首、ハーネス、両腕と手袋、太ももと脛と靴
-  A(new THREE.BoxGeometry(.4,.44,.24),st,0,.27,.47,.12);A(new THREE.BoxGeometry(.34,.26,.05),vest,0,.3,.345,.12);
-  A(new THREE.CylinderGeometry(.07,.08,.1,10),st,0,.5,.47);
-  for(const s of[1,-1]){A(new THREE.SphereGeometry(.13,12,10),st,s*.22,.44,.48);A(new THREE.BoxGeometry(.05,.4,.02),web,s*.09,.31,.315,.12);A(new THREE.BoxGeometry(.06,.05,.03),mt,s*.09,.2,.3);
-    limb(new V3(s*.25,.42,.45),new V3(s*.35,.2,.22),.06,st);
-    const hand=s>0?new V3(.03,.3,-.04):new V3(-.42,.27,-.08);limb(new V3(s*.35,.2,.22),hand,.05,st);A(new THREE.SphereGeometry(.052,10,8),dk,hand.x,hand.y,hand.z);
-    limb(new V3(s*.11,.13,.34),new V3(s*.16,.24,-.14),.078,st);limb(new V3(s*.16,.24,-.14),new V3(s*.16,.1,-.58),.058,st);A(new THREE.BoxGeometry(.1,.08,.2),dk,s*.16,.08,-.64);}
-  // 頭：ヘルメット、帯、耳当て、バイザー、酸素マスク
-  const head=new THREE.Group();head.position.set(x,.63,z+.45);p.add(head);
-  const H=(geo,m,px,py,pz)=>{const o=new THREE.Mesh(geo,m);o.position.set(px,py,pz);head.add(o);return o;};
-  H(new THREE.SphereGeometry(.19,20,16),hm,0,0,0);const sp=H(new THREE.TorusGeometry(.19,.012,6,24),red,0,0,0);sp.rotation.y=Math.PI/2;
-  for(const s of[1,-1]){const e=H(new THREE.CylinderGeometry(.07,.07,.04,12),dk,s*.185,-.02,.0);e.rotation.z=Math.PI/2;}
-  const v=H(new THREE.SphereGeometry(.165,18,12),vz,0,.005,-.055);v.scale.set(1.08,.72,1);
-  const mk=H(new THREE.CylinderGeometry(.055,.07,.1,10),dk,0,-.09,-.16);mk.rotation.x=Math.PI/2;
-  limb(new V3(.03,.5,.28),new V3(.12,.3,.33),.022,dk);
-  {const kb=A(new THREE.BoxGeometry(.11,.012,.15),std({color:lin(0xe8e6dc),roughness:.9,metalness:0}),.15,.315,.05);kb.rotation.x=-.2;A(new THREE.BoxGeometry(.118,.016,.02),dk,.15,.333,.105).rotation.x=-.2;
-    for(const sd of[1,-1])A(new THREE.BoxGeometry(.11,.14,.03),mt,sd*.16,.14,-.75,.5);A(new THREE.BoxGeometry(.5,.04,.04),dk,0,.1,-.76);}
-  // 操縦桿（付け根を軸に動く）
-  const stick=new THREE.Group();stick.position.set(x+.03,.09,z-.04);p.add(stick);
-  const s1=new THREE.Mesh(new THREE.CylinderGeometry(.022,.03,.24,8),dk);s1.position.y=.1;stick.add(s1);const s2=new THREE.Mesh(new THREE.BoxGeometry(.05,.1,.06),dk);s2.position.y=.22;stick.add(s2);
+  const S=(c,r,m)=>std({color:lin(c),roughness:r,metalness:m});
+  const dk=S(0x15181b,.7,.3),pad=S(0x2f352e,.95,0),st=S(suit,.9,0),gsuit=S(0x545740,.92,0),vest=S(0x4c4a38,.9,0),lpu=S(0xb8952a,.75,0),web=S(0x2a2d30,.85,0),
+    glove=S(0x3a3c34,.9,0),boot=S(0x141517,.6,.1),hm=S(0xc9ced2,.3,.2),vz=S(0x0a0f16,.05,.95),msk=S(0x3a3f44,.6,.1),mt=S(0x9aa0a6,.35,.9),yl=S(0xd9a21b,.6,.1),red=S(0xb3261c,.6,.1);
+  const V=(a,b,c)=>new V3(a,b,c),grp=new THREE.Group();grp.position.set(x,0,z);p.add(grp);
+  const add=(geo,m,px,py,pz,o)=>{const q=new THREE.Mesh(geo,m);q.position.set(px,py,pz);if(o&&o.rx)q.rotation.x=o.rx;if(o&&o.ry)q.rotation.y=o.ry;if(o&&o.rz)q.rotation.z=o.rz;if(o&&o.s)q.scale.set(o.s[0],o.s[1],o.s[2]);grp.add(q);return q;};
+  const ell=(c,sx,sy,sz,m,rx)=>add(new THREE.SphereGeometry(1,18,12),m,c.x,c.y,c.z,{s:[sx,sy,sz],rx});
+  // 先細りの円柱（a→b）と、a 側の関節の球
+  const seg=(a,b,r0,r1,m,joint)=>{const d=new V3().subVectors(b,a),o=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,d.length(),12),m);o.position.copy(a).addScaledVector(d,.5);o.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());grp.add(o);
+    if(joint!==false)add(new THREE.SphereGeometry(r0,12,10),m,a.x,a.y,a.z);return o;};
+  // ── 射出座席：座面の箱（左右の側板）、クッション、背もたれ、頭部の箱（落下傘の収納）、案内レール、射出ハンドル
+  add(new THREE.BoxGeometry(.5,.12,.52),dk,0,-.02,.33);add(new THREE.BoxGeometry(.4,.05,.42),pad,0,.072,.31);
+  for(const s of[1,-1])add(new THREE.BoxGeometry(.04,.2,.5),dk,s*.25,.08,.33);
+  add(new THREE.BoxGeometry(.46,.62,.1),dk,0,.25,.66,{rx:.2});add(new THREE.BoxGeometry(.36,.46,.05),pad,0,.26,.6,{rx:.2});
+  add(new THREE.BoxGeometry(.34,.3,.2),dk,0,.62,.76,{rx:.2});add(new THREE.BoxGeometry(.3,.02,.14),red,0,.775,.79,{rx:.2});add(new THREE.BoxGeometry(.24,.16,.035),pad,0,.6,.655,{rx:.2});
+  for(const s of[1,-1]){add(new THREE.BoxGeometry(.04,.95,.06),mt,s*.22,.32,.74,{rx:.2});add(new THREE.BoxGeometry(.06,.24,.16),dk,s*.25,.18,.5,{rx:.2});}
+  {const eh=add(new THREE.TorusGeometry(.05,.013,6,14),yl,0,.1,.055,{rx:Math.PI/2-.35});eh.scale.set(1.2,1,1);}   // 射出ハンドル：座面の前縁から少し起こす
+  // ── 胴：骨盤・腹・胸（飛行服）。その上にサバイバルベスト（ポケット）と、首まわりの救命胴衣
+  ell(V(0,.1,.42),.18,.1,.16,st);ell(V(0,.21,.45),.17,.12,.13,st,.12);ell(V(0,.35,.49),.21,.16,.13,st,.12);
+  ell(V(0,.3,.46),.22,.18,.125,vest,.12);
+  for(const s of[1,-1]){add(new THREE.BoxGeometry(.08,.07,.03),vest,s*.08,.29,.342,{rx:.12});add(new THREE.BoxGeometry(.06,.05,.03),vest,s*.13,.2,.36,{rx:.12});
+    seg(V(s*.07,.45,.43),V(s*.14,.27,.37),.024,.022,lpu);}   // 救命胴衣（たたんで首から胸へ）
+  // ハーネス：肩から腰へ 2 本、胸の横帯、留め具
+  for(const s of[1,-1]){const c=new THREE.CatmullRomCurve3([V(s*.1,.48,.5),V(s*.115,.38,.335),V(s*.095,.2,.35),V(s*.085,.08,.31)]);grp.add(new THREE.Mesh(new THREE.TubeGeometry(c,16,.013,6),web));}
+  add(new THREE.BoxGeometry(.26,.028,.012),web,0,.31,.324,{rx:.12});add(new THREE.BoxGeometry(.05,.045,.02),mt,0,.31,.314,{rx:.12});
+  // 首と肩
+  seg(V(0,.47,.48),V(0,.55,.46),.055,.05,st);
+  const sh=[V(.215,.46,.5),V(-.215,.46,.5)];for(const q of sh)add(new THREE.SphereGeometry(.085,14,10),st,q.x,q.y,q.z);
+  // 腕：右手は操縦桿、左手はスロットル（関節は球）。手袋は甲・指・親指
+  const grip=[V(.03,.3,-.04),V(-.42,.29,-.1)],elb=[V(.27,.24,.27),V(-.36,.26,.24)];
+  for(let k=0;k<2;k++){const s=k?-1:1,a=sh[k],e=elb[k],h=grip[k];seg(a,e,.066,.056,st);seg(e,h.clone().lerp(e,.12),.055,.044,st);
+    const hd=new THREE.Group();hd.position.copy(h);const dd=h.clone().sub(e).normalize();hd.quaternion.setFromUnitVectors(V(0,0,-1),dd);grp.add(hd);
+    const pm=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),glove);pm.scale.set(.045,.028,.06);hd.add(pm);
+    const fg=new THREE.Mesh(new THREE.SphereGeometry(1,10,8),glove);fg.scale.set(.042,.026,.035);fg.position.set(0,-.02,-.05);fg.rotation.x=.6;hd.add(fg);
+    const th=new THREE.Mesh(new THREE.CylinderGeometry(.012,.014,.05,8),glove);th.position.set(s*.035,.012,-.03);th.rotation.set(-1.2,0,s*.6);hd.add(th);
+    const cf=new THREE.Mesh(new THREE.CylinderGeometry(.046,.044,.04,12),glove);cf.position.set(0,0,.05);cf.rotation.x=Math.PI/2;hd.add(cf);}   // 手袋の袖口
+  // 脚：太もも（耐 G スーツ）、膝、すね、ブーツ。足は踏み板の上
+  for(const s of[1,-1]){const hip=V(s*.1,.1,.38),kn=V(s*.15,.24,-.14),an=V(s*.16,.09,-.56);
+    seg(hip,kn,.095,.078,gsuit);seg(kn,an,.07,.055,gsuit);add(new THREE.SphereGeometry(.078,12,10),gsuit,kn.x,kn.y,kn.z);
+    add(new THREE.BoxGeometry(.05,.13,.02),web,s*.155,.2,-.06,{rx:-.4});   // 耐 G スーツの袋の縫い目
+    ell(V(s*.16,.07,-.62),.05,.045,.11,boot,-.2);add(new THREE.BoxGeometry(.1,.025,.22),boot,s*.16,.035,-.64,{rx:-.2});}
+  // 膝板（右ももの上）
+  {const kb=add(new THREE.BoxGeometry(.1,.008,.14),S(0xe8e6dc,.9,0),.15,.3,.06,{rx:-.4});kb.position.y=.315;}
+  // 方向舵ペダル
+  for(const sd of[1,-1])add(new THREE.BoxGeometry(.11,.14,.03),mt,sd*.16,.12,-.72,{rx:.5});add(new THREE.BoxGeometry(.5,.04,.04),dk,0,.06,-.74);
+  // ── 頭（首振りする）：ヘルメット、バイザーの覆い、色付きバイザー、耳当て、酸素マスク、ホース
+  const head=new THREE.Group();head.position.set(x,.63,z+.45);head.userData.dyn=1;p.add(head);
+  const H=(geo,m,px,py,pz,o)=>{const q=new THREE.Mesh(geo,m);q.position.set(px,py,pz);if(o&&o.s)q.scale.set(o.s[0],o.s[1],o.s[2]);if(o&&o.rx!==undefined)q.rotation.x=o.rx;if(o&&o.rz!==undefined)q.rotation.z=o.rz;head.add(q);return q;};
+  H(new THREE.SphereGeometry(1,22,16),hm,0,.01,.01,{s:[.135,.145,.155]});
+  H(new THREE.SphereGeometry(1,18,10,Math.PI*.15,Math.PI*.7,0,Math.PI*.42),hm,0,.02,-.005,{s:[.145,.15,.16],rx:-.25});   // バイザーの覆い（額の上のふくらみ）
+  H(new THREE.SphereGeometry(1,20,12,Math.PI*1.12,Math.PI*.76,Math.PI*.3,Math.PI*.32),vz,0,.0,.0,{s:[.142,.15,.158]});   // 色付きバイザー（目の前）
+  for(const s of[1,-1]){const e=H(new THREE.CylinderGeometry(.05,.05,.03,14),hm,s*.135,-.015,.02,{rz:Math.PI/2});}
+  H(new THREE.SphereGeometry(.012,8,6),mt,0,.085,-.14);   // バイザーの留め具
+  {const mk=H(latheZ([[-.07,.012],[-.05,.04],[-.01,.058],[.03,.06]],14),msk,0,-.075,-.115);mk.rotation.x=-.25;mk.scale.set(1,.85,1);   // 酸素マスク
+    for(const s of[1,-1]){const sp=H(new THREE.BoxGeometry(.012,.012,.11),web,s*.07,-.05,-.07);sp.rotation.y=-s*.5;}
+    const c=new THREE.CatmullRomCurve3([V(0,-.12,-.17),V(.02,-.2,-.16),V(.06,-.3,-.1),V(.09,-.36,-.05)]);head.add(new THREE.Mesh(new THREE.TubeGeometry(c,14,.018,8),msk));}
+  // 操縦桿：付け根を軸に動く。握り（傾いた握り・頭の上のボタン・人差し指の引き金）
+  const stick=new THREE.Group();stick.position.set(x+.03,.09,z-.04);stick.userData.dyn=1;p.add(stick);
+  {const sm=new THREE.Mesh(new THREE.CylinderGeometry(.018,.026,.2,10),dk);sm.position.y=.1;stick.add(sm);const bt=new THREE.Mesh(new THREE.CylinderGeometry(.04,.045,.035,12),pad);bt.position.y=.012;stick.add(bt);   // 付け根の蛇腹
+    const gr=new THREE.Mesh(latheZ([[-.06,.02],[-.03,.026],[.03,.024],[.055,.017]],12),dk);gr.rotation.x=-Math.PI/2+.25;gr.position.y=.23;stick.add(gr);
+    const hb=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,.012,8),mt);hb.position.set(0,.288,.004);stick.add(hb);const tg=new THREE.Mesh(new THREE.BoxGeometry(.012,.02,.01),red);tg.position.set(0,.23,-.026);stick.add(tg);}
   return{head,stick};
 }
 // 計器盤（覆いと画面）を p に置く。w は幅
 function instrPanel(p,w,y,z){
-  const dk=std({color:lin(0x101316),roughness:.8,metalness:.2});
+  const dk=std({color:lin(0x23272c),roughness:.75,metalness:.2}),bz=std({color:lin(0x1c2126),roughness:.6,metalness:.4}),key=std({color:lin(0x2a3036),roughness:.7,metalness:.2});
   const hood=new THREE.Mesh(new THREE.BoxGeometry(w,.4,.5),dk);hood.position.set(0,y,z);p.add(hood);
   const lip=new THREE.Mesh(new THREE.BoxGeometry(w*1.04,.035,.66),dk);lip.position.set(0,y+.215,z+.06);p.add(lip);
-  const face=new THREE.Mesh(new THREE.PlaneGeometry(w*.96,.36),new THREE.MeshBasicMaterial({map:mfdTex(),color:new THREE.Color(1.5,1.5,1.5)}));face.position.set(0,y,z+.257);face.rotation.x=-.08;face.castShadow=false;p.add(face);
+  // 表示面（3 つの画面の絵）と、その上に立体の縁・押しボタンの列。面と同じ傾きの組にまとめる
+  const fp=new THREE.Group();fp.position.set(0,y,z+.257);fp.rotation.x=-.08;p.add(fp);
+  const W=w*.96,face=new THREE.Mesh(new THREE.PlaneGeometry(W,.36),new THREE.MeshBasicMaterial({map:mfdTex(),color:new THREE.Color(1.5,1.5,1.5)}));face.castShadow=false;fp.add(face);
+  const sw=152/512*W,shh=124/192*.36,cy=(.5-74/192)*.36,fr=.014,dp=.014;
+  for(const u of[88,256,424]){const cx=(u/512-.5)*W;
+    for(const[bx,by,bw,bh]of[[cx,cy+shh/2+fr/2,sw+fr*2,fr],[cx,cy-shh/2-fr/2,sw+fr*2,fr],[cx-sw/2-fr/2,cy,fr,shh],[cx+sw/2+fr/2,cy,fr,shh]]){const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,dp),bz);b.position.set(bx,by,dp/2);fp.add(b);}
+    for(const sy of[1,-1])for(let k=0;k<5;k++){const b=new THREE.Mesh(new THREE.BoxGeometry(.016,.011,.008),key);b.position.set(cx-sw*.38+k*sw*.19,cy+sy*(shh/2+fr+.011),.004);fp.add(b);}}
+  // 画面の下の予備計器の窓と、スイッチ列の段
+  {const b=new THREE.Mesh(new THREE.BoxGeometry(W*.98,.012,.02),bz);b.position.set(0,(.5-146/192)*.36,.01);fp.add(b);}
   const cmp=new THREE.Mesh(new THREE.BoxGeometry(.1,.07,.08),dk);cmp.position.set(w*.36,y+.26,z+.1);p.add(cmp);
+  // HUD の下の操作パネル（キーの並び）
+  {const uf=new THREE.Mesh(new THREE.BoxGeometry(.24,.09,.07),dk);uf.position.set(0,y+.175,z+.27);uf.rotation.x=-.5;p.add(uf);
+    for(let r=0;r<2;r++)for(let k=0;k<5;k++){const b=new THREE.Mesh(new THREE.BoxGeometry(.028,.018,.012),key);b.position.set(-.08+k*.04,.015-r*.03,.04);uf.add(b);}}
 }
 // 操作盤の上面に貼る板
 function consoleTop(p,w,l,x,y,z){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),new THREE.MeshBasicMaterial({map:consoleTex(),color:new THREE.Color(1.2,1.2,1.2)}));m.rotation.x=-Math.PI/2;m.position.set(x,y+.006,z);   /* 箱の上面から少し離す（同じ高さだとちらつく） */m.castShadow=false;p.add(m);return m;}
@@ -539,7 +581,10 @@ function buildAircraft(accentHex,label,shapeI,scheme){
   // ディフューザー（腹下のパイロンに懸架）
   const PY=SH.orig?-2.76:-2.32;
   const pod=buildDiffuser();pod.position.set(0,PY,-.3);g.add(pod);ud.pod=pod;
-  const pyl=new THREE.Mesh(new THREE.BoxGeometry(.34,.52,3.4),belly);pyl.position.set(0,PY+.54,-.2);pyl.userData.podm=1;g.add(pyl);ud.podY=PY;
+  {const XA=new V3(1,0,0),pyl=new THREE.Mesh(loft([foil(new V3(0,PY+.36,-1.85),3.3,.11,XA),foil(new V3(0,PY+1.05,-1.95),3.5,.11,XA)]),belly);pyl.userData.podm=1;g.add(pyl);   // 翼断面のパイロン（下端は弾の中、上端は胴体の中）
+    for(const z of[-1.15,.75])for(const s of[1,-1]){const a=new V3(s*.12,PY+.62,z-.3),b=new V3(s*.31,PY+.31,z-.3),d=b.clone().sub(a),br=new THREE.Mesh(new THREE.CylinderGeometry(.026,.026,d.length(),8),dark);br.position.copy(a).addScaledVector(d,.5);br.quaternion.setFromUnitVectors(new V3(0,1,0),d.normalize());br.userData.podm=1;g.add(br);
+      const pad=new THREE.Mesh(new THREE.BoxGeometry(.1,.04,.14),dark);pad.position.set(s*.3,PY+.3,z-.3);pad.rotation.z=-s*Math.PI/4;pad.userData.podm=1;g.add(pad);}}   // 揺れ止め（弾を斜め上から押さえる）
+  ud.podY=PY;
   for(const z of[-1.6,1.1]){const br=new THREE.Mesh(new THREE.TorusGeometry(.48,.04,6,16,Math.PI),dark);br.position.set(0,PY,z);br.userData.podm=1;g.add(br);}
   // 衝突防止灯
   const stb=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.6,1.6,1.8),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
@@ -1148,26 +1193,61 @@ function addArmor(g){
 }
 
 // ───────────────────────── ディフューザー（気象制御弾） ─────────────────────────
+// 外形は半径 0.42・全長約 7.5m（機体の腹下の懸架環や格納庫の架台に合わせる）。前から：レドームと観測窓、前の小翼 4 枚、
+// 放射部（へこんだ帯に放射素子が 18 個ずつ並ぶ 3 本の帯）、後部胴体（危険表示の帯・機番の刷り込み・点検口）、ガンメタルの絞り胴、切り落とし三角の安定翼 4 枚、ロケットのノズル
+let DFTEX=null;
+function diffuserTex(){if(DFTEX)return DFTEX;const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');
+  x.fillStyle='#1a1f24';x.font='bold 46px Arial';x.textBaseline='middle';x.fillText('WX-7',14,40);x.font='bold 22px Arial';x.fillText('DIFFUSER',150,30);x.font='16px Arial';x.fillText('MIZUHA WEATHER CONTROL',150,56);
+  x.fillStyle='#d69a14';x.fillRect(14,82,330,8);x.fillStyle='#1a1f24';x.font='bold 15px Arial';x.fillText('DANGER  HIGH VOLTAGE  DO NOT TOUCH EMITTERS',14,106);
+  // 稲妻の警告三角
+  x.fillStyle='#d69a14';x.beginPath();x.moveTo(430,14);x.lineTo(490,112);x.lineTo(370,112);x.fill();x.fillStyle='#1a1f24';x.beginPath();x.moveTo(436,44);x.lineTo(416,82);x.lineTo(432,82);x.lineTo(424,104);x.lineTo(448,70);x.lineTo(432,70);x.lineTo(442,44);x.fill();
+  DFTEX=new THREE.CanvasTexture(c);DFTEX.encoding=THREE.sRGBEncoding;DFTEX.anisotropy=8;return DFTEX;}
 function buildDiffuser(){
-  const g=new THREE.Group();
-  const white=std({color:lin(0xc4cace),metalness:.6,roughness:.34}),dark=std({color:lin(0x14181c),metalness:.75,roughness:.4}),
-    amber=std({color:lin(0xd69a14),metalness:.3,roughness:.5}),cy=new THREE.MeshBasicMaterial({color:new THREE.Color(.16,.95,1.3)});CUTDIM.push([cy,cy.color.clone()]);
-  g.add(new THREE.Mesh(latheZ([[-3.7,.02],[-3.45,.17],[-2.8,.34],[-1.9,.42],[2.5,.42],[3.0,.36],[3.35,.27]],20),white));
-  const seek=new THREE.Mesh(new THREE.SphereGeometry(.19,14,10),dark);seek.position.z=-3.52;g.add(seek);
-  // 放射リングと、その間の黒い帯
-  for(const z of[-1.5,-.5,.5]){const r=new THREE.Mesh(new THREE.TorusGeometry(.445,.04,8,28),cy);r.position.z=z;g.add(r);
-    const b=new THREE.Mesh(new THREE.CylinderGeometry(.428,.428,.5,24,1,true),dark);b.rotation.x=Math.PI/2;b.position.z=z+.5;g.add(b);}
-  const hz=new THREE.Mesh(new THREE.CylinderGeometry(.43,.43,.22,24,1,true),amber);hz.rotation.x=Math.PI/2;hz.position.z=1.85;g.add(hz);
-  const hz2=hz.clone();hz2.position.z=-2.35;hz2.scale.set(.92,1,.92);g.add(hz2);
-  // 後退角つきの安定翼 4 枚
-  const fs=new THREE.Shape();fs.moveTo(0,0);fs.lineTo(1.25,0);fs.lineTo(1.25,.34);fs.lineTo(.95,.78);fs.lineTo(.55,.78);fs.closePath();
-  const fg=new THREE.ExtrudeGeometry(fs,{depth:.045,bevelEnabled:false});fg.translate(0,0,-.022);fg.rotateY(-Math.PI/2);
-  for(let k=0;k<4;k++){const f=new THREE.Group();f.rotation.z=k*Math.PI/2+Math.PI/4;const m=new THREE.Mesh(fg,white);m.position.set(0,.36,2.05);f.add(m);g.add(f);}
-  const noz=new THREE.Mesh(new THREE.CylinderGeometry(.2,.29,.4,16,1,true),dark);noz.material=noz.material.clone();noz.material.side=THREE.DoubleSide;noz.rotation.x=Math.PI/2;noz.position.z=3.5;g.add(noz);
-  {const cap=new THREE.Mesh(new THREE.CircleGeometry(.28,20),dark);cap.position.z=3.34;g.add(cap);const throat=new THREE.Mesh(new THREE.CircleGeometry(.27,16),new THREE.MeshBasicMaterial({color:0x020304}));throat.position.z=3.4;g.add(throat);}
+  const g=new THREE.Group(),R=.42;
+  const white=std({color:lin(0xd6dadd),metalness:.35,roughness:.42}),rad=std({color:lin(0xaab1b8),metalness:.15,roughness:.55}),gun=std({color:lin(0x3b4148),metalness:.85,roughness:.38}),
+    dark=std({color:lin(0x14181c),metalness:.75,roughness:.4,side:THREE.DoubleSide}),amber=std({color:lin(0xd69a14),metalness:.3,roughness:.5}),
+    hot=std({color:lin(0x4a3f36),metalness:.9,roughness:.45,side:THREE.DoubleSide}),sap=std({color:lin(0x0e2436),metalness:.9,roughness:.06}),
+    cy=new THREE.MeshBasicMaterial({color:new THREE.Color(.1,.62,.85)});CUTDIM.push([cy,cy.color.clone()]);
+  const M=(geo,m,z,rx)=>{const o=new THREE.Mesh(geo,m);o.position.z=z||0;if(rx!==undefined)o.rotation.x=rx;g.add(o);return o;};
+  const cyl=(r0,r1,z0,z1,m,open)=>M(new THREE.CylinderGeometry(r1,r0,z1-z0,36,1,!!open),m,(z0+z1)/2,Math.PI/2);   // z0 側の半径 r0、z1 側の半径 r1
+  // レドーム（なめらかなオジーブ）と、先端のサファイアの観測窓と縁
+  M(latheZ([[-3.72,.02],[-3.64,.1],[-3.45,.19],[-3.15,.28],[-2.8,.36],[-2.55,.405],[-2.4,R]],36),rad);
+  M(new THREE.SphereGeometry(.075,16,12),sap,-3.69);M(new THREE.TorusGeometry(.07,.012,6,18),dark,-3.67);
+  // 胴体：前部・放射部の間・後部（継ぎ目は細い溝の輪）
+  const bands=[-1.45,-.55,.35],BL=.62,RC=.392;
+  const segs=[[-2.4,bands[0]-BL/2],[bands[0]+BL/2,bands[1]-BL/2],[bands[1]+BL/2,bands[2]-BL/2],[bands[2]+BL/2,2.3]];
+  for(const[z0,z1]of segs)cyl(R,R,z0,z1,white,true);
+  for(const z of[-2.4,-1.95,1.0,2.3])M(new THREE.TorusGeometry(R,.007,6,40),dark,z);
+  // 放射部：へこんだ帯（段の面も閉じる）、縁の金属環、放射素子の列
+  for(const zc of bands){const z0=zc-BL/2,z1=zc+BL/2;cyl(RC,RC,z0,z1,dark,true);
+    for(const[z,f]of[[z0,1],[z1,-1]]){const rg=M(new THREE.RingGeometry(RC,R,36),dark,z);rg.rotation.y=f>0?0:Math.PI;}
+    for(const z of[z0+.012,z1-.012])M(new THREE.TorusGeometry(R-.004,.014,6,40),gun,z);
+    for(let k=0;k<18;k++){const a=k/18*Math.PI*2,e=new THREE.Mesh(new THREE.BoxGeometry(.045,.014,BL-.2),cy);e.position.set(Math.cos(a)*(RC+.008),Math.sin(a)*(RC+.008),zc);e.rotation.z=a+Math.PI/2;g.add(e);}}
+  // 危険表示の帯と、機番の刷り込み（左右）
+  cyl(R+.006,R+.006,1.48,1.62,amber,true);for(const z of[1.48,1.62]){const rg=M(new THREE.RingGeometry(R-.002,R+.006,36),amber,z);rg.rotation.y=z<1.5?Math.PI:0;}
+  // 機番の刷り込み：後部胴体の左右に、胴の長さ方向に読めるように（絵柄を 90° 回す）
+  for(const s of[1,-1]){const t=diffuserTex().clone();t.needsUpdate=true;t.center.set(.5,.5);t.rotation=s>0?-Math.PI/2:Math.PI/2;
+    const dm=std({map:t,transparent:true,alphaTest:.4,metalness:.2,roughness:.5,polygonOffset:true,polygonOffsetFactor:-2});
+    const d=new THREE.Mesh(new THREE.CylinderGeometry(R+.005,R+.005,.74,20,1,true,(s>0?Math.PI/2:Math.PI*1.5)-.5,1.0),dm);d.rotation.x=Math.PI/2;d.position.z=1.06;g.add(d);}
+  // 懸架の金具（上面、懸架環の位置）
+  for(const z of[-1.3,1.4]){const lg=M(new THREE.BoxGeometry(.1,.07,.16),gun,z);lg.position.y=R+.025;}
+  // 絞り胴（ガンメタル）とノズル：外のベル、奥の喉、燃焼の光
+  M(latheZ([[2.3,R],[2.6,.412],[2.95,.375],[3.25,.325],[3.42,.3]],36),gun);
+  cyl(.3,.3,3.42,3.45,gun,true);M(new THREE.RingGeometry(.22,.3,36),gun,3.45);   // 端の板はノズルのベルまで届かせる（ベルが浮いていた）
+  M(latheZ([[3.3,.2],[3.5,.235],[3.78,.27]],28),hot);
+  M(new THREE.TorusGeometry(.27,.014,6,32),gun,3.78);
+  {M(new THREE.CircleGeometry(.2,24),dark,3.305);M(new THREE.CircleGeometry(.11,20),new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.6,.2)}),3.325);}   // 喉と燃焼の光（後ろから見える向き。少し離して重ねない）
+  // 小翼：前の 4 枚（小さな台形）と後ろの安定翼 4 枚（切り落とし三角）。どちらも根元を胴に少し埋める
+  const fin=(pts,th)=>{const sh=new THREE.Shape();sh.moveTo(pts[0][0],pts[0][1]);for(const q of pts.slice(1))sh.lineTo(q[0],q[1]);sh.closePath();const fg=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false});fg.translate(0,0,-th/2);fg.rotateY(-Math.PI/2);return fg;};
+  const cg=fin([[0,0],[.44,0],[.36,.24],[.16,.24]],.024),tg=fin([[0,0],[1.22,0],[1.22,.3],[.92,.66],[.6,.66]],.032);
+  for(let k=0;k<4;k++){const a=k*Math.PI/2+Math.PI/4;
+    const f1=new THREE.Group();f1.rotation.z=a;const m1=new THREE.Mesh(cg,white);m1.position.set(0,R-.03,-2.42);f1.add(m1);g.add(f1);
+    const f2=new THREE.Group();f2.rotation.z=a;const m2=new THREE.Mesh(tg,white);m2.position.set(0,.31,2.12);f2.add(m2);
+    const rf=new THREE.Mesh(new THREE.BoxGeometry(.06,.05,1.1),gun);rf.position.set(0,.37,2.62);rf.rotation.x=-.05;f2.add(rf);g.add(f2);}   // 安定翼の根元の覆い
   const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.6,3.2,5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   fl.position.z=4.1;fl.scale.set(2.6,2.6,1);fl.visible=false;g.add(fl);g.userData.flame=fl;
   g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial)o.castShadow=true;});
+  mergeStatic(g);   // 部品が多い（放射素子だけで 54 個）ので材質ごとに 1 つへまとめる（機体・格納庫・カットで何本も出る）
   return g;
 }
 
@@ -1222,6 +1302,8 @@ function snapParts(g){g.updateMatrixWorld(true);const items=[],others=[];g.trave
     const pa=it.geometry.attributes.position;let vd=1e9;const vb=new V3();for(let i=0;i<pa.count;i++){v.fromBufferAttribute(pa,i).applyMatrix4(it.matrixWorld);const d=v.distanceToSquared(best);if(d<vd){vd=d;vb.copy(v);}}
     const dir=best.clone().sub(C).normalize(),sh=best.clone().sub(vb).addScaledVector(dir,.006);
     const inv=new THREE.Matrix4().copy(it.parent.matrixWorld).invert(),p0=it.getWorldPosition(new V3()).add(sh).applyMatrix4(inv);it.position.copy(p0);it.updateMatrixWorld(true);}}
+// 操縦席の動かない部品（操縦士の体・座席・計器）を材質ごとにまとめる。首と操縦桿（dyn）は動くので残す
+function ckMerge(ck){ck.updateMatrixWorld(true);mergeStatic(ck);}
 function detailAircraft(g,accentHex,label){
   const ud=g.userData;
   const dark=std({color:lin(0x14181c),metalness:.7,roughness:.45}),metal=std({color:lin(0x80858a),metalness:.95,roughness:.26}),
@@ -1239,7 +1321,7 @@ function detailAircraft(g,accentHex,label){
   if(STD)for(const s of[1,-1]){const v=add(new THREE.BoxGeometry(.04,.3,.9),dark,s*1.94,.55,-3.6);v.rotation.z=-s*.12;v.userData.snap=1;}
   // 操縦席：風防を半透明にして中を作る
   if(ud.canopy){const cm=ud.canopy.material=ud.canopy.material.clone();ENVMATS.push(cm);cm.transparent=true;cm.opacity=.46;cm.depthWrite=false;cm.envMapIntensity=1.8;cm.color=lin(0x1a2a36);}
-  const ckDark=std({color:lin(0x101316),roughness:.8,metalness:.2}),lamp=c=>new THREE.MeshBasicMaterial({color:c}),ckMetal=std({color:lin(0x3a4148),roughness:.45,metalness:.8});
+  const ckDark=std({color:lin(0x2a2f34),roughness:.75,metalness:.2}),lamp=c=>new THREE.MeshBasicMaterial({color:c}),ckMetal=std({color:lin(0x3a4148),roughness:.45,metalness:.8});
   ud.heads=[];ud.sticks=[];
   if(!OR){
     // 風防の内側：胴体上面の傾きに合わせた床の上に、計器盤・HUD・側方の操作盤・座席と操縦士を置く
@@ -1260,9 +1342,9 @@ function detailAircraft(g,accentHex,label){
       for(let k=0;k<2;k++){const kn=C(new THREE.CylinderGeometry(.03,.035,.04,10),ckMetal,s*.5,.28,-.7+k*1.2);}
     }
     // スロットル（左の操作盤の上、2 本）
-    for(const dx of[-.035,.035]){C(new THREE.BoxGeometry(.03,.14,.03),ckMetal,-.42+dx,.33,-.1);C(new THREE.BoxGeometry(.05,.05,.09),dark,-.42+dx,.41,-.1);}
+    for(const dx of[-.035,.035]){C(new THREE.BoxGeometry(.03,.14,.03),ckMetal,-.42+dx,.33,-.1);const tg=C(latheZ([[-.055,.018],[-.03,.03],[.03,.03],[.055,.02]],12),dark,-.42+dx,.415,-.1);tg.rotation.x=.15;}   // スロットルの握り（丸みのある形）
     const cw=new THREE.Group();cw.scale.setScalar(.9);cw.position.set(0,.01,.04);ck.add(cw);
-    const cr=crewSeat(cw,0,0,0x5a6a3c);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
+    const cr=crewSeat(cw,0,0,0x6a6e58);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
     // 座席の後ろ：電子機器の棚と、風防を押し上げる支柱
     C(new THREE.BoxGeometry(.62,.26,.8),ckDark,0,.2,1.45);consoleTop(ck,.5,.6,0,.332,1.45);
     {const a=new V3(0,.33,1.15),b=new V3(0,.62,1.0),d=new V3().subVectors(b,a),o=C(new THREE.CylinderGeometry(.025,.03,d.length(),8),ckMetal,0,0,0);o.position.copy(a).addScaledVector(d,.5);o.quaternion.setFromUnitVectors(new V3(0,1,0),d.normalize());}
@@ -1270,6 +1352,7 @@ function detailAircraft(g,accentHex,label){
     const cs=ud.canopy.scale.x,cy=ud.canopy.scale.y;
     for(const zl of[-1.8,.9,2.2]){const r=1.2*Math.sqrt(1-(zl/3.48)**2),b=new THREE.Mesh(new THREE.TorusGeometry(r,zl<0?.06:.045,6,26,Math.PI),dark);b.position.z=zl;b.scale.set(cs*(zl<0?1-.5*(zl/3.48)**2:1),cy,1);ud.canopyG.add(b);}
     {const pts=[];for(let k=0;k<=8;k++){const zl=.9+k/8*1.3;pts.push(new V3(0,1.2*cy*Math.sqrt(1-(zl/3.48)**2),zl));}ud.canopyG.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),12,.03,6),dark));}
+    ckMerge(ck);
   }else{
     // 原型機：丸い風防の中の操縦室。床・後ろの隔壁・並列 2 席・計器盤・中央の操作台・頭上の操作盤
     const fl=add(new THREE.CylinderGeometry(1,1,.08,36),ckDark,0,-.82,-10.2);fl.scale.set(2.08,1,3.1);
@@ -1280,7 +1363,7 @@ function detailAircraft(g,accentHex,label){
     for(const s of[1,-1]){add(new THREE.BoxGeometry(.8,1.2,.2),ckDark,s*1.25,-.1,-9.84);const r=new THREE.Mesh(new THREE.PlaneGeometry(.7,1.1),new THREE.MeshBasicMaterial({map:consoleTex(),color:new THREE.Color(1.2,1.2,1.2)}));r.position.set(s*1.25,-.1,-9.945);r.rotation.y=Math.PI;r.castShadow=false;g.add(r);}
     const ck=new THREE.Group();ck.position.set(0,-.54,-11.5);ck.scale.setScalar(1.5);g.add(ck);
     const C=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);ck.add(o);return o;};
-    for(const s of[1,-1]){C(new THREE.BoxGeometry(.56,.16,.62),ckDark,s*.56,-.12,.4);const cr=crewSeat(ck,s*.56,0,s>0?0x5a6a3c:0x6a5a3c);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
+    for(const s of[1,-1]){C(new THREE.BoxGeometry(.56,.16,.62),ckDark,s*.56,-.12,.4);const cr=crewSeat(ck,s*.56,0,s>0?0x6a6e58:0x6e6a58);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
       C(new THREE.BoxGeometry(.2,.3,1.3),ckDark,s*1.02,.0,.1);consoleTop(ck,.17,1.2,s*1.02,.152,.1);}
     instrPanel(ck,1.5,.22,-.95);
     C(new THREE.BoxGeometry(.3,.34,1.1),ckDark,0,.0,-.3);consoleTop(ck,.26,1.0,0,.172,-.3);
@@ -1288,6 +1371,7 @@ function detailAircraft(g,accentHex,label){
     // 頭上の操作盤（隔壁から伸びる梁に吊る）
     C(new THREE.BoxGeometry(.1,.07,1.75),ckMetal,0,1.02,.33);C(new THREE.BoxGeometry(.7,.06,.6),ckDark,0,.97,-.1);
     {const o=consoleTop(ck,.6,.5,0,.938,-.1);o.rotation.x=Math.PI/2;}
+    ckMerge(ck);
   }
   // エンジン：ファン、可変ノズル
   ud.noz=[];

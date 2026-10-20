@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer';
 const only=process.argv.slice(2).map(Number);
 const b=await puppeteer.launch({headless:'new',protocolTimeout:900000});const p=await b.newPage();
 const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message));
+await p.evaluateOnNewDocument(()=>{window.__NOMERGE=1;});   // 部品をまとめる前の状態で調べる（まとめると部品どうしの重なりが見えない）
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR',{timeout:200000});
 const src=await (await fetch('http://127.0.0.1:8795/index.html')).text();const LINES=src.split('\n');
 const res=await p.evaluate(only=>{const out=[];const V=THREE.Vector3;
