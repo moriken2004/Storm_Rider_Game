@@ -17,6 +17,7 @@ const T=[
   ['カットの割り込み','midcut.mjs',[],o=>/"gates":3/.test(o)&&!/PAGEERR/.test(o)],
   ['武装モード','armed.mjs',[],o=>/読み込み直し後 false/.test(o)&&!/PAGEERR/.test(o)],
   ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
+  ['機体の作り（浮き・面の重なり）','acheck.mjs',[],o=>(o.match(/浮き 0  重なり 0/g)||[]).length===8&&/エラーなし/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=24;}],   // 岸壁に掛けた防舷材のタイヤは壁から下がっているので候補に入る（係留船を基地から外したため 16→24）
   ['設定画面の機体プレビュー','preview.mjs',[],o=>!/✗/.test(o)&&/✓/.test(o)],
   ['画面遷移とキー操作','ui.mjs',[],o=>/問題 0 件/.test(o)],

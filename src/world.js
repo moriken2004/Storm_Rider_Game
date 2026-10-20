@@ -242,11 +242,11 @@ function panelize(m,wx){m.onBeforeCompile=sh=>{
     .replace("#include <color_fragment>","#include <color_fragment>\nfloat pln=max(pl(vOP.z/1.9,0.016),max(pl(vOP.x/1.55+0.5,0.02),pl(vOP.y/1.1,0.026)*0.5));\nfloat ptn=hsh(vec3(vOP.x/1.55+0.5,vOP.y/1.1,vOP.z/1.9));\nfloat pst=fract(sin(floor(vOP.x*7.0)*91.7)*4375.5);\nfloat aoc=1.0-0.30*(1.0-smoothstep(1.2,3.4,abs(vOP.x)))*smoothstep(1.1,-0.5,vOP.y)*smoothstep(-9.0,-4.0,vOP.z)-0.18*(1.0-smoothstep(1.7,2.6,abs(vOP.x)))*smoothstep(0.1,0.9,vOP.y)*smoothstep(-3.5,-1.0,vOP.z)*(1.0-smoothstep(4.5,8.0,vOP.z));\ndiffuseColor.rgb*=aoc*(0.96+0.06*ptn)*(1.0-0.38*pln)*(1.0-0.15*smoothstep(0.55,1.0,pst)*smoothstep(-2.0,9.0,vOP.z));\nfloat gr=vn(vOP*vec3(1.1,1.1,0.3))*0.6+vn(vOP*vec3(3.1,3.1,0.9)+7.0)*0.4;\nfloat stv=vn(vec3(vOP.z*2.6,vOP.y*0.22,3.0+step(0.0,vOP.x)));\nfloat sd=length(vec2(abs(vOP.x)-uEng.x,vOP.y-uEng.y));\nfloat soot=smoothstep(uEng.z+1.0,uEng.z+4.2,vOP.z)*(1.0-smoothstep(0.6,2.9,sd));\ndiffuseColor.rgb*=(1.0-0.42*smoothstep(0.38,0.72,gr))*(1.0-0.34*smoothstep(0.52,0.8,stv)*smoothstep(1.4,-1.6,vOP.y)*smoothstep(0.8,0.35,abs(normalize(vON).y)))*(1.0-0.22*smoothstep(0.55,0.85,vn(vec3(vOP.x*3.2,5.0,vOP.z*0.22)))*smoothstep(0.7,0.95,abs(normalize(vON).y)));\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.015,0.014,0.013),0.92*soot*(0.6+0.4*gr));")
     .replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(ptn-0.5)*0.2+pln*0.3+smoothstep(0.38,0.72,gr)*0.3+soot*0.4,0.05,1.0);");
 };return m;}
-function loft(secs){
+function loft(secs,noStart){
   const n=secs[0].length,pos=[],idx=[];
   secs.forEach(s=>s.forEach(p=>pos.push(p.x,p.y,p.z)));
   for(let i=0;i<secs.length-1;i++)for(let j=0;j<n;j++){const a=i*n+j,b=i*n+(j+1)%n,c=a+n,d=b+n;idx.push(a,c,b,b,c,d);}
-  const last=(secs.length-1)*n;for(let j=1;j<n-1;j++){idx.push(0,j,j+1);idx.push(last,last+j+1,last+j);}
+  const last=(secs.length-1)*n;for(let j=1;j<n-1;j++){if(!noStart)idx.push(0,j,j+1);idx.push(last,last+j+1,last+j);}   // noStart：中心線から始まる翼は根元の蓋を作らない（左右の蓋が重なる）
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;
 }
 // 翼断面：origin=前縁、chord は +z 方向、厚みは up 方向
@@ -358,9 +358,9 @@ function crewSeat(p,x,z,suit){
   for(const s of[1,-1]){A(new THREE.BoxGeometry(.05,.8,.07),mt,s*.27,.2,.7,.2);A(new THREE.BoxGeometry(.06,.3,.2),dk,s*.25,.14,.47,.2);}
   A(new THREE.BoxGeometry(.3,.2,.13),dk,0,.52,.73);A(new THREE.BoxGeometry(.22,.14,.03),pad,0,.52,.66);
   A(new THREE.BoxGeometry(.34,.13,.2),dk,0,.44,.86);A(new THREE.BoxGeometry(.2,.02,.12),red,0,.51,.86);
-  const eh=A(new THREE.TorusGeometry(.055,.014,6,14),yl,0,.13,.08);eh.rotation.x=Math.PI/2;
+  const eh=A(new THREE.TorusGeometry(.055,.014,6,14),yl,0,.074,.1);eh.rotation.x=Math.PI/2;
   // 操縦士：胴、救命胴衣、肩、首、ハーネス、両腕と手袋、太ももと脛と靴
-  A(new THREE.BoxGeometry(.42,.44,.24),st,0,.27,.47,.12);A(new THREE.BoxGeometry(.34,.26,.05),vest,0,.3,.345,.12);
+  A(new THREE.BoxGeometry(.4,.44,.24),st,0,.27,.47,.12);A(new THREE.BoxGeometry(.34,.26,.05),vest,0,.3,.345,.12);
   A(new THREE.CylinderGeometry(.07,.08,.1,10),st,0,.5,.47);
   for(const s of[1,-1]){A(new THREE.SphereGeometry(.13,12,10),st,s*.22,.44,.48);A(new THREE.BoxGeometry(.05,.4,.02),web,s*.09,.31,.315,.12);A(new THREE.BoxGeometry(.06,.05,.03),mt,s*.09,.2,.3);
     limb(new V3(s*.25,.42,.45),new V3(s*.35,.2,.22),.06,st);
@@ -374,7 +374,7 @@ function crewSeat(p,x,z,suit){
   const v=H(new THREE.SphereGeometry(.165,18,12),vz,0,.005,-.055);v.scale.set(1.08,.72,1);
   const mk=H(new THREE.CylinderGeometry(.055,.07,.1,10),dk,0,-.09,-.16);mk.rotation.x=Math.PI/2;
   limb(new V3(.03,.5,.28),new V3(.12,.3,.33),.022,dk);
-  {const kb=A(new THREE.BoxGeometry(.11,.012,.15),std({color:lin(0xe8e6dc),roughness:.9,metalness:0}),.15,.315,.05);kb.rotation.x=-.2;A(new THREE.BoxGeometry(.11,.016,.02),dk,.15,.325,.115).rotation.x=-.2;
+  {const kb=A(new THREE.BoxGeometry(.11,.012,.15),std({color:lin(0xe8e6dc),roughness:.9,metalness:0}),.15,.315,.05);kb.rotation.x=-.2;A(new THREE.BoxGeometry(.118,.016,.02),dk,.15,.333,.105).rotation.x=-.2;
     for(const sd of[1,-1])A(new THREE.BoxGeometry(.11,.14,.03),mt,sd*.16,.14,-.75,.5);A(new THREE.BoxGeometry(.5,.04,.04),dk,0,.1,-.76);}
   // 操縦桿（付け根を軸に動く）
   const stick=new THREE.Group();stick.position.set(x+.03,.09,z-.04);p.add(stick);
@@ -390,7 +390,7 @@ function instrPanel(p,w,y,z){
   const cmp=new THREE.Mesh(new THREE.BoxGeometry(.1,.07,.08),dk);cmp.position.set(w*.36,y+.26,z+.1);p.add(cmp);
 }
 // 操作盤の上面に貼る板
-function consoleTop(p,w,l,x,y,z){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),new THREE.MeshBasicMaterial({map:consoleTex(),color:new THREE.Color(1.2,1.2,1.2)}));m.rotation.x=-Math.PI/2;m.position.set(x,y,z);m.castShadow=false;p.add(m);return m;}
+function consoleTop(p,w,l,x,y,z){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,l),new THREE.MeshBasicMaterial({map:consoleTex(),color:new THREE.Color(1.2,1.2,1.2)}));m.rotation.x=-Math.PI/2;m.position.set(x,y+.006,z);   /* 箱の上面から少し離す（同じ高さだとちらつく） */m.castShadow=false;p.add(m);return m;}
 // 2 点をつなぐ翼断面の支柱（厚みは支柱の向きに直交）
 function strutFoil(p0,p1,chord,thick){const d=p1.clone().sub(p0);d.z=0;const n=new V3(-d.y,d.x,0).normalize();
   return loft([foil(new V3(p0.x,p0.y,p0.z-chord/2),chord,thick,n),foil(new V3(p1.x,p1.y,p1.z-chord*.45),chord*.9,thick,n)]);}
@@ -405,7 +405,7 @@ const SHAPES=[{name:'後退翼',eng:[0,.32,0,1],st:[[1.1,.15,-2.9,7.8,.12],[6.2,
   // 全翼機：幅広の胴体と主翼がつながり、尾翼を持たない。エンジンは背中に半分埋まる
   {name:'全翼機',fus:1.6,st:[[1.7,.2,-6.6,14.6,.1],[6.6,.3,1.0,6.2,.09],[13.6,.5,6.3,2.2,.08]],winglet:true,tail:'none',eng:[-.7,1.08,1.3,1],saddle:true},
   // 連結翼：垂直尾翼の上から前へ伸びる後ろの翼が、主翼の端とつながる
-  {name:'結合翼',eng:[0,.32,0,1],st:[[1.1,-.3,-4.6,5.2,.11],[6,-.05,-.6,3.6,.1],[11.6,.25,3.5,2.2,.09]],winglet:false,tail:'join'},
+  {name:'結合翼',eng:[0,.32,0,1],st:[[1.1,-.3,-4.6,5.2,.11],[6,-.05,-.6,3.6,.1],[11.6,.25,3.5,2.2,.09]],winglet:false,tail:'join',gear:[2.5,-.25,-1.0]},   // 主脚は主翼の下（主翼が前寄りで、既定の位置だと何もない所から下がっていた）
   // 逆ガル翼：翼が一度下がってから上がる。脚は折れ目に付く
   {name:'逆ガル翼',eng:[0,.32,0,1],st:[[1.1,.9,-2.6,7.0,.12],[5.0,-.75,-.9,5.0,.11],[12.6,1.5,2.6,2.2,.09]],winglet:false,tail:'h',gear:[4.6,-.6],fil:.15},
   // 原型機：丸い風防の胴体、背中の支柱に載る長い直線翼、両脇のエンジン、腹下の左右のフロート
@@ -450,13 +450,13 @@ function buildAircraft(accentHex,label,shapeI,scheme){
     for(const s of[1,-1]){
       // フロート（上は機体色、下は腹の色）と、胴体につなぐ 2 本の支柱
       const fl=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),belly);fl.scale.set(1.15,.5,6.0);fl.position.set(s*2.75,-2.0,-1.4);g.add(fl);
-      const ft=new THREE.Mesh(new THREE.SphereGeometry(1,24,10,0,Math.PI*2,0,Math.PI/2),body);ft.scale.set(1.17,.42,6.03);ft.position.set(s*2.75,-1.96,-1.4);g.add(ft);
+      const ft=new THREE.Mesh(new THREE.SphereGeometry(1,24,10,0,Math.PI*2,0,Math.PI/2),body);ft.scale.set(1.2,.44,6.08);ft.position.set(s*2.75,-1.95,-1.4);   // 下の楕円体とほぼ同じ面になってちらついたので、少し外へg.add(ft);
       for(const z of[-4.4,.4])g.add(new THREE.Mesh(strutFoil(new V3(s*1.2,-1.5,z),new V3(s*2.7,-1.75,z),2.4,.2),body));
     }
   }else{
     const fus=new THREE.Mesh(latheZ([[-12.6,.02],[-12.1,.3],[-10.6,.82],[-8.2,1.32],[-5,1.74],[-1,1.95],[4,1.86],[8,1.42],[11,.82],[12.2,.42],[12.4,.02]]),body);
     fus.scale.set(FW,.9,1);g.add(fus);
-    const keel=new THREE.Mesh(latheZ([[-8.5,.02],[-6,1.0],[-1,1.5],[5,1.35],[9,.6],[10.5,.02]],20),belly);keel.scale.set(.86*FW,.6,1);keel.position.y=-.82;g.add(keel);
+    const keel=new THREE.Mesh(latheZ([[-8.5,.02],[-6,1.0],[-1,1.5],[5,1.35],[9,.6],[10.5,.02]],20),belly);keel.scale.set(.86*FW,.64,1);keel.position.y=-.88;g.add(keel);
     const nose=new THREE.Mesh(latheZ([[-13.9,.02],[-13.5,.09],[-12.3,.26],[-12.1,.31]],12),dark);nose.scale.set(FW,.9,1);g.add(nose);
     // 風防：機首側を細く絞り、胴体上面の傾きに合わせて前下がりに置く（胴体の幅からはみ出さないように）
     const cg=new THREE.Group();cg.position.set(0,1.12,-6.2);cg.rotation.x=-.08;g.add(cg);ud.canopyG=cg;
@@ -466,7 +466,7 @@ function buildAircraft(accentHex,label,shapeI,scheme){
   // 主翼・尾翼（形の選択で変わる）
   const T=ST[2],WK=SH.winglet==='down'?-1:1,tipP=SH.winglet?new V3(T[0]+1.1,T[1]+2.18*WK,T[2]+2.2):new V3(T[0]+.15,T[1]+.12,T[2]+T[3]*.55);ud.tipPos=tipP;
   for(const s of[1,-1]){
-    g.add(new THREE.Mesh(loft(ST.map(a=>foil(new V3(s*a[0],a[1],a[2]),a[3],a[4],UP))),body));
+    g.add(new THREE.Mesh(loft(ST.map(a=>foil(new V3(s*a[0],a[1],a[2]),a[3],a[4],UP)),ST[0][0]===0),body));
     if(!SH.orig){const a=ST[0],b=ST[1],rr=fusR(a[2]+a[3]*.4),hw=FW*Math.sqrt(Math.max(.3,rr*rr-(a[1]/.9)**2));
       const sec=(x,kc,kt)=>{const t=clamp((x-a[0])/(b[0]-a[0]),0,1),c=lerp(a[3],b[3],t);return foil(new V3(s*x,lerp(a[1],b[1],t),lerp(a[2],b[2],t)-c*(kc-1)*.45),c*kc,lerp(a[4],b[4],t)*(1+(kt-1)*(SH.fil||1))/kc,UP);};
       g.add(new THREE.Mesh(loft([sec(hw-.35,1.2,2.3),sec(hw+.2,1.1,1.5),sec(hw+.75,1.015,1.04)]),body));}
@@ -488,7 +488,7 @@ function buildAircraft(accentHex,label,shapeI,scheme){
       g.add(new THREE.Mesh(loft([foil(new V3(s*4.8,3.4,10.9),1.4,.07,XA),foil(new V3(s*4.8,3.9,11.4),.9,.07,XA)]),acc));
     }else if(SH.tail==='join'){
       if(s>0)g.add(new THREE.Mesh(loft([foil(new V3(0,1.2,5.6),5.6,.085,XA),foil(new V3(0,6.1,9.5),2.9,.075,XA)]),body));
-      g.add(new THREE.Mesh(loft([foil(new V3(0,5.85,9.2),3.3,.12,UP),foil(new V3(s*6,3.45,6.7),2.7,.115,UP),foil(new V3(s*T[0],T[1]+1.0,T[2]+.2),2.0,.11,UP)]),body));
+      g.add(new THREE.Mesh(loft([foil(new V3(s*.14,5.85,9.2),3.3,.12,UP),foil(new V3(s*6,3.45,6.7),2.7,.115,UP),foil(new V3(s*T[0],T[1]+1.0,T[2]+.2),2.0,.11,UP)]),body));
       g.add(new THREE.Mesh(loft([foil(new V3(s*T[0],T[1]-.3,T[2]-.5),T[3]+.9,.06,XA),foil(new V3(s*T[0],T[1]+.45,T[2]-.2),T[3]+.4,.06,XA),foil(new V3(s*T[0],T[1]+1.45,T[2]+.5),1.9,.055,XA)]),acc));
       if(s>0){const bl=new THREE.Mesh(new THREE.SphereGeometry(.3,14,10),body);bl.scale.set(1,1.1,5);bl.position.set(0,5.95,10.9);g.add(bl);}
     }else if(SH.tail==='orig'){
@@ -506,10 +506,10 @@ function buildAircraft(accentHex,label,shapeI,scheme){
     // エンジン
     const nac=new THREE.Mesh(latheZ([[-3.6,.78],[-3.3,.96],[-1.5,1.08],[1.5,1.02],[3.3,.86],[3.8,.74]],22),body);nac.position.set(s*2.55,1.25,6.3);g.add(nac);
     const lip=new THREE.Mesh(new THREE.TorusGeometry(.86,.1,8,22),dark);lip.position.set(s*2.55,1.25,2.72);g.add(lip);
-    const intake=new THREE.Mesh(new THREE.CircleGeometry(.84,20),new THREE.MeshBasicMaterial({color:0x020304}));intake.position.set(s*2.55,1.25,2.9);intake.rotation.y=Math.PI;g.add(intake);
+    const intake=new THREE.Mesh(new THREE.CircleGeometry(.93,20),new THREE.MeshBasicMaterial({color:0x020304}));intake.position.set(s*2.55,1.25,2.9);intake.rotation.y=Math.PI;g.add(intake);
     const py=new THREE.Mesh(new THREE.BoxGeometry(.5,1.1,3.6),body);py.position.set(s*1.9,.8,6.2);py.rotation.z=-s*.6;py.userData.pylon=1;g.add(py);
     const noz=new THREE.Mesh(new THREE.CylinderGeometry(.7,.76,.9,20,1,true),dark);noz.rotation.x=Math.PI/2;noz.position.set(s*2.55,1.25,10.3);g.add(noz);
-    const fire=new THREE.Mesh(new THREE.CircleGeometry(.66,18),new THREE.MeshBasicMaterial({color:new THREE.Color(5,2.4,.9)}));fire.position.set(s*2.55,1.25,10.35);g.add(fire);
+    const fire=new THREE.Mesh(new THREE.CircleGeometry(.74,18),new THREE.MeshBasicMaterial({color:new THREE.Color(5,2.4,.9)}));fire.position.set(s*2.55,1.25,10.35);g.add(fire);
     const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.0,.5,.22),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
     gl.position.set(s*2.55,1.25,11.2);gl.scale.set(5,5,1);g.add(glowLOD(gl,30,.3));
     (ud.fires=ud.fires||[]).push(fire);(ud.glows=ud.glows||[]).push(gl);
@@ -546,7 +546,7 @@ function buildAircraft(accentHex,label,shapeI,scheme){
   stb.position.set(0,-1.2,4);stb.scale.set(1.4,1.4,1);g.add(glowLOD(stb,70,.18));ud.strobe=stb;
   const bcn=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.4,.2,.12),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   bcn.position.set(0,SH.orig?4.1:2.1,SH.orig?-1.9:3);bcn.scale.set(1.6,1.6,1);g.add(glowLOD(bcn,70,.18));ud.beacon=bcn;
-  detailAircraft(g,accentHex,label||'SR-01');
+  detailAircraft(g,accentHex,label||'SR-01');snapParts(g);
   ud.power=1;
   return g;
 }
@@ -1118,6 +1118,13 @@ function shellGeo(z0,z1,t0,t1,off,rf,sy){
   for(let i=0;i<n;i++)for(let j=0;j<n;j++){const a=i*(n+1)+j,b=a+1,c=a+n+1,d=c+1;idx.push(a,c,b,b,c,d);}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;
 }
+function shellSlab(z0,z1,t0,t1,o0,o1,rf,sy){
+  const n=6,pos=[],idx=[],N=(n+1)*(n+1);
+  for(const off of[o1,o0])for(let i=0;i<=n;i++)for(let j=0;j<=n;j++){const z=lerp(z0,z1,i/n),th=lerp(t0,t1,j/n),r=(rf||fusR)(z)+off;pos.push(Math.sin(th)*r,Math.cos(th)*r*(sy||.9),z);}
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){const a=i*(n+1)+j,b=a+1,c=a+n+1,d=c+1;idx.push(a,c,b,b,c,d);idx.push(N+a,N+b,N+c,N+b,N+d,N+c);}
+  const ring=[];for(let j=0;j<=n;j++)ring.push(j);for(let i=1;i<=n;i++)ring.push(i*(n+1)+n);for(let j=n-1;j>=0;j--)ring.push(n*(n+1)+j);for(let i=n-1;i>0;i--)ring.push(i*(n+1));
+  for(let k=0;k<ring.length;k++){const a=ring[k],b=ring[(k+1)%ring.length];idx.push(a,b,N+a,b,N+b,N+a);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;}
 function addArmor(g){
   const plates=[],pc=lin(g.userData.bodyHex||0x98a1a9).multiplyScalar(.7),pm=panelize(std({color:pc,metalness:.72,roughness:.36,side:THREE.DoubleSide})),
     sms=[0,1].map(v=>{const t=scarTex(v),m=std({map:t.map,emissiveMap:t.em,emissive:new THREE.Color(2.4,2.2,2.0),bumpMap:t.bump,bumpScale:.05,alphaTest:.5,metalness:.35,roughness:.62,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});return m;});g.userData.scarMats=sms;let sn=0;
@@ -1127,10 +1134,10 @@ function addArmor(g){
     for(const m of[s,p]){m.position.set(x,y,z);m.rotation.set(0,ry,rz||0);g.add(m);}if(sgeo.type==='PlaneGeometry')s.position.y-=.004;s.visible=false;p.castShadow=true;
     plates.push({mesh:p,scar:s,home:p.position.clone(),homeQ:p.quaternion.clone(),on:true,vel:new V3(),av:new V3(),life:0});};
   // 原型機は機首寄りの胴体に（支柱と丸窓を避ける）
-  if(SHA.orig)for(const[z0,z1]of[[-9.7,-8.3],[-8.1,-6.7],[-6.5,-5.1]])for(const[t0,t1]of[[-1.25,-.45],[-.4,.4],[.45,1.25]])
-    add(shellGeo(z0,z1,t0,t1,.07,origR,.86),shellUV(z0+.02,z1-.02,t0+.01,t1-.01,.012,origR,.86),0,0,0,0);
+  if(SHA.orig)for(const[z0,z1]of[[-9.45,-8.3],[-8.1,-6.7],[-6.5,-5.1]])for(const[t0,t1]of[[-1.25,-.45],[-.4,.4],[.45,1.25]])
+    add(shellSlab(z0,z1,t0,t1,-.04,.07,origR,.86),shellUV(z0+.02,z1-.02,t0+.01,t1-.01,.012,origR,.86),0,0,0,0);
   else for(const[z0,z1,tt]of[[-2.4,.3,[[-1.3,-.62],[-.52,.18],[.3,1.2]]],[.6,4.1,[[-1.15,-.2],[-.1,.7],[.82,1.32]]],[4.4,6.9,[[-1.32,-.7],[-.58,.42],[.54,1.1]]]])for(const[t0,t1]of tt)
-    add(fit(shellGeo(z0,z1,t0,t1,.07)),fit(shellUV(z0+.02,z1-.02,t0+.01,t1-.01,.012)),0,0,0,0);
+    add(fit(shellSlab(z0,z1,t0,t1,-.01,.07)),fit(shellUV(z0+.02,z1-.02,t0+.01,t1-.01,.012)),0,0,0,0);
   const WA=g.userData.wingAt,S0=g.userData.shape.st;
   const ar=mulberry(77);
   for(const s of[1,-1])for(const[fx0,w0]of(s>0?[[.24,2.9],[.55,2.2],[.84,2.1]]:[[.36,2.3],[.66,2.8],[.9,1.6]])){const fx=fx0+(ar()-.5)*.05,w=w0;const ax=lerp(S0[0][0],S0[2][0],fx),q=WA(ax),q2=WA(ax+1),d=Math.min(1.9,q.c*.3);
@@ -1157,7 +1164,7 @@ function buildDiffuser(){
   const fg=new THREE.ExtrudeGeometry(fs,{depth:.045,bevelEnabled:false});fg.translate(0,0,-.022);fg.rotateY(-Math.PI/2);
   for(let k=0;k<4;k++){const f=new THREE.Group();f.rotation.z=k*Math.PI/2+Math.PI/4;const m=new THREE.Mesh(fg,white);m.position.set(0,.36,2.05);f.add(m);g.add(f);}
   const noz=new THREE.Mesh(new THREE.CylinderGeometry(.2,.29,.4,16,1,true),dark);noz.material=noz.material.clone();noz.material.side=THREE.DoubleSide;noz.rotation.x=Math.PI/2;noz.position.z=3.5;g.add(noz);
-  {const cap=new THREE.Mesh(new THREE.CircleGeometry(.28,20),dark);cap.position.z=3.34;g.add(cap);const throat=new THREE.Mesh(new THREE.CircleGeometry(.2,16),new THREE.MeshBasicMaterial({color:0x020304}));throat.position.z=3.4;g.add(throat);}
+  {const cap=new THREE.Mesh(new THREE.CircleGeometry(.28,20),dark);cap.position.z=3.34;g.add(cap);const throat=new THREE.Mesh(new THREE.CircleGeometry(.27,16),new THREE.MeshBasicMaterial({color:0x020304}));throat.position.z=3.4;g.add(throat);}
   const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.6,3.2,5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
   fl.position.z=4.1;fl.scale.set(2.6,2.6,1);fl.visible=false;g.add(fl);g.userData.flame=fl;
   g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial)o.castShadow=true;});
@@ -1201,9 +1208,20 @@ function hinge(g,p0,p1,depth,mat,tk){
   // 厚みは翼に合わせ、後縁へ向かって薄くする（翼の中に埋もれないように）
   const geo=new THREE.BoxGeometry(len,tk,depth,1,1,4);geo.translate(0,0,depth/2);{const pa=geo.attributes.position;for(let i=0;i<pa.count;i++)pa.setY(i,pa.getY(i)*(1-.86*pa.getZ(i)/depth));geo.computeVertexNormals();}
   const m=new THREE.Mesh(geo,mat);m.castShadow=true;h.add(m);
-  const gap=new THREE.Mesh(new THREE.BoxGeometry(len,tk+.012,.05),new THREE.MeshBasicMaterial({color:0x050607}));h.add(gap);
+  const gap=new THREE.Mesh(new THREE.BoxGeometry(len*.985,tk+.012,.05),new THREE.MeshBasicMaterial({color:0x050607}));h.add(gap);
   g.add(h);return m;
 }
+// 表面に付く小物（ピトー管・排気口・電球など）を、いちばん近い機体の面へ寄せる（数 cm 浮いていた）
+function snapParts(g){g.updateMatrixWorld(true);const items=[],others=[];g.traverse(o=>{if(!o.isMesh||!o.visible)return;if(o.userData.snap)items.push(o);else{const m=Array.isArray(o.material)?o.material[0]:o.material;if(m.transparent||m.blending===THREE.AdditiveBlending)return;others.push(o);}});
+  const tri=new THREE.Triangle(),a=new V3(),b=new V3(),c=new V3(),cp=new V3(),best=new V3(),v=new V3(),bb=new THREE.Box3();
+  for(const it of items){bb.setFromObject(it);const C=bb.getCenter(new V3()),R=bb.getSize(new V3()).length()+.6;let bd=1e9;
+    for(const o of others){const ob=new THREE.Box3().setFromObject(o);if(ob.distanceToPoint(C)>R)continue;const pa=o.geometry.attributes.position,ix=o.geometry.index,n=ix?ix.count:pa.count;
+      for(let i=0;i<n;i+=3){const g0=ix?ix.getX(i):i,g1=ix?ix.getX(i+1):i+1,g2=ix?ix.getX(i+2):i+2;tri.set(a.fromBufferAttribute(pa,g0).applyMatrix4(o.matrixWorld),b.fromBufferAttribute(pa,g1).applyMatrix4(o.matrixWorld),c.fromBufferAttribute(pa,g2).applyMatrix4(o.matrixWorld));tri.closestPointToPoint(C,cp);const d=cp.distanceToSquared(C);if(d<bd){bd=d;best.copy(cp);}}}
+    if(bd>=1e9)continue;
+    // 部品の頂点のうち、その面にいちばん近いものを面へ。少しだけ埋める
+    const pa=it.geometry.attributes.position;let vd=1e9;const vb=new V3();for(let i=0;i<pa.count;i++){v.fromBufferAttribute(pa,i).applyMatrix4(it.matrixWorld);const d=v.distanceToSquared(best);if(d<vd){vd=d;vb.copy(v);}}
+    const dir=best.clone().sub(C).normalize(),sh=best.clone().sub(vb).addScaledVector(dir,.006);
+    const inv=new THREE.Matrix4().copy(it.parent.matrixWorld).invert(),p0=it.getWorldPosition(new V3()).add(sh).applyMatrix4(inv);it.position.copy(p0);it.updateMatrixWorld(true);}}
 function detailAircraft(g,accentHex,label){
   const ud=g.userData;
   const dark=std({color:lin(0x14181c),metalness:.7,roughness:.45}),metal=std({color:lin(0x80858a),metalness:.95,roughness:.26}),
@@ -1212,13 +1230,13 @@ function detailAircraft(g,accentHex,label){
   // 機首の観測ブームと風向ベーン（台風観測機の定番装備）
   const boom=add(new THREE.CylinderGeometry(.04,.085,5.4,8),metal,0,0,-16.5);boom.rotation.x=Math.PI/2;
   add(new THREE.BoxGeometry(.7,.02,.14),dark,0,0,-18.0);add(new THREE.BoxGeometry(.02,.7,.14),dark,0,0,-18.4);
-  const tip=add(new THREE.CylinderGeometry(.06,.06,.5,8),std({color:lin(0xb3261c),roughness:.5,metalness:.2}),0,0,-18.95);tip.rotation.x=Math.PI/2;
+  const tip=add(new THREE.CylinderGeometry(.06,.06,.5,8),std({color:lin(0xb3261c),roughness:.5,metalness:.2}),0,0,-18.98);tip.rotation.x=Math.PI/2;
   const OR=ud.shape.orig;
-  if(!OR)for(const s of[1,-1]){const pt=add(new THREE.CylinderGeometry(.022,.022,1,6),metal,s*.98,.3,-10.9);pt.rotation.x=Math.PI/2;pt.rotation.z=s*.12;}
+  if(!OR)for(const s of[1,-1]){const pt=add(new THREE.CylinderGeometry(.022,.022,1,6),metal,s*.98,.3,-10.9);pt.rotation.x=Math.PI/2;pt.rotation.z=s*.12;pt.userData.snap=1;}
   // ブレードアンテナと排気口
   const bl=new THREE.BoxGeometry(.05,.5,.55);if(!OR){add(bl,dark,0,1.98,-1.9);add(bl,dark,0,1.9,3.6);add(bl,dark,0,-1.72,5.2);add(bl,dark,.5,-1.6,-6.5);}else{add(bl,dark,0,2.44,-6.6);add(bl,dark,0,.84,6.5);}
   const STD=!OR&&!(ud.shape.fus>1);
-  if(STD)for(const s of[1,-1]){add(new THREE.BoxGeometry(.04,.3,.9),dark,s*1.94,.55,-3.6).rotation.z=-s*.12;}
+  if(STD)for(const s of[1,-1]){const v=add(new THREE.BoxGeometry(.04,.3,.9),dark,s*1.94,.55,-3.6);v.rotation.z=-s*.12;v.userData.snap=1;}
   // 操縦席：風防を半透明にして中を作る
   if(ud.canopy){const cm=ud.canopy.material=ud.canopy.material.clone();ENVMATS.push(cm);cm.transparent=true;cm.opacity=.46;cm.depthWrite=false;cm.envMapIntensity=1.8;cm.color=lin(0x1a2a36);}
   const ckDark=std({color:lin(0x101316),roughness:.8,metalness:.2}),lamp=c=>new THREE.MeshBasicMaterial({color:c}),ckMetal=std({color:lin(0x3a4148),roughness:.45,metalness:.8});
@@ -1237,7 +1255,6 @@ function detailAircraft(g,accentHex,label){
     const hg=C(new THREE.PlaneGeometry(.38,.26),new THREE.MeshBasicMaterial({map:hudTex(),color:new THREE.Color(1.4,1.4,1.4),transparent:true,opacity:.9,side:THREE.DoubleSide,depthWrite:false}),0,.66,-1.5);hg.rotation.x=-.3;hg.castShadow=false;
     const hgl=C(new THREE.PlaneGeometry(.38,.26),new THREE.MeshBasicMaterial({color:new THREE.Color(.12,.5,.25),transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false}),0,.66,-1.499);hgl.rotation.x=-.3;hgl.castShadow=false;
     // 風防枠の後写鏡
-    for(const s of[1,-1])C(new THREE.BoxGeometry(.12,.05,.02),ckMetal,s*.3,.63,-1.86);
     for(const s of[1,-1]){
       C(new THREE.BoxGeometry(.28,.2,2.2),ckDark,s*.5,.16,-.05);consoleTop(ck,.24,2.1,s*.5,.262,-.05);
       for(let k=0;k<2;k++){const kn=C(new THREE.CylinderGeometry(.03,.035,.04,10),ckMetal,s*.5,.28,-.7+k*1.2);}
@@ -1263,7 +1280,7 @@ function detailAircraft(g,accentHex,label){
     for(const s of[1,-1]){add(new THREE.BoxGeometry(.8,1.2,.2),ckDark,s*1.25,-.1,-9.84);const r=new THREE.Mesh(new THREE.PlaneGeometry(.7,1.1),new THREE.MeshBasicMaterial({map:consoleTex(),color:new THREE.Color(1.2,1.2,1.2)}));r.position.set(s*1.25,-.1,-9.945);r.rotation.y=Math.PI;r.castShadow=false;g.add(r);}
     const ck=new THREE.Group();ck.position.set(0,-.54,-11.5);ck.scale.setScalar(1.5);g.add(ck);
     const C=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);ck.add(o);return o;};
-    for(const s of[1,-1]){C(new THREE.BoxGeometry(.56,.16,.62),ckDark,s*.56,-.09,.38);const cr=crewSeat(ck,s*.56,0,s>0?0x5a6a3c:0x6a5a3c);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
+    for(const s of[1,-1]){C(new THREE.BoxGeometry(.56,.16,.62),ckDark,s*.56,-.12,.4);const cr=crewSeat(ck,s*.56,0,s>0?0x5a6a3c:0x6a5a3c);ud.heads.push(cr.head);ud.sticks.push(cr.stick);
       C(new THREE.BoxGeometry(.2,.3,1.3),ckDark,s*1.02,.0,.1);consoleTop(ck,.17,1.2,s*1.02,.152,.1);}
     instrPanel(ck,1.5,.22,-.95);
     C(new THREE.BoxGeometry(.3,.34,1.1),ckDark,0,.0,-.3);consoleTop(ck,.26,1.0,0,.172,-.3);
@@ -1276,10 +1293,11 @@ function detailAircraft(g,accentHex,label){
   ud.noz=[];
   for(const s of[1,-1]){
     const sp=add(new THREE.ConeGeometry(.27,.7,14),metal,s*2.55,1.25,2.6);sp.rotation.x=-Math.PI/2;
-    const fan=add(new THREE.CircleGeometry(.82,26),new THREE.MeshBasicMaterial({map:fanTex(),color:0x9aa0a6}),s*2.55,1.25,2.88);fan.rotation.y=Math.PI;fan.castShadow=false;(ud.fans=ud.fans||[]).push(fan);
+    const fan=add(new THREE.CircleGeometry(.9,26),new THREE.MeshBasicMaterial({map:fanTex(),color:0x9aa0a6}),s*2.55,1.25,2.88);fan.rotation.y=Math.PI;fan.castShadow=false;(ud.fans=ud.fans||[]).push(fan);
     const ng=new THREE.Group();ng.position.set(s*2.55,1.25,10.1);g.add(ng);
     for(let k=0;k<16;k++){const a=k/16*Math.PI*2,p=new THREE.Mesh(new THREE.BoxGeometry(.29,.035,1.15),hot);p.position.set(Math.cos(a)*.74,Math.sin(a)*.74,.5);p.rotation.z=a+Math.PI/2;p.rotation.order='ZXY';p.rotation.x=-.1;ng.add(p);}
     const ab=new THREE.Mesh(new THREE.TorusGeometry(.5,.05,6,24),new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,.9,.25)}));ab.position.z=.2;ng.add(ab);
+    for(let k=0;k<4;k++){const a=k/4*Math.PI*2+.4,st=new THREE.Mesh(new THREE.BoxGeometry(.3,.035,.035),dark);st.position.set(Math.cos(a)*.66,Math.sin(a)*.66,.2);st.rotation.z=a;ng.add(st);}   // 保炎環の支え（ノズルの内壁へ）
     ud.noz.push(ng);
     // 排気炎（始動時の炎と、ブースト時のショックダイヤモンド）
     {if(!ud.plumeMat)ud.plumeMat=new THREE.ShaderMaterial({uniforms:{uPow:{value:0},uAB:{value:0},uIgn:{value:0},uT:U.uTime},transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
@@ -1288,7 +1306,7 @@ function detailAircraft(g,accentHex,label){
       const pg=new THREE.CylinderGeometry(.2,.62,1,18,10,true);pg.translate(0,.5,0);pg.rotateX(Math.PI/2);const pl=new THREE.Mesh(pg,ud.plumeMat);pl.position.set(s*2.55,1.25,10.5);pl.frustumCulled=false;g.add(pl);(ud.plumes=ud.plumes||[]).push(pl);}
     // 補助吸気口と編隊灯
     add(new THREE.BoxGeometry(.03,.09,1.3),new THREE.MeshBasicMaterial({color:new THREE.Color(.10,.34,.09)}),s*3.62,1.25,5.9).castShadow=false;
-    if(STD&&(q=>-1.5<q.le-.2||-2.9>q.le+q.c)(ud.wingAt(2)))add(new THREE.BoxGeometry(.03,.08,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color(.10,.34,.09)}),s*1.96,.2,-2.2).castShadow=false;
+    if(STD&&(q=>-1.5<q.le-.2||-2.9>q.le+q.c)(ud.wingAt(2))){const fm=add(new THREE.BoxGeometry(.03,.08,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color(.10,.34,.09)}),s*1.96,.2,-2.2);fm.castShadow=false;fm.userData.snap=1;}
     add(new THREE.BoxGeometry(.6,.04,.5),dark,s*2.55,2.33,5.2);
   }
   for(const c of g.children){const p=c.position,ax=Math.abs(p.x);if(ax>1.7&&ax<3.8&&p.y>.6&&p.y<2.5&&p.z>2.4&&p.z<11.5)c.userData.eng=1;}
@@ -1328,7 +1346,7 @@ function detailAircraft(g,accentHex,label){
       const rg=add(new THREE.CylinderGeometry(.175,.175,.16,14,1,true),ud.wetMats[2],s*ax,py-.62,pz-.2);rg.rotation.x=Math.PI/2;
       for(const d of[-.07,.07]){const pr=add(new THREE.CylinderGeometry(.018,.018,.5,6),metal,s*ax+d,py-.62,pz-1.25);pr.rotation.x=Math.PI/2;}}
     // 翼端灯の電球
-    {const tp=ud.tipPos,bl=add(new THREE.SphereGeometry(.07,10,8),new THREE.MeshBasicMaterial({color:s>0?new THREE.Color(.12,.95,.25):new THREE.Color(1.0,.1,.07)}),s*tp.x,tp.y,tp.z);CUTDIM.push([bl.material,bl.material.color.clone()]);bl.castShadow=false;}
+    {const tp=ud.tipPos,bl=add(new THREE.SphereGeometry(.07,10,8),new THREE.MeshBasicMaterial({color:s>0?new THREE.Color(.12,.95,.25):new THREE.Color(1.0,.1,.07)}),s*tp.x,tp.y,tp.z);bl.userData.snap=1;CUTDIM.push([bl.material,bl.material.color.clone()]);bl.castShadow=false;}
     // 前縁の防氷ブーツ
     for(let k=0;k<2;k++){const a=S0[k],b=S0[k+1],ax=k?a[0]:1.9,qa=ud.wingAt(ax),L=Math.hypot(b[0]-ax,b[2]-qa.le),le=add(new THREE.BoxGeometry(L,OR?.16:.1,OR?.5:.2),OR?ud.wetMats[2]:dark,s*(ax+b[0])/2,(qa.y+b[1])/2+.01,(qa.le+b[2])/2+.07);le.rotation.y=-s*Math.atan2(b[2]-qa.le,b[0]-ax);le.rotation.z=s*Math.atan2(b[1]-qa.y,b[0]-ax);}
   }
@@ -1348,10 +1366,10 @@ function buildGear(sh,hex){
     const tr=new THREE.Mesh(new THREE.BoxGeometry(.6,.34,1.0),hub);tr.position.set(x,top-.1,z);g.add(tr);
     const b=new THREE.Mesh(new THREE.CylinderGeometry(.085,.085,1.1,12),chrome);b.position.set(x,-2.55,z);g.add(b);
     // トルクリンク（くの字の 2 枚）と、内筒の付け根の環
-    {const bar=(y0,z0,y1,z1)=>{const L=Math.hypot(y1-y0,z1-z0),m=new THREE.Mesh(new THREE.BoxGeometry(.12,L,.045),hub);m.position.set(x,(y0+y1)/2,z+(z0+z1)/2);m.rotation.x=Math.atan2(z1-z0,y1-y0);g.add(m);};
-      const yt=Math.min(top-.05,-2.12);bar(yt,-.12,-2.62,-.4);bar(-2.62,-.4,-3.0,-.1);
+    {const bar=(y0,z0,y1,z1,w)=>{const L=Math.hypot(y1-y0,z1-z0),m=new THREE.Mesh(new THREE.BoxGeometry(w||.12,L,.045),hub);m.position.set(x,(y0+y1)/2,z+(z0+z1)/2);m.rotation.x=Math.atan2(z1-z0,y1-y0);g.add(m);};
+      const yt=Math.min(top-.05,-2.12);bar(yt,-.12,-2.62,-.4);bar(-2.62,-.4,-3.0,-.1,.105);   // 下の腕は少し細く（上の腕と側面が同じ面になっていた）
       const pin=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,.2,8),chrome);pin.rotation.z=Math.PI/2;pin.position.set(x,-2.62,z-.4);g.add(pin);
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.1,12),hub);col.position.set(x,Math.min(top-.02,-2.3),z);g.add(col);}
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.1,12),hub);col.position.set(x,Math.min(top-.02,-2.31),z);   /* 脚柱の端と環の端を同じ高さにしない */g.add(col);}
     if(x===0){// 前脚：着陸灯と泥よけ
       const lh=new THREE.Mesh(new THREE.CylinderGeometry(.11,.09,.14,12),hub);lh.rotation.x=Math.PI/2;lh.position.set(0,-2.05,z-.2);g.add(lh);
       const ll=new THREE.Mesh(new THREE.CircleGeometry(.095,14),new THREE.MeshBasicMaterial({color:new THREE.Color(3,2.9,2.5)}));ll.rotation.y=Math.PI;ll.position.set(0,-2.05,z-.275);g.add(ll);
@@ -1364,8 +1382,8 @@ function buildGear(sh,hex){
     const ax=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,twin?.8:.4,8),hub);ax.rotation.z=Math.PI/2;ax.position.set(x,-3.1,z);g.add(ax);
     const dh=(top+2.35)*.62,d=new THREE.Mesh(new THREE.BoxGeometry(.04,dh,1.6),door);d.position.set(x+(x===0?.5:Math.sign(x)*.55),top-dh/2-.05,z);d.rotation.z=x===0?.22:Math.sign(x)*.26;g.add(d);
   };
-  const gp=sh&&sh.gear||[2.5,.02];
-  leg(0,-7.6,true,-1.0);leg(-gp[0],2.3,false,gp[1]);leg(gp[0],2.3,false,gp[1]);
+  const gp=sh&&sh.gear||[2.5,.02],gz=gp[2]!==undefined?gp[2]:2.3;   // [横の位置, 脚柱の付け根の高さ, 前後の位置]
+  leg(0,-7.6,true,sh&&sh.orig?-1.9:-1.0);leg(-gp[0],gz,false,gp[1]);   // 原型機は胴体が太いので前脚の付け根を胴体の下面のすぐ内側に（扉が胴体の中に埋もれていた）leg(gp[0],gz,false,gp[1]);
   g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
   return g;
 }
@@ -1677,7 +1695,7 @@ function buildFighter(){
     wh=std({color:lin(0xdfe3e6),roughness:.5,metalness:.3}),red=std({color:lin(0xb3261c),roughness:.6,metalness:.2,side:THREE.DoubleSide}),glass=std({color:lin(0x4a3a12),metalness:.95,roughness:.06});glass.envMapIntensity=2;
   const UP=new V3(0,1,0);
   const A=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;g.add(o);return o;};
-  const L=(secs,m)=>{const o=new THREE.Mesh(loft(secs),m);o.castShadow=true;g.add(o);return o;};
+  const L=(secs,m,ns)=>{const o=new THREE.Mesh(loft(secs,ns),m);o.castShadow=true;g.add(o);return o;};
   // 機首：レドーム、前部胴体、ピトー管、光学センサー
   A(latheZ([[-15.2,.02],[-14.6,.2],[-13.2,.5],[-11.8,.72]],16),radome).scale.set(1,.92,1);
   A(latheZ([[-11.8,.72],[-9,1.0],[-6,1.15],[-2.5,1.1],[0,.9]],18),top).scale.set(1,.95,1);
@@ -1691,7 +1709,7 @@ function buildFighter(){
   L([foil(new V3(-2.5,.1,-4.6),15.2,.07,UP),foil(new V3(0,.22,-5.2),16.2,.085,UP),foil(new V3(2.5,.1,-4.6),15.2,.07,UP)],top);
   for(const s of[1,-1]){
     // 前縁の張り出し（LERX）
-    L([foil(new V3(s*.7,.2,-9.6),5.2,.03,UP),foil(new V3(s*2.5,.12,-4.6),6.0,.05,UP)],top);
+    L([foil(new V3(s*2.5,.12,-4.6),6.0,.05,UP),foil(new V3(s*.7,.2,-9.6),5.2,.03,UP)],top,true);   // 中央胴体の側面から始まる（根元の蓋が胴体の蓋と重なっていた）
     // エンジン：吸気口（斜めの口と境界層の隙間）、胴、可変ノズル、噴射
     const ex=s*1.3,ey=-.55;
     A(new THREE.BoxGeometry(1.3,1.15,3.4),bot,ex,ey,-2.2);{const lip=A(new THREE.BoxGeometry(1.34,1.19,.5),bot,ex,ey+.12,-4.05);lip.rotation.x=.42;}
@@ -1704,7 +1722,7 @@ function buildFighter(){
     const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(1.3,.65,.25),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));gl.position.set(ex,ey+.12,11.5);gl.scale.set(5,5,1);g.add(glowLOD(gl,30,.3));(ud.glows=ud.glows||[]).push(gl);
     {const pg=new THREE.CylinderGeometry(.12,.56,1,14,1,true);pg.translate(0,.5,0);pg.rotateX(Math.PI/2);const pl=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.75,.35),transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));pl.position.set(ex,ey+.12,10.9);pl.frustumCulled=false;g.add(pl);(ud.plumes=ud.plumes||[]).push(pl);}
     // 主翼（後退角 42°、わずかな下反角）と動翼の線、翼端のランチャー
-    L([foil(new V3(s*2.5,.1,-3.2),8.6,.05,UP),foil(new V3(s*5.2,.04,-.6),5.4,.045,UP),foil(new V3(s*8.0,-.04,2.2),2.4,.04,UP)],top);
+    L([foil(new V3(s*2.5,.1,-3.2),8.6,.05,UP),foil(new V3(s*5.2,.04,-.6),5.4,.045,UP),foil(new V3(s*8.0,-.04,2.2),2.4,.04,UP)],top,true);
     L([foil(new V3(s*4.6,.07,-2.6),2.2,.06,UP),foil(new V3(s*7.4,-.01,.6),1.6,.05,UP)],top2);
     {const h=A(new THREE.BoxGeometry(3.6,.07,.06),dk,s*5.3,.06,3.6);h.rotation.y=-s*.2;const h2=A(new THREE.BoxGeometry(2.0,.07,.06),dk,s*3.4,.1,4.3);h2.rotation.y=-s*.06;}
     A(new THREE.BoxGeometry(.12,.12,3.4),dk,s*8.05,-.04,3.3);
@@ -1715,20 +1733,20 @@ function buildFighter(){
     L([foil(new V3(s*2.0,.5,4.2),5.0,.055,cu),foil(new V3(s*2.5,2.6,6.2),3.3,.05,cu),foil(new V3(s*2.95,4.5,8.0),1.9,.045,cu)],top2);
     L([foil(new V3(s*2.95,4.5,8.0),1.9,.05,cu),foil(new V3(s*3.06,4.95,8.4),1.5,.05,cu)],dk);
     {const r=A(new THREE.BoxGeometry(.05,3.0,.07),dk,s*2.56,2.75,8.75);r.rotation.z=-s*.245;r.rotation.x=-.42;}
-    L([foil(new V3(s*1.9,-1.2,6.6),2.6,.05,new V3(1,0,0)),foil(new V3(s*2.2,-2.1,7.4),1.3,.04,new V3(1,0,0))],bot);
+    L([foil(new V3(s*1.9,-1.0,6.6),2.6,.05,new V3(1,0,0)),foil(new V3(s*2.2,-2.1,7.4),1.3,.04,new V3(1,0,0))],bot);   // 腹びれの根元をエンジンの下面に付ける（15cm 浮いていた）
     // 標識（主翼上面と垂直尾翼の外側）
     {const dm=new THREE.MeshStandardMaterial({map:fighterDecal(),alphaTest:.5,roughness:.6,metalness:.1,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3});ENVMATS.push(dm);
       const d1=A(new THREE.PlaneGeometry(2.8,1.4),dm,s*5.0,.25,1.3);d1.rotation.x=-Math.PI/2;d1.castShadow=false;
       const n=new V3(s*.97,-.24,0).normalize(),u=new V3(s*.24,.97,0).normalize(),xa=new V3().crossVectors(u,n);
-      const d2=A(new THREE.PlaneGeometry(2.0,1.0),dm,s*2.48,2.5,7.75);d2.position.addScaledVector(n,.17);d2.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa,u,n));d2.castShadow=false;}
+      const d2=A(new THREE.PlaneGeometry(2.0,1.0),dm,s*2.48,2.5,7.75);d2.position.addScaledVector(n,.088);d2.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xa,u,n));d2.castShadow=false;}
     // 兵装：翼下のパイロン 2 つと翼端。ミサイルは胴・前後の小翼・先端のシーカー
     const missile=(x,y,z,len)=>{const m=A(new THREE.CylinderGeometry(.1,.1,len,10),wh,x,y,z);m.rotation.x=Math.PI/2;A(new THREE.SphereGeometry(.1,10,8),dk,x,y,z-len/2);
-      for(const[fz,fs]of[[len/2-.25,.34],[-len/2+.9,.2]])for(const a of[Math.PI/4,-Math.PI/4]){const f=A(new THREE.BoxGeometry(fs*2,.02,.42),wh,x,y,z+fz);f.rotation.z=a;}};
+      for(const[fz,fs]of[[len/2-.25,.34],[-len/2+.9,.2]])for(const a of[Math.PI/4,-Math.PI/4]){const f=A(new THREE.BoxGeometry(fs*2,.02,a>0?.42:.4),wh,x,y,z+fz);f.rotation.z=a;}};   // 十字の小翼の前後の面が重ならないよう片方を少し短く
     for(const[mx,mz,my,ln]of[[4.0,.6,-.52,3.6],[6.0,1.9,-.5,3.0]]){A(new THREE.BoxGeometry(.1,.34,1.6),bot,s*mx,my+.24,mz);missile(s*mx,my,mz,ln);}
     missile(s*8.05,-.2,3.1,2.9);
     // 翼端灯と編隊灯
     const nv=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:s>0?new THREE.Color(.1,1.6,.3):new THREE.Color(1.9,.12,.08),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));nv.position.set(s*8.1,0,4.6);nv.scale.set(1.2,1.2,1);g.add(glowLOD(nv,70,.18));
-    A(new THREE.BoxGeometry(.03,.08,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color(.5,.9,.3)}),s*1.02,.35,-10.4).castShadow=false;
+    {const fm=A(new THREE.BoxGeometry(.03,.08,1.2),new THREE.MeshBasicMaterial({color:new THREE.Color(.5,.9,.3)}),s*1.02,.35,-10.4);fm.castShadow=false;fm.userData.snap=1;}
   }
   // 腹：機関砲の覆い、増槽、アンテナ
   A(new THREE.BoxGeometry(.24,.2,2.6),dk,.95,.55,-8.6);
@@ -1736,7 +1754,7 @@ function buildFighter(){
   for(const[z,y]of[[-3.6,1.35],[2.2,.72]])A(new THREE.BoxGeometry(.04,.42,.5),dk,0,y,z);
   // 衝突防止灯
   const bc=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.2,.18,.1),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));bc.position.set(0,1.0,3.5);bc.scale.set(1.5,1.5,1);g.add(glowLOD(bc,70,.18));ud.beacon=bc;
-  g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
+  snapParts(g);g.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});
   // 推力に合わせて噴射の長さと光を変える
   ud.setPower=k=>{for(const p of ud.plumes)p.scale.set(1,1,1.5+k*9);for(const s of ud.glows){const q=2+k*3.5;s.scale.set(q,q,1);}};ud.setPower(.3);
   return g;
