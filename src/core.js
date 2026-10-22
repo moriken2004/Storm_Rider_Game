@@ -36,7 +36,7 @@ const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),null);quad.frustumCulled=
 
 // 全シェーダ共有の uniform
 const U={
-  uTime:{value:0},uSpin:{value:0},uStorm:{value:1},uEye:{value:1},
+  uTime:{value:0},uSpin:{value:0},uStorm:{value:1},uEye:{value:1},uCalm:{value:0},uExD:{value:0},
   uSunDir:{value:new V3(-0.45,0.55,0.70).normalize()},uSunCol:{value:new V3(6.2,5.6,4.7)},
   uSkyZen:{value:new V3(0.085,0.21,0.52)},uSkyHor:{value:new V3(0.46,0.60,0.78)},
   uFlashPos:{value:new V3(0,1500,0)},uFlashI:{value:0},
@@ -127,7 +127,7 @@ function makeNoise2D(N){
 
 // ───────────────────────── GLSL 共通 ─────────────────────────
 const GLSL_COMMON=`
-uniform float uTime,uSpin,uStorm,uEye;
+uniform float uTime,uSpin,uStorm,uEye,uCalm;
 uniform vec3 uSunDir,uSunCol,uSkyZen,uSkyHor,uFlashPos;
 uniform float uFlashI;
 const float EYE_R=2400.0;const float WALL_OUT=4600.0;const float RO=15000.0;
@@ -396,10 +396,10 @@ const raysMat=new THREE.ShaderMaterial({uniforms:{tSrc:{value:null},uSun:{value:
   for(int i=0;i<18;i++){c+=texture2D(tSrc,uv).rgb*w;w*=0.93;uv+=d;}gl_FragColor=vec4(c/9.0,1.0);}`});
 const finalMat=new THREE.ShaderMaterial({
   uniforms:{tHDR:{value:null},tBloom:{value:null},tRays:{value:null},tDepth:U.tDepth,uTime:U.uTime,uRain:{value:0},uRainAng:{value:0.3},uExp:{value:0.9},uFade:{value:0},uWhite:{value:0},
-    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uWash:{value:0},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
+    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uWash:{value:0},uUnder:{value:0},uUwD:{value:0},uCamNF:{value:new THREE.Vector2(1,90000)},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
   vertexShader:FS_VERT,depthTest:false,depthWrite:false,
   fragmentShader:`
-uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uWash,uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
+uniform vec2 uCamNF;uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uWash,uUnder,uUwD,uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
 varying vec2 vUv;
 float sat(float x){return clamp(x,0.0,1.0);}
 float h1(float n){return fract(sin(n*127.1)*43758.5453);}
@@ -459,6 +459,9 @@ void main(){
       for(int i=0;i<16;i++){float fi=float(i)+0.5;float rr=sqrt(fi/16.0)*rad;float th=fi*2.39996+ang;vec3 s=T(suv+uPx*rr*vec2(cos(th),sin(th)));float w=1.0/(1.0+luma(s));a+=s*w;ws+=w;}
       col=mix(col,a/ws,sat(coc*3.0));}}
   col+=texture2D(tBloom,suv).rgb*0.42;
+  // 海の中：遠いほど青緑に霞み、深いほど暗い。水がゆらぐ
+  if(uUnder>0.5){float zz=texture2D(tDepth,suv).x;float zl=zz>=0.999999?400.0:uCamNF.x*uCamNF.y/(uCamNF.y-zz*(uCamNF.y-uCamNF.x));float lt=exp(-uUwD*0.045);
+    vec3 wc=vec3(0.02,0.13,0.15)*(0.35+0.9*lt);float f=1.0-exp(-zl/26.0);col=mix(col*vec3(0.7,0.92,0.96),wc,f);}
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;
     vec2 gv=vec2(1.0)-vUv;col+=texture2D(tBloom,0.5+(gv-0.5)*0.55).rgb*vec3(0.35,0.55,0.9)*0.05*uRays+texture2D(tBloom,0.5+(gv-0.5)*1.6).rgb*vec3(0.9,0.6,0.3)*0.03*uRays;

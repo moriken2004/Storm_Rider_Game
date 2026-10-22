@@ -952,7 +952,7 @@ function startRunKeep(ph){ // カットシーン後、機体の状態を保っ�
 function showTitle(){
   view.scale=.72;cloudMat.uniforms.uSteps.value=84;resize();
   G.mode='title';ICP.seen=0;strReset();monShow(false);if(typeof CFX!=='undefined'&&CFX.g)CFX.g.visible=false;P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
-  endOptPrev();['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');$('banner').classList.remove('on');bannerT=0;   // 任務の帯（PHASE ○）がタイトルに残っていた
+  endOptPrev();if(typeof stopExplore==='function')stopExplore();G.pauseFrom=null;['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');$('banner').classList.remove('on');bannerT=0;   // 任務の帯（PHASE ○）がタイトルに残っていた
   U.uStorm.value=1;U.uEye.value=1;G.eyeSun=0;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
   P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.br=null;P.brA=0;P.brCD=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);gateRings.forEach(g=>g.visible=false);P.hasPod=true;G.spareGiven=false;syncPods();
@@ -1135,7 +1135,7 @@ function bindInput(){
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
   click('bStart',()=>{perfStart();resize();$('title').hidden=true;startCut(CUT_INTRO);});
-  click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;if(G.mode==='pause'&&!G.optPrev){G.optPrev='air';$('pause').hidden=true;document.body.classList.add('optair');G.orb=null;G.pt=0;G.pcam={p:camera.position.clone(),q:camera.quaternion.clone(),f:camera.fov};cloudReset=true;}});   // 一時停止中の設定：飛んでいる機体のまわりを回って見せる（以前は景色だけで機体が見えなかった）
+  click('bExplore',()=>{SFX.ui();startExplore();});click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;if(G.mode==='pause'&&!G.optPrev){G.optPrev='air';$('pause').hidden=true;document.body.classList.add('optair');G.orb=null;G.pt=0;G.pcam={p:camera.position.clone(),q:camera.quaternion.clone(),f:camera.fov};cloudReset=true;}});   // 一時停止中の設定：飛んでいる機体のまわりを回って見せる（以前は景色だけで機体が見えなかった）
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
     const start=()=>{if(!G.orb){const a=G.t*.2+.9;G.orb={az:a,el:.17,r:36};}};
@@ -1190,7 +1190,9 @@ function bindInput(){
 }
 function togglePause(){
   document.body.classList.toggle('inplay',G.mode==='pause');G.inplayCls=G.mode==='pause';
-  if(G.mode==='play'){G.mode='pause';$('pause').hidden=false;setAlarm(false);if(AU.ctx){AU.paused=true;AU.ctx.suspend();}}
+  if(G.mode==='explore'){G.pauseFrom='explore';G.mode='pause';$('pause').hidden=false;$('bPOpts').hidden=true;}
+  else if(G.mode==='play'){G.pauseFrom='play';G.mode='pause';$('pause').hidden=false;$('bPOpts').hidden=false;setAlarm(false);if(AU.ctx){AU.paused=true;AU.ctx.suspend();}}
+  else if(G.mode==='pause'&&G.pauseFrom==='explore'){G.mode='explore';$('pause').hidden=true;}
   else if(G.mode==='pause'){G.mode='play';$('pause').hidden=true;$('opts').hidden=true;endOptPrev();if(AU.ctx){AU.paused=false;AU.ctx.resume();}if(hazAlarm())setAlarm(true);}
 }
 
@@ -1858,7 +1860,7 @@ function brkReset(){fracResetAll();for(let k=BRK.list.length-1;k>=0;k--){const b
     for(const q of b.asm)q.c[4]=q.y1;for(const h of b.hide){h.x.visible=h.v;h.x.userData.brkDead=false;}for(const t of b.att){t.x.position.copy(t.p0);t.x.quaternion.copy(t.q0);t.x.userData.brkDead=false;}}
   BRK.list.length=0;BRK.sc=0;U.uScN.value=0;BRK.claim.clear();if(G.hgDead){G.hgDead=false;hangarLight(1);}}
 function updateCommon(dt){
-  {const ip=G.mode==='play';if(ip!==G.inplayCls){G.inplayCls=ip;document.body.classList.toggle('inplay',ip);if(!ip){input.tx=input.ty=0;input.tAct=input.tBoost=input.tGun=input.tMsl=false;}}}
+  {const ip=G.mode==='play'||G.mode==='explore';if(ip!==G.inplayCls){G.inplayCls=ip;document.body.classList.toggle('inplay',ip);if(!ip){input.tx=input.ty=0;input.tAct=input.tBoost=input.tGun=input.tMsl=false;}}}
   updateExplosion(dt);
   // 稲光の減衰
   G.flash*=Math.exp(-dt*5.5);U.uFlashI.value=opts.calm?G.flash*.4:G.flash*(.55+.45*Math.sin(G.t*63)*Math.sin(G.t*41));   /* 光を抑える設定では明滅（ちらつき）をやめ、明るさも下げる */
@@ -1886,7 +1888,7 @@ function updateCommon(dt){
   // 海面に落ちる自機の影（低空ほど濃くくっきり、高いほど淡くぼやける。島の上は地面が影を受けるので出さない）
   {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying';[P,W[0],W[1]].forEach((o,i)=>{const S=U.uPSh.value[i],h=o.pos.y-3.5;let k=0;
     if(inG&&o.mesh&&o.mesh.visible&&o.state!=='gone'&&sd.y>.12&&h>-1){const t=h/sd.y,sx=o.pos.x-sd.x*t,sz=o.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;S.set(sx,sz,o.yaw,k);U.uPSh2.value[i].set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(o.roll||0))));}else S.w=0;});}
-  sunL.position.copy(P.pos).addScaledVector(sd,300);sunL.target.position.copy(P.pos);sunL.target.updateMatrixWorld();
+  {const sc=EX.on?EX.pos:P.pos;sunL.position.copy(sc).addScaledVector(sd,300);sunL.target.position.copy(sc);}sunL.target.updateMatrixWorld();
   sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis*(1-.45*(G.duskK||0));
   {const c=baseGroup.userData.cones,o=G.doorO===undefined?1:G.doorO,day=1-sat((G.gloom||0)*.9);c.spillM.opacity=.2*o*day;c.hazeM.opacity=.05*o*day;
     [P,W[0],W[1]].forEach((a,i)=>{const b=c.blobs[i],lx=a.pos.x-BASE.x,lz=a.pos.z-BASE.z-HANGAR_Z,inH=Math.abs(lx)<46&&Math.abs(lz)<88&&a.pos.y<RWY_Y+9&&a.mesh.visible;b.visible=inH;if(inH){b.position.set(lx,.09,lz);b.rotation.y=a.yaw;}});}
@@ -1938,6 +1940,7 @@ function step(dt){
   if(G.mode==='play'){G.missionT+=dt;updatePlayer(dt);updateWing(dt);updatePhase(dt);updateIntercept(dt);updateArmed(dt);if(G.mode==='play'){chaseCam(dt);updateHUD(dt);}}
   else if(G.mode==='cut')updateCut(dt);
   else if(G.mode==='dying'){updateDying(dt);updateWing(dt);updateIntercept(dt);}
+  else if(G.mode==='explore')exploreUpdate(dt);
   if(G.mode!=='play'&&G.armed)$('lockBox').style.display='none';
   else if(G.mode==='title'||G.mode==='result'||G.mode==='over'){
     // 結果画面：パネルの左の空いた所に機体が来るように画面をずらす（空きが狭いときはずらさない）
@@ -1959,7 +1962,7 @@ function step(dt){
     // カットで寄って撮る物（ディフューザー・受け渡しの予備弾・迎撃機）も、手前で切れないよう含める
     if(proj&&proj.g.visible)dmin=Math.min(dmin,camera.position.distanceTo(proj.g.position));if(HAND.pod&&HAND.pod.visible)dmin=Math.min(dmin,camera.position.distanceTo(HAND.pod.position));for(const f of ICP.f)if(f.mesh.visible)dmin=Math.min(dmin,camera.position.distanceTo(f.pos));
     const bx=camera.position.x-BASE.x,bz=camera.position.z-BASE.z,gnd=Math.abs(bx)<2400&&Math.abs(bz)<2700?Math.max(islandH(bx,bz),0):0,alt=camera.position.y-gnd;
-    let nr=(G.indoor>0||G.mode==='title'||G.mode==='boot')?1.5:Math.max(1.5,Math.min(20,dmin-19,alt*.45));if(nr>2&&Math.abs(bx)<2400&&Math.abs(bz)<2700&&camera.position.y<200){const c0=camera.position;let db=1e9;for(const c of baseGroup.userData.colliders){const dx=Math.max(c[0]-c0.x,0,c0.x-c[3]),dy=Math.max(c[1]-c0.y,0,c0.y-c[4]),dz=Math.max(c[2]-c0.z,0,c0.z-c[5]),d=dx*dx+dy*dy+dz*dz;if(d<db)db=d;}const hx=Math.max(Math.abs(bx)-53,0),hzz=Math.max(Math.abs(bz-HANGAR_Z)-92,0);db=Math.min(Math.sqrt(db),Math.hypot(hx,hzz));nr=Math.max(1.5,Math.min(nr,db*.6));}
+    let nr=G.mode==='explore'?.35:(G.indoor>0||G.mode==='title'||G.mode==='boot')?1.5:Math.max(1.5,Math.min(20,dmin-19,alt*.45));if(nr>2&&Math.abs(bx)<2400&&Math.abs(bz)<2700&&camera.position.y<200){const c0=camera.position;let db=1e9;for(const c of baseGroup.userData.colliders){const dx=Math.max(c[0]-c0.x,0,c0.x-c[3]),dy=Math.max(c[1]-c0.y,0,c0.y-c[4]),dz=Math.max(c[2]-c0.z,0,c0.z-c[5]),d=dx*dx+dy*dy+dz*dz;if(d<db)db=d;}const hx=Math.max(Math.abs(bx)-53,0),hzz=Math.max(Math.abs(bz-HANGAR_Z)-92,0);db=Math.min(Math.sqrt(db),Math.hypot(hx,hzz));nr=Math.max(1.5,Math.min(nr,db*.6));}
     if(Math.abs(camera.near-nr)>.2){camera.near=nr;camera.updateProjectionMatrix();}}
   if(window.__PCAM)window.__PCAM(camera,dt);   // 予告編の撮影用：カメラを差し替える
   renderFrame();
@@ -2104,7 +2107,7 @@ function animPort(dt){const B=baseGroup.userData.lodPort;if(!B)return;if(camera.
     for(const r of a.r){const top=35,bot=sy+.4;r.scale.y=top-bot;r.position.y=(top+bot)/2;}}
   for(const g of B.userData.rtgs||[])g.position.z=g.userData.z0+Math.sin(t*.05+g.userData.z0)*14;
   // 港と基地を結ぶ道の車：端で折り返し、左側の車線を走る
-  {const path=B.userData.roadPath;if(path)for(const c of B.userData.roadCars||[]){const L=path[path.length-1].d;let s=c.userData.s+dt*13*c.userData.dir;if(s>L-8){s=L-8;c.userData.dir=-1;}if(s<8){s=8;c.userData.dir=1;}c.userData.s=s;
+  {const path=B.userData.roadPath;if(path)for(const c of B.userData.roadCars||[]){if(c.userData.pushed)continue;const L=path[path.length-1].d;let s=c.userData.s+dt*13*c.userData.dir;if(s>L-8){s=L-8;c.userData.dir=-1;}if(s<8){s=8;c.userData.dir=1;}c.userData.s=s;
     let i=0,j=path.length-1;while(j-i>1){const m=(i+j)>>1;if(path[m].d<s)i=m;else j=m;}const a=path[i],b=path[j],u=(s-a.d)/Math.max(.01,b.d-a.d),dir=c.userData.dir,tx=lerp(a.tx,b.tx,u)*dir,tz=lerp(a.tz,b.tz,u)*dir;
     c.position.set(lerp(a.x,b.x,u)+tz*2,lerp(a.y,b.y,u),lerp(a.z,b.z,u)-tx*2);c.rotation.y=Math.atan2(-tx,-tz);}}
   for(const tr of B.userData.trucks||[]){tr.userData.s=(tr.userData.s+dt*7)%1244;const d=tr.userData.s;let x,z,yaw;

@@ -257,6 +257,11 @@ body.small #help .panel{max-width:760px}
 body.small .panel p,body.small .panel li{line-height:1.6}
 /* 一時停止中の設定で機体を見せている間は、計器・字幕・目標の印を隠す */
 body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.optair #warn,body.optair #prompt,body.optair #hint,body.optair #banner,body.optair #radar,body.optair #inst{visibility:hidden}
+/* AquaTopia の計器 */
+#exhud{position:fixed;left:16px;bottom:16px;z-index:5;color:#e8f6f4;font:600 15px/1.5 -apple-system,'Hiragino Sans',sans-serif;background:rgba(6,30,34,.55);border:1px solid rgba(120,220,210,.35);border-radius:10px;padding:10px 14px;pointer-events:none}
+#exhud .t{font-size:12px;letter-spacing:.2em;color:#7fe3d6}#exhud .k{font-size:12px;opacity:.75;margin-top:4px;font-weight:400}
+body.explore #hud,body.explore #fhud,body.explore #radio,body.explore #banner,body.explore #tbG,body.explore #tbM{visibility:hidden}
+@media (pointer:coarse){#exhud .k{display:none}}
 </style>
 </head>
 <body>
@@ -312,6 +317,7 @@ body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.opt
     <div id="diff"><button data-d="0">訓練</button><button data-d="1">実戦</button><button data-d="2">極限</button></div>
     <div id="diffT"></div>
     <button class="pri" id="bStart">出撃する</button>
+    <button id="bExplore">AquaTopia（探検）</button>
     <button id="bHelp">操作と任務</button>
     <button id="bOpts">設定</button>
   </div>
@@ -394,6 +400,7 @@ body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.opt
 <div id="touch"><div id="stickZone"></div><div id="stick"><i></i></div><button class="tb" id="tbA">発射</button><button class="tb" id="tbB">ブースト</button><button class="tb" id="tbP" aria-label="一時停止">Ⅱ</button><button class="tb" id="tbG">機銃</button><button class="tb" id="tbM">ミサイル</button></div>
 <div id="rot"><svg viewBox="0 0 64 64" fill="none" stroke="#e6bd74" stroke-width="3" stroke-linecap="round"><rect x="20" y="8" width="24" height="48" rx="5"/><line x1="29" y1="50" x2="35" y2="50"/></svg><div>端末を横向きにしてください</div></div>
 <div id="sleep" hidden>休止中　―　クリックまたはキー操作で再開</div>
+<div id="exhud" hidden><div class="t">AQUATOPIA</div><div class="m">水上</div><div class="s">0 km/h</div><div class="d"></div><div class="k">W/S 前後　A/D 曲がる　Shift 潜る　Space 浮く　Esc メニュー</div></div>
 <div id="toast"></div>
 <div id="fade"></div>
 <div id="load"><div>気象データを読み込み中</div><div class="bar"><i id="loadBar" style="transform:scaleX(0)"></i></div></div>

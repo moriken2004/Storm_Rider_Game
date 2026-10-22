@@ -4,7 +4,7 @@ const vec4 WAV[6]=vec4[6](vec4(0.955,0.296,0.02027,2.6),vec4(0.454,0.891,0.03307
   vec4(-0.416,0.909,0.08378,0.6),vec4(0.697,0.717,0.1366,0.38),vec4(0.267,-0.964,0.2167,0.22));
 float harb(vec2 xz){vec2 l=xz-vec2(0.0,21000.0);float u=clamp((l.x-1282.0)/358.0,0.0,1.0);float zn=mix(-246.0,-150.0,u),zs=mix(556.0,440.0,u);
   return smoothstep(1268.0,1296.0,l.x)*(1.0-smoothstep(1648.0,1672.0,l.x))*smoothstep(zn-6.0,zn+14.0,l.y)*(1.0-smoothstep(zs-14.0,zs+6.0,l.y));}
-float seaState(vec2 xz,float c){return max(c,(1.0-smoothstep(2500.0,14000.0,length(xz)))*0.75*uStorm);}
+float seaState(vec2 xz,float c){return max(c,(1.0-smoothstep(2500.0,14000.0,length(xz)))*0.75*uStorm)*(1.0-uCalm);}   // uCalm：探検中は凪
 `;
 let ocean;
 function shoreTex(){const N=512,d=new Uint8Array(N*N*4),H=new Float32Array(N*N),D=new Float32Array(N*N),cs=6400/N;
@@ -186,14 +186,15 @@ function buildEnv(){
 function weatherMat(m){if(m.userData.wx||m.hasOwnProperty('onBeforeCompile')||!m.isMeshStandardMaterial)return;if(m.metalness>.9&&m.roughness<.15)return;m.userData.wx=1;
   const pat=(m.color&&m.color.r>m.color.g*1.6&&m.metalness>.6)?1:0;   // 銅らしい色の金属
   const rib=(!m.map&&m.metalness>.35&&m.metalness<.9)?1:0;            // 金属の外壁は波板の縦リブ
-  m.onBeforeCompile=sh=>{sh.uniforms.tWN=U.tNoise2;sh.uniforms.tWS=U.tShore;sh.uniforms.uScA=U.uScA;sh.uniforms.uScB=U.uScB;sh.uniforms.uScN=U.uScN;
+  m.extensions={derivatives:true};
+  m.onBeforeCompile=sh=>{sh.uniforms.tWN=U.tNoise2;sh.uniforms.tWS=U.tShore;sh.uniforms.uExD=U.uExD;sh.uniforms.uScA=U.uScA;sh.uniforms.uScB=U.uScB;sh.uniforms.uScN=U.uScN;
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;').replace('#include <project_vertex>',`#include <project_vertex>
 {vec4 wq=vec4(transformed,1.0);vec3 nq=objectNormal;
 #ifdef USE_INSTANCING
 wq=instanceMatrix*wq;nq=mat3(instanceMatrix)*nq;
 #endif
 vWxP=(modelMatrix*wq).xyz;vWxN=normalize(mat3(modelMatrix)*nq);}`);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;uniform sampler2D tWN,tWS;uniform vec4 uScA[24],uScB[24];uniform int uScN;').replace('#include <color_fragment>',`#include <color_fragment>
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vWxP;varying vec3 vWxN;uniform sampler2D tWN,tWS;uniform vec4 uScA[24],uScB[24];uniform int uScN;uniform float uExD;\n// 探検（近景）だけの細かい汚れ：面の向きで投影面を選ぶ座標\nvec2 exTp(vec3 P,vec3 n){return abs(n.y)>0.7?P.xz:(abs(n.x)>abs(n.z)?P.zy:P.xy);}\nfloat exCrk(vec3 P){return smoothstep(0.012,0.0,abs(texture2D(tWN,P.xz/9.0).b-0.5))*smoothstep(0.45,0.6,texture2D(tWN,P.xz/23.0+0.2).b)+0.7*smoothstep(0.008,0.0,abs(texture2D(tWN,P.xz/3.1+0.5).b-0.5))*smoothstep(0.55,0.7,texture2D(tWN,P.xz/13.0+0.7).b);}').replace('#include <color_fragment>',`#include <color_fragment>
 {vec3 n=normalize(vWxN);float vt=1.0-abs(n.y),up=smoothstep(0.6,0.95,n.y);
  float bl=texture2D(tWN,vWxP.xz/23.0+vWxP.y/31.0).b,bl2=texture2D(tWN,vWxP.xz/5.3-vWxP.y/7.0).b;
  float st=texture2D(tWN,vec2((vWxP.x+vWxP.z)*0.085,vWxP.y*0.011)).b;
@@ -207,7 +208,25 @@ vWxP=(modelMatrix*wq).xyz;vWxN=normalize(mat3(modelMatrix)*nq);}`);
  diffuseColor.rgb*=k;
  // 壊れた建物の焼け焦げ（すすの濃さにむら、上ほど濃い）
  for(int i=0;i<24;i++){if(i>=uScN)break;vec3 a=uScA[i].xyz-1.5,b=uScB[i].xyz+1.5;if(all(greaterThan(vWxP,a))&&all(lessThan(vWxP,b))){float sn=texture2D(tWN,vWxP.xz/7.0+vWxP.y/5.0).b;diffuseColor.rgb*=mix(1.0,0.16+0.3*sn,uScA[i].w*smoothstep(0.25,0.75,sn*0.7+0.45));}}
- ${pat?'diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.16,0.34,0.28)*(0.7+0.5*bl2),smoothstep(0.55,0.8,bl*0.6+bl2*0.6)*0.55);':''}}`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor*(0.85+0.3*texture2D(tWN,vWxP.xz/9.0+vWxP.y/13.0).b),0.04,1.0);');};
+ ${pat?'diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.16,0.34,0.28)*(0.7+0.5*bl2),smoothstep(0.55,0.8,bl*0.6+bl2*0.6)*0.55);':''}
+ // 探検の近景：細かな色むら、舗装の骨材の粒・ひび・補修跡・タイヤ跡、金属の塗装はがれと錆の流れ
+ if(uExD>0.5){float fd=1.0-smoothstep(20.0,95.0,length(vViewPosition));vec2 tp=exTp(vWxP,n);
+  float f1=texture2D(tWN,tp/0.21).b,f2=texture2D(tWN,tp/0.067+0.3).b,f3=texture2D(tWN,tp/0.73+0.6).b,f4=texture2D(tWN,tp/2.3+0.1).b;
+  vec3 c=diffuseColor.rgb;c*=1.0+((f1-0.5)*0.26+(f2-0.5)*0.18+(f3-0.5)*0.2)*fd;
+  float ag=smoothstep(0.78,0.86,texture2D(tWN,vWxP.xz/0.045).b),ag2=smoothstep(0.8,0.9,texture2D(tWN,vWxP.xz/0.031+0.5).b);
+  c=mix(c,c*1.7+0.025,up*ag*fd*0.4);c*=1.0-up*ag2*fd*0.3;
+  c*=1.0-up*fd*0.6*min(1.0,exCrk(vWxP));
+  {vec2 pq=floor(vWxP.xz/vec2(4.3,2.9));float pr=fract(sin(dot(pq,vec2(41.3,17.9)))*4375.85);vec2 pf=fract(vWxP.xz/vec2(4.3,2.9));float pin=step(0.86,pr)*step(0.08,pf.x)*step(pf.x,0.92)*step(0.1,pf.y)*step(pf.y,0.9);c*=mix(1.0,0.72+0.1*f3,up*pin*fd);}   // 補修の継ぎ当て
+  {float tr=abs(fract((vWxP.x*0.6+vWxP.z*0.8)/3.7+texture2D(tWN,vWxP.xz/40.0).b*0.8)-0.5);c*=1.0-up*fd*0.16*smoothstep(0.07,0.02,abs(tr-0.22))*smoothstep(0.4,0.7,texture2D(tWN,vWxP.xz/31.0+0.4).b);}   // タイヤ跡
+  float mt=step(0.25,metalness);
+  float chip=smoothstep(0.83,0.86,texture2D(tWN,tp/0.31+0.2).b*0.5+f4*0.6)*mt*step(0.3,roughness);c=mix(c,vec3(0.21,0.11,0.06)*(0.55+0.7*f1),chip*fd*0.7);
+  float rs=smoothstep(0.55,0.85,texture2D(tWN,vec2(dot(vWxP.xz,vec2(0.71,0.71))*1.3,vWxP.y*0.04)).b)*vt*mt;c=mix(c,c*vec3(0.8,0.62,0.48),rs*fd*0.35*step(0.3,roughness));
+  c*=1.0-vt*fd*0.18*smoothstep(0.6,0.9,texture2D(tWN,vec2(dot(vWxP.xz,vec2(0.71,0.71))*2.1,vWxP.y*0.09+0.3)).b);   // 縦の雨筋
+  diffuseColor.rgb=c;}}`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor*(0.85+0.3*texture2D(tWN,vWxP.xz/9.0+vWxP.y/13.0).b),0.04,1.0);').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+if(uExD>0.5){vec3 nw=normalize(vWxN);vec2 tp=exTp(vWxP,nw);float fd=1.0-smoothstep(15.0,70.0,length(vViewPosition)),up=smoothstep(0.6,0.95,nw.y);
+ float h=(texture2D(tWN,tp/0.21).b*0.6+texture2D(tWN,tp/0.067+0.3).b*0.4)*0.006+up*(smoothstep(0.82,0.9,texture2D(tWN,vWxP.xz/0.045).b)*0.004-min(1.0,exCrk(vWxP))*0.012);h*=fd;
+ vec3 eSx=dFdx(-vViewPosition),eSy=dFdy(-vViewPosition),eR1=cross(eSy,normal),eR2=cross(normal,eSx);float eDt=dot(eSx,eR1);vec2 eDh=vec2(dFdx(h),dFdy(h));
+ normal=normalize(abs(eDt)*normal-sign(eDt)*(eDh.x*eR1+eDh.y*eR2));}`);};
   m.needsUpdate=true;}
 function weatherize(root){root.traverse(o=>{if(o.userData.noWeather)return;if(!o.isMesh)return;for(let q=o;q;q=q.parent)if(q.userData.noWeather)return;(Array.isArray(o.material)?o.material:[o.material]).forEach(weatherMat);});}
 
@@ -677,6 +696,7 @@ function buildGroundTex(){
   {const a=fbm(5,5,4,101),gr=fbm(128,128,2,111),w=fbm(4,4,3,121);
     make('sand',(u,v)=>{const rp=.5+.5*Math.sin((v*17+w(u,v)*1.7)*6.2832),g=gr(u,v),n=a(u,v),k=.8+.22*n+.14*g+.07*rp;return[.50*k,.44*k,.315*k,rp*.6+g*.4];});}
 }
+const DETU={uDet:{value:new THREE.Vector4(1e9,1e9,-1e9,-1e9)}};   // 探検（AquaTopia）中、基地の地形のこの範囲は描かない（細かい地面に任せる）
 function forestMask(x,z){return smooth(.46,.6,fbm2(x*.0023+9,z*.0023+4));}
 function buildBase(){
   const B=baseGroup=new THREE.Group();B.position.copy(BASE);scene.add(B);
@@ -688,12 +708,15 @@ function buildBase(){
     col[i*3]=Math.max((1-smooth(105,135,Math.abs(x-262)))*(1-smooth(175,205,Math.abs(z+30))),(1-smooth(95,120,Math.abs(x-330)))*(1-smooth(60,85,Math.abs(z-400))),(1-smooth(14,22,Math.abs(x-150)))*(1-smooth(200,230,Math.abs(z-120))));
     col[i*3+1]=forestMask(x,z);col[i*3+2]=cliffAt(x,z)*smooth(.76,.81,coastD(x,z));}
   tg.setAttribute('color',new THREE.BufferAttribute(col,3));tg.computeVertexNormals();
+  {const H=new Float32Array(p.count);for(let i=0;i<p.count;i++)H[i]=p.getY(i);B.userData.terr={h:H,c:col,nx:251,nz:277,w:3800,d:4200,dx:3800/250,dz:4200/276};}   // 探検で細かい地面を作るときに補間する
   const tm=std({vertexColors:true,roughness:.95,metalness:0});
-  tm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;Object.assign(sh.uniforms,{uT:U.uTime,tN3:U.tNoise,uSunDir:U.uSunDir,uStorm:U.uStorm,tGr:GT.grass,tGrN:GT.grassN,tRk:GT.rock,tRkN:GT.rockN,tSd:GT.sand,tSdN:GT.sandN});
+  B.userData.terrMat=tm;
+  tm.onBeforeCompile=sh=>{sh.uniforms.tN2=U.tNoise2;sh.uniforms.uDet=DETU.uDet;Object.assign(sh.uniforms,{uT:U.uTime,tN3:U.tNoise,uSunDir:U.uSunDir,uStorm:U.uStorm,tGr:GT.grass,tGrN:GT.grassN,tRk:GT.rock,tRkN:GT.rockN,tSd:GT.sand,tSdN:GT.sandN});
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying vec3 vNw;').replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(position,1.0)).xyz;vNw=normal;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nprecision highp sampler3D;\nvarying vec3 vWP;varying vec3 vNw;uniform sampler2D tN2,tGr,tGrN,tRk,tRkN,tSd,tSdN;uniform sampler3D tN3;uniform vec3 uSunDir;uniform float uStorm,uT;').replace('#include <color_fragment>',`
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nprecision highp sampler3D;\nvarying vec3 vWP;varying vec3 vNw;uniform vec4 uDet;uniform sampler2D tN2,tGr,tGrN,tRk,tRkN,tSd,tSdN;uniform sampler3D tN3;uniform vec3 uSunDir;uniform float uStorm,uT;').replace('#include <color_fragment>',`
 float hgt=vWP.y,slope=1.0-normalize(vNw).y;
 if(hgt<-1.2)discard;
+if(vWP.x>uDet.x&&vWP.x<uDet.z&&vWP.z>uDet.y&&vWP.z<uDet.w)discard;
 float n1=texture2D(tN2,vWP.xz/41.0).b,n2=texture2D(tN2,vWP.xz/263.0).b,n3=texture2D(tN2,vWP.xz/6.7).b,n4=texture2D(tN2,vWP.xz/900.0+0.3).b;
 // 近景用（13m）と中景用（71m・回転）の 2 段で貼り、繰り返しを目立たなくする
 vec2 uA=vWP.xz/13.0,uB=vec2(vWP.x*0.8+vWP.z*0.6,vWP.z*0.8-vWP.x*0.6)/71.0;
@@ -1853,6 +1876,7 @@ function buildVehicle(kind,hex){
     const c=document.createElement('canvas');c.width=64;c.height=16;const x=c.getContext('2d');for(let i=0;i<8;i++){x.fillStyle=i%2?'#d9a21b':'#17191a';x.beginPath();x.moveTo(i*8,16);x.lineTo(i*8+8,16);x.lineTo(i*8+16,0);x.lineTo(i*8+8,0);x.fill();}
     const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.wrapS=THREE.RepeatWrapping;VEH.m.haz=std({map:t,roughness:.6,metalness:.2});}
   const M=VEH.m,g=new THREE.Group(),paint=std({color:lin(hex),roughness:.42,metalness:.45});
+  g.userData.dyn=1;g.userData.push=kind;   /* 探検のボートで押せるよう、まとめずに 1 台ずつ残す（台の中はまとめる） */
   const B=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);g.add(o);return o;};
   const C=(r0,r1,h,m,x,y,z,ax)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,16),m);o.position.set(x,y,z);if(ax==='x')o.rotation.z=Math.PI/2;if(ax==='z')o.rotation.x=Math.PI/2;g.add(o);return o;};
   // 車輪：タイヤ・ホイール・泥よけ
@@ -1902,10 +1926,33 @@ function buildVehicle(kind,hex){
     B(1.95,.7,5.0,paint,0,.95,0);B(1.95,.35,1.5,paint,0,1.45,-1.75);cab(1.9,1.7,0,1.25,-.3,.85);B(1.9,.5,.08,paint,0,1.55,2.46);for(const sx of[-1,1])B(.08,.5,1.9,paint,sx*.93,1.55,1.5);
     B(2.05,.25,5.1,M.haz,0,.74,0);axle(-1.6,.92,.4,.3,true);axle(1.6,.92,.4,.3,true);face(1.95,1.0,-2.5,2.5);mirrors(1.9,1.95,-1.0);
     B(1.3,.16,.3,M.dark,0,3.05,-.3);for(const sx of[-1,1])beacon(sx*.45,3.12,-.3);B(1.2,.6,.06,M.black,0,3.0,.5);
-  }else if(kind==='car'){ // 乗用車：ボンネット・客室・トランクの 3 箱、丸めた屋根
-    B(1.8,.55,4.4,paint,0,.72,0);B(1.72,.2,1.3,paint,0,1.05,-1.5).rotation.x=.06;B(1.72,.2,.9,paint,0,1.05,1.7);
-    B(1.62,.5,2.1,M.glass,0,1.25,.15);B(1.56,.08,1.6,paint,0,1.53,.2);for(const sx of[-1,1])for(const z of[-.85,.2,1.2])B(.07,.5,.08,paint,sx*.78,1.25,z);
-    axle(-1.4,.84,.34,.24,false);axle(1.35,.84,.34,.24,false);face(1.8,.8,-2.2,2.2);mirrors(1.7,1.12,-.75);
+  }else if(kind==='car'){ // 乗用車：横から見た輪郭を押し出した丸みのある車体、窓の箱と柱・屋根、輪のくぼみ、5 本スポークの車輪、灯火、扉の継ぎ目
+    paint.roughness=.26;paint.metalness=.55;paint.envMapIntensity=1.4;
+    const ext=(pts,w,bev,m,holes)=>{const sh=new THREE.Shape(pts.map(q=>new THREE.Vector2(q[0],q[1])));if(holes)for(const h of holes)sh.holes.push(h);
+      const ge=new THREE.ExtrudeGeometry(sh,{depth:w-bev*2,bevelEnabled:true,bevelThickness:bev,bevelSize:bev*.8,bevelSegments:3,curveSegments:10});ge.translate(0,0,-(w-bev*2)/2);ge.rotateY(-Math.PI/2);ge.computeVertexNormals();const o=new THREE.Mesh(ge,m);g.add(o);return o;};
+    // 下の車体（輪のところはくり抜く）
+    const arch=(z0,r)=>{const pp=[];for(let k=0;k<=12;k++){const a=Math.PI*k/12;pp.push([z0+Math.cos(a)*r,.3+Math.sin(a)*r*.95]);}return pp;};
+    {const pts=[[-2.22,.34],[-2.27,.52],[-2.2,.74],[-2.0,.84],[-1.0,.95],[1.55,.98],[2.12,.92],[2.24,.74],[2.24,.45],[2.15,.34]];const a1=arch(1.35,.43),a2=arch(-1.4,.43);
+      ext([...pts,[1.78,.34],...a1.slice(1,-1),[.92,.34],[-.97,.34],...a2.slice(1,-1),[-1.83,.34]],1.82,.1,paint);}
+    // 窓の箱：ガラス、上に屋根、柱
+    ext([[-.98,.93],[-.2,1.42],[.92,1.44],[1.58,.96]],1.6,.06,M.glass);
+    {const rf=ext([[-.24,1.4],[-.2,1.47],[.94,1.49],[.9,1.42]],1.64,.04,paint);}
+    for(const sx of[-1,1]){const ap=B(.06,.07,.92,paint,sx*.79,1.18,-.6);ap.rotation.x=-.59;const cp=B(.06,.07,.82,paint,sx*.79,1.2,1.24);cp.rotation.x=.65;B(.06,.5,.1,paint,sx*.8,1.19,.36);
+      B(.02,.03,2.4,M.dark,sx*.8,.97,.25);   // 窓の下の縁
+      for(const z of[-.95,.36,1.45])B(.012,.55,.015,M.dark,sx*.915,.66,z);B(.012,.012,2.4,M.dark,sx*.915,.4,.25);   // 扉の継ぎ目
+      for(const z of[-.25,1.05])B(.02,.04,.18,M.steel,sx*.92,.86,z);   // 取っ手
+      const mi=B(.2,.12,.08,paint,sx*.98,1.02,-.85);B(.02,.1,.06,M.glass,sx*1.08,1.02,-.81);
+      // 灯火：前は横長の前照灯と方向指示器、後ろは車体の角を回る尾灯
+      const hl=B(.42,.12,.08,M.head,sx*.58,.72,-2.2);hl.rotation.x=-.35;B(.14,.06,.06,M.amber,sx*.84,.66,-2.17);
+      B(.36,.12,.06,M.tail,sx*.62,.8,2.24);B(.05,.12,.24,M.tail,sx*.9,.8,2.12);}
+    B(.7,.16,.05,M.dark,0,.58,-2.25);B(.52,.12,.02,M.white,0,.42,-2.3);B(.52,.12,.02,M.white,0,.58,2.27);B(1.86,.12,.16,M.dark,0,.38,-2.18);B(1.86,.12,.16,M.dark,0,.4,2.18);
+    B(1.5,.36,3.6,M.dark,0,.5,0);   // 車輪のくぼみの奥と床下
+    // 車輪：丸いタイヤ、5 本スポーク、中心
+    for(const z of[-1.4,1.35])for(const sx of[-1,1]){const w=new THREE.Group();w.position.set(sx*.8,.34,z);g.add(w);
+      const t=new THREE.Mesh(new THREE.TorusGeometry(.25,.1,10,24),M.tire);t.rotation.y=Math.PI/2;t.scale.z=1.15;w.add(t);
+      const rim=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.16,20),M.hub);rim.rotation.z=Math.PI/2;w.add(rim);
+      for(let k=0;k<5;k++){const sp=new THREE.Mesh(new THREE.BoxGeometry(.03,.16,.045),M.steel);sp.position.set(sx*.085,Math.cos(k*1.2566)*.1,Math.sin(k*1.2566)*.1);sp.rotation.x=-k*1.2566;w.add(sp);}
+      const hb=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.05,10),M.dark);hb.rotation.z=Math.PI/2;hb.position.x=sx*.09;w.add(hb);}
   }else{ // 工具車：引き出しの並ぶ箱、天板、押し手、小さな車輪
     B(1.1,1.5,2.4,paint,0,1.05,0);B(1.2,.08,2.5,M.steel,0,1.84,0);for(let k=0;k<5;k++){B(.03,.24,2.2,M.dark,.56,.48+k*.27,0);B(.05,.04,1.2,M.steel,.6,.5+k*.27,0);}
     for(const sz of[-1,1]){B(.05,.5,.05,M.steel,-.45,2.1,sz*1.15);}B(.05,.05,2.35,M.steel,-.45,2.35,0);
