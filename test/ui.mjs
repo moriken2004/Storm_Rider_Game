@@ -17,7 +17,7 @@ await clk('bOpts');expect('設定',await st(),{opts:true,title:false,opt:true,vi
 // 2) 出撃 → Enter でカットを飛ばす → Esc で一時停止 → 設定 → 戻る → 再開
 await clk('bStart');await W(800);await p.keyboard.press('Enter');await W(1500);let s=await st();expect('出撃→スキップ',s,{mode:'play',hud:true,cine:false});
 await p.keyboard.press('Escape');await W(500);expect('Esc',await st(),{mode:'pause',pause:true});
-await clk('bPOpts');s=await st();expect('一時停止→設定',s,{opts:true,view:false});await clk('#opts .bBack');expect('設定→戻る（一時停止）',await st(),{opts:false,pause:true});
+await clk('bPOpts');s=await st();expect('一時停止→設定',s,{opts:true,pause:false});await clk('#opts .bBack');expect('設定→戻る（一時停止）',await st(),{opts:false,pause:true,view:false});   // 一時停止中の設定は機体を見せるため一時停止の枠を隠し、画面をずらす。戻ったらずらしを解く
 await p.keyboard.press('KeyP');await W(500);expect('P で再開',await st(),{mode:'play',pause:false});
 // 3) 一時停止中に Enter（カットの飛ばし）を押しても壊れない／カット中に Esc
 await p.keyboard.press('Escape');await W(300);await p.keyboard.press('Enter');await W(800);expect('一時停止中の Enter',await st(),{mode:'pause'});await clk('bResume');

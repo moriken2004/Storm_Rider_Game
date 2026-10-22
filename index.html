@@ -255,6 +255,8 @@ body.small #plate{margin-top:calc(30px * var(--ui))}
 body.small #opts{align-items:flex-end;background:linear-gradient(90deg,rgba(2,16,22,0) 30%,rgba(2,16,22,.55))}body.small #opts .panel{margin-right:calc(8px + var(--sr));transform-origin:100% 50%;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
 body.small #help .panel{max-width:760px}
 body.small .panel p,body.small .panel li{line-height:1.6}
+/* 一時停止中の設定で機体を見せている間は、計器・字幕・目標の印を隠す */
+body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.optair #warn,body.optair #prompt,body.optair #hint,body.optair #banner,body.optair #radar,body.optair #inst{visibility:hidden}
 </style>
 </head>
 <body>
@@ -5132,7 +5134,7 @@ function startRunKeep(ph){ // カットシーン後、機体の状態を保っ�
 function showTitle(){
   view.scale=.72;cloudMat.uniforms.uSteps.value=84;resize();
   G.mode='title';ICP.seen=0;strReset();monShow(false);if(typeof CFX!=='undefined'&&CFX.g)CFX.g.visible=false;P.hull=100;startRun0();resetHaz();clearRadio();CUT=null;AU.paused=false;if(AU.ctx)initAudio();document.body.classList.remove('cine');
-  ['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');
+  endOptPrev();['hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('title').hidden=false;$('card').classList.remove('on');$('banner').classList.remove('on');bannerT=0;   // 任務の帯（PHASE ○）がタイトルに残っていた
   U.uStorm.value=1;U.uEye.value=1;G.eyeSun=0;applyEnv(0);setMood('title');$('fade').style.opacity=0;G.white=0;
   P.pos.set(0,RWY_Y+3.6,RZ0());P.yaw=0;P.pitch=0;P.roll=0;P.br=null;P.brA=0;P.brCD=0;syncAC(P);W.forEach((w,i)=>{w.state='form';w.pos.set(i?24:-24,GH(w),RZ0()+45+i*35);w.yaw=0;w.pitch=0;w.roll=0;syncAC(w);});resetArmor();
   spouts.forEach((s,i)=>s.mesh.visible=i<DF().spouts);gateRings.forEach(g=>g.visible=false);P.hasPod=true;G.spareGiven=false;syncPods();
@@ -5315,7 +5317,7 @@ function bindInput(){
   const setDiff=d=>{opts.diff=d;saveOpts();document.querySelectorAll('#diff button').forEach(b=>b.classList.toggle('on',+b.dataset.d===d));$('diffT').textContent=DIFFS[d].desc;};
   document.querySelectorAll('#diff button').forEach(b=>b.addEventListener('click',()=>{initAudio();SFX.ui();setDiff(+b.dataset.d);}));setDiff(opts.diff||0);
   click('bStart',()=>{perfStart();resize();$('title').hidden=true;startCut(CUT_INTRO);});
-  click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;});
+  click('bHelp',()=>{$('help').hidden=false;if(G.mode==='title')$('title').hidden=true;});click('bOpts',()=>{$('opts').hidden=false;if(G.mode==='title'){G.optPrev=true;P.power=0;$('title').hidden=true;setDoors(1);hangarLight(1);gearOf(P,true);cloudReset=true;}});click('bPOpts',()=>{$('opts').hidden=false;if(G.mode==='pause'&&!G.optPrev){G.optPrev='air';$('pause').hidden=true;document.body.classList.add('optair');G.orb=null;G.pt=0;G.pcam={p:camera.position.clone(),q:camera.quaternion.clone(),f:camera.fov};cloudReset=true;}});   // 一時停止中の設定：飛んでいる機体のまわりを回って見せる（以前は景色だけで機体が見えなかった）
   {const o=$('opts'),pts=new Map();let pd=0;
     const lim=()=>{const q=G.orb;q.el=clamp(q.el,-.06,1.25);q.r=clamp(q.r,12,44);const top=RWY_Y+33-(P.pos.y+.6);if(Math.sin(q.el)*q.r>top)q.r=Math.max(12,top/Math.max(Math.sin(q.el),.01));};
     const start=()=>{if(!G.orb){const a=G.t*.2+.9;G.orb={az:a,el:.17,r:36};}};
@@ -5326,7 +5328,7 @@ function bindInput(){
       p.x=e.clientX;p.y=e.clientY;if(pts.size===2){const[a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pd>0)G.orb.r*=pd/d;pd=d;}lim();});
     const up=e=>{pts.delete(e.pointerId);if(!pts.size)o.classList.remove('grabbing');pd=0;};o.addEventListener('pointerup',up);o.addEventListener('pointercancel',up);
     o.addEventListener('wheel',e=>{if(!G.optPrev||e.target!==o)return;start();G.orb.r*=1+Math.sign(e.deltaY)*.08;lim();e.preventDefault();},{passive:false});}
-  document.querySelectorAll('.bBack').forEach(b=>b.addEventListener('click',()=>{SFX.ui();$('help').hidden=true;$('opts').hidden=true;if(G.mode==='title')$('title').hidden=false;if(G.optPrev){G.optPrev=false;G.orb=null;G.indoor=0;cloudReset=true;}}));
+  document.querySelectorAll('.bBack').forEach(b=>b.addEventListener('click',()=>{SFX.ui();$('help').hidden=true;$('opts').hidden=true;if(G.mode==='title')$('title').hidden=false;endOptPrev();}));
   // 機体の塗装と形
   const mkSel=(id,items,key,html)=>{const box=$(id);items.forEach((it,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML=html(it);b.title=it.name;b.setAttribute('aria-label',it.name);b.addEventListener('click',()=>{initAudio();SFX.ui();opts[key]=i;saveOpts();upd();makePlayer();syncPods();});box.appendChild(b);});
     const upd=()=>{[...box.children].forEach((b,i)=>b.classList.toggle('on',i===(opts[key]||0)));const n=$(id+'N');if(n)n.textContent=items[opts[key]||0].name;};upd();};
@@ -5371,7 +5373,7 @@ function bindInput(){
 function togglePause(){
   document.body.classList.toggle('inplay',G.mode==='pause');G.inplayCls=G.mode==='pause';
   if(G.mode==='play'){G.mode='pause';$('pause').hidden=false;setAlarm(false);if(AU.ctx){AU.paused=true;AU.ctx.suspend();}}
-  else if(G.mode==='pause'){G.mode='play';$('pause').hidden=true;$('opts').hidden=true;if(AU.ctx){AU.paused=false;AU.ctx.resume();}if(hazAlarm())setAlarm(true);}
+  else if(G.mode==='pause'){G.mode='play';$('pause').hidden=true;$('opts').hidden=true;endOptPrev();if(AU.ctx){AU.paused=false;AU.ctx.resume();}if(hazAlarm())setAlarm(true);}
 }
 
 // ───────────────────────── メインループ ─────────────────────────
@@ -6102,9 +6104,17 @@ function updateCommon(dt){
   setLoops(inGame?sat(P.power*.9+.2)*(P.power<.2?P.power*5:1)*dieK:0,inGame&&(P.boosting||P.power>1.2)?1:0,inGame?sat(P.wind/55*.7+G.gloom*.3+(P.turb||0)*.2):G.mode==='title'?.25:0,inGame?G.rain:0,spE);
 }
 let last=0,fpsAcc=0,fpsN=0;
+// 設定画面の機体の見せ方を終える（一時停止中に開いた場合は、元の視点へ戻す）
+function endOptPrev(){if(!G.optPrev)return;const air=G.optPrev==='air';G.optPrev=false;G.orb=null;cloudReset=true;if(camera.view&&camera.view.enabled)camera.clearViewOffset();
+  if(air){document.body.classList.remove('optair');if(G.mode==='pause')$('pause').hidden=false;}
+  if(air&&G.pcam){camera.position.copy(G.pcam.p);camera.quaternion.copy(G.pcam.q);camera.fov=G.pcam.f;camera.updateProjectionMatrix();G.pcam=null;}else G.indoor=0;}
+function pausePreview(dt){G.pt=(G.pt||0)+dt;const W=innerWidth,H=innerHeight,pr=document.querySelector('#opts .panel').getBoundingClientRect(),free=W-pr.width-12,ox=pr.left>W*.4?Math.round((W-free)/2):0;
+  if(ox){if(!camera.view||!camera.view.enabled||camera.view.offsetX!==ox||camera.view.fullWidth!==W)camera.setViewOffset(W,H,ox,0,W,H);}else if(camera.view&&camera.view.enabled)camera.clearViewOffset();
+  const o=G.orb,az=o?o.az:G.pt*.2+.9+P.yaw,el=o?o.el:.16,r=o?Math.max(14,o.r):34,ce=Math.cos(el);
+  setCam(P.pos.x+Math.sin(az)*ce*r,P.pos.y+1+Math.sin(el)*r,P.pos.z+Math.cos(az)*ce*r,P.pos.x,P.pos.y+.6,P.pos.z,40);}
 function step(dt){
   G.dt=dt;
-  if(G.mode==='pause'){renderFrame();return;}
+  if(G.mode==='pause'){if(G.optPrev==='air')pausePreview(dt);renderFrame();return;}
   G.t+=dt;U.uTime.value+=dt;U.uSpin.value+=dt*.01;
   readInput();
   if(G.mode==='play'){G.missionT+=dt;updatePlayer(dt);updateWing(dt);updatePhase(dt);updateIntercept(dt);updateArmed(dt);if(G.mode==='play'){chaseCam(dt);updateHUD(dt);}}

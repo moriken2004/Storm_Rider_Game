@@ -255,6 +255,8 @@ body.small #plate{margin-top:calc(30px * var(--ui))}
 body.small #opts{align-items:flex-end;background:linear-gradient(90deg,rgba(2,16,22,0) 30%,rgba(2,16,22,.55))}body.small #opts .panel{margin-right:calc(8px + var(--sr));transform-origin:100% 50%;max-height:calc((100vh - 12px) / var(--ui));overflow-y:auto;-webkit-overflow-scrolling:touch}
 body.small #help .panel{max-width:760px}
 body.small .panel p,body.small .panel li{line-height:1.6}
+/* 一時停止中の設定で機体を見せている間は、計器・字幕・目標の印を隠す */
+body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.optair #warn,body.optair #prompt,body.optair #hint,body.optair #banner,body.optair #radar,body.optair #inst{visibility:hidden}
 </style>
 </head>
 <body>
