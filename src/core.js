@@ -609,6 +609,19 @@ function renderFrame(){
   cloudMat.uniforms.uInvPV.value.copy(_pv).invert();
   cloudMat.uniforms.uCam.value.copy(camera.position);
   cloudMat.uniforms.uFrame.value=(frameNo++)%16;
+  // 探検：海面の下に見える物（海底・岩・海の生き物・ボート＝層 1）だけを先に半分の解像度で描く。海面のシェーダがこれを透かして見せる
+  const EXREF=window.EXREF;if(EXREF&&EXREF.on&&ocean){const W=Math.max(2,rtScene.width>>1),H=Math.max(2,rtScene.height>>1);if(!EXREF.rt||EXREF.rt.width!==W||EXREF.rt.height!==H){if(EXREF.rt)EXREF.rt.dispose();EXREF.rt=makeRT(W,H,true);}
+    const au=renderer.shadowMap.autoUpdate,mk=camera.layers.mask;renderer.shadowMap.autoUpdate=false;ocean.visible=false;camera.layers.set(1);renderer.setRenderTarget(EXREF.rt);renderer.clear();renderer.render(scene,camera);
+    camera.layers.mask=mk;ocean.visible=true;renderer.shadowMap.autoUpdate=au;const ou=ocean.material.uniforms;ou.tRefC.value=EXREF.rt.texture;ou.tRefD.value=EXREF.rt.depthTexture;ou.uRefOn.value=1;ou.uRefRes.value.set(rtScene.width,rtScene.height);ou.uRefNF.value.set(camera.near,camera.far);}
+  else if(ocean&&ocean.material.uniforms.uRefOn)ocean.material.uniforms.uRefOn.value=0;
+  // 探検：水面に映る近くの物（ボート・船・港・島＝層 2）。水面を鏡にしたカメラで、水より上だけを半分の解像度で描く。何もない所は透明（空の映り込みのまま）
+  if(EXREF&&EXREF.refl&&ocean){const W=Math.max(2,Math.round(rtScene.width/3)),H=Math.max(2,Math.round(rtScene.height/3));if(!EXREF.rr||EXREF.rr.width!==W||EXREF.rr.height!==H){if(EXREF.rr)EXREF.rr.dispose();EXREF.rr=makeRT(W,H,true);}
+    const vc=EXREF.vc||(EXREF.vc=new THREE.PerspectiveCamera());vc.fov=camera.fov;vc.aspect=camera.aspect;vc.near=camera.near;vc.far=camera.far;vc.updateProjectionMatrix();
+    const cp=camera.position,dir=camera.getWorldDirection(new V3());vc.position.set(cp.x,-cp.y,cp.z);vc.up.set(0,-1,0);vc.lookAt(cp.x+dir.x,-(cp.y+dir.y),cp.z+dir.z);vc.updateMatrixWorld();vc.layers.set(2);
+    const au=renderer.shadowMap.autoUpdate,cc=renderer.getClearColor(new THREE.Color()),ca=renderer.getClearAlpha();renderer.shadowMap.autoUpdate=false;ocean.visible=false;renderer.setClearColor(0x000000,0);
+    renderer.clippingPlanes=EXREF.clip||(EXREF.clip=[new THREE.Plane(new V3(0,1,0),.05)]);renderer.setRenderTarget(EXREF.rr);renderer.clear();renderer.render(scene,vc);renderer.clippingPlanes=[];
+    renderer.setClearColor(cc,ca);ocean.visible=true;renderer.shadowMap.autoUpdate=au;const ou=ocean.material.uniforms;ou.tRefl.value=EXREF.rr.texture;ou.uReflOn.value=1;ou.uReflPV.value.multiplyMatrices(vc.projectionMatrix,vc.matrixWorldInverse);}
+  else if(ocean&&ocean.material.uniforms.uReflOn)ocean.material.uniforms.uReflOn.value=0;
   renderer.setRenderTarget(rtScene);renderer.clear();renderer.render(scene,camera);
   quad.material=cloudMat;renderer.setRenderTarget(rtCloud);renderer.render(fsScene,fsCam);
   // 視点が飛んだとき（場面転換）は履歴を捨てる

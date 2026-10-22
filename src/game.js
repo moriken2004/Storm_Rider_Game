@@ -1888,7 +1888,10 @@ function updateCommon(dt){
   // 海面に落ちる自機の影（低空ほど濃くくっきり、高いほど淡くぼやける。島の上は地面が影を受けるので出さない）
   {const inG=G.mode==='play'||G.mode==='cut'||G.mode==='dying';[P,W[0],W[1]].forEach((o,i)=>{const S=U.uPSh.value[i],h=o.pos.y-3.5;let k=0;
     if(inG&&o.mesh&&o.mesh.visible&&o.state!=='gone'&&sd.y>.12&&h>-1){const t=h/sd.y,sx=o.pos.x-sd.x*t,sz=o.pos.z-sd.z*t;k=vis*(1-smooth(8,140,h))*(1-.75*(G.gloom||0))*.62;if(islandH(sx-BASE.x,sz-BASE.z)>-1.5)k=0;S.set(sx,sz,o.yaw,k);U.uPSh2.value[i].set(.35+h*.045,Math.max(.25,Math.abs(Math.cos(o.roll||0))));}else S.w=0;});}
-  {const sc=EX.on?EX.pos:P.pos;sunL.position.copy(sc).addScaledVector(sd,300);sunL.target.position.copy(sc);}sunL.target.updateMatrixWorld();
+  {let sc=EX.on?EX.pos:P.pos;if(EX.on){// 影の範囲を影の画素の格子にそろえて動かす（輪郭が泳がない）
+      const cam=sunL.shadow.camera,t=(cam.right-cam.left)/sunL.shadow.mapSize.x,u=_shU.crossVectors(sd,_shY).normalize(),v=_shV.crossVectors(u,sd).normalize(),a=sc.dot(u),b=sc.dot(v);
+      sc=_shC.copy(sc).addScaledVector(u,Math.round(a/t)*t-a).addScaledVector(v,Math.round(b/t)*t-b);}
+    sunL.position.copy(sc).addScaledVector(sd,300);sunL.target.position.copy(sc);}sunL.target.updateMatrixWorld();
   sunL.color.setRGB(scol.x/6,scol.y/6,scol.z/6);sunL.intensity=2.5*vis*(1-.45*(G.duskK||0));
   {const c=baseGroup.userData.cones,o=G.doorO===undefined?1:G.doorO,day=1-sat((G.gloom||0)*.9);c.spillM.opacity=.2*o*day;c.hazeM.opacity=.05*o*day;
     [P,W[0],W[1]].forEach((a,i)=>{const b=c.blobs[i],lx=a.pos.x-BASE.x,lz=a.pos.z-BASE.z-HANGAR_Z,inH=Math.abs(lx)<46&&Math.abs(lz)<88&&a.pos.y<RWY_Y+9&&a.mesh.visible;b.visible=inH;if(inH){b.position.set(lx,.09,lz);b.rotation.y=a.yaw;}});}
@@ -2002,6 +2005,7 @@ function spatial(o,st){const d=camera.position.distanceTo(o.pos);tA.set(1,0,0).a
   return{prox:clamp(Math.pow(48/Math.max(d,7),.9),.04,3.6),pan,dop:clamp(1-st.vr/343,.72,1.38),muf:clamp(100/Math.max(d,20),.3,1.2)};}
 const spP={},spW=[{},{}];
 let strikeGlow=null;
+const _shU=new V3(),_shV=new V3(),_shY=new V3(0,1,0),_shC=new V3();
 let sprayTrail,puffs=[],sprays=[],ships=[],dpods=[],tether;const qT=new THREE.Quaternion();
 // しぶきの絵柄：中心の霧に、大小の水滴をまだらに散らす。白く、日の当たる側は明るい
 // タイヤ痕：接地点から後ろへ伸びる黒いゴムの跡（滑走路に残る）

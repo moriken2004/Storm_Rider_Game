@@ -12,13 +12,17 @@ const r=await p.evaluate(()=>{const S=__SR,I=S.input,out=[];
   const near=(L,cx,cz)=>{const s=new Set();for(const[k,x,z]of L)if((x-cx)**2+(z-cz)**2<400)s.add(k+':'+x.toFixed(2)+','+z.toFixed(2));return s;};
   const snap=(cx,cz)=>{const m=new THREE.Matrix4(),v=new THREE.Vector3(),set=new Set();for(const k of['coralB','coralM','coralT','fan','soft','eel','kelp','spT','spB','whip','pen','star','urch']){const im=SEA[k];for(let i=0;i<im.count;i++){im.getMatrixAt(i,m);v.setFromMatrixPosition(m);if((v.x-cx)**2+(v.z-cz)**2<400)set.add(k+':'+v.x.toFixed(2)+','+v.z.toFixed(2));}}return set;};
   EX.pos.set(st[0],-3,st[1]);EX.depth=-st[2]-2;EX.yaw=0;for(let i=0;i<20;i++)S.step(1/30);
+  const psnap=()=>{const pa=EX.patch.geometry.attributes.position.array,m=new Map();for(let i=0;i<pa.length;i+=3){const x=pa[i],z=pa[i+2];if((x-EX.pos.x)**2+(z-EX.pos.z)**2<900)m.set(x.toFixed(2)+','+z.toFixed(2),pa[i+1]);}return m;};let pPrev=psnap(),pc=EX.pc.clone(),patchMoves=0,patchDiff=0,patchCommon=0,fishJ=0;const fPrev=[];
   let worstFlip=0,worstJump=0,tot=0,checks=0,rescat=0;const prevMov=new Map();let gc=EX.gc?SEA.gc.clone():null;
   for(let i=0;i<600;i++){I.ty=1;I.tBoost=true;S.step(1/30);EX.depth=Math.max(EX.depth,-exGround(EX.pos.x,EX.pos.z)-2.5);
     // 生き物の 1 コマの移動量
-    for(const f of SEA.mov){if(!f.ok)continue;const pv=prevMov.get(f);if(f.re){f.re=false;prevMov.set(f,f.p.clone());continue;}if(pv&&f.kind!=='squid'){const d=pv.distanceTo(f.p);if(d>worstJump){worstJump=d;window.__jk=f.kind+' ok='+f.ok;}}prevMov.set(f,f.p.clone());}
+    for(const f of SEA.mov){if(!f.ok)continue;const pv=prevMov.get(f);if(f.reN!==f.tReN){f.tReN=f.reN;prevMov.set(f,f.p.clone());continue;}if(pv&&f.kind!=='squid'){const d=pv.distanceTo(f.p);if(d>worstJump){worstJump=d;window.__jk=f.kind+' ok='+f.ok;}}prevMov.set(f,f.p.clone());}
     if(!SEA.gc.equals(gc)){// 置き直しが起きた：前後で、今のボートのまわり 20m の物が同じか
       rescat++;const cx=EX.pos.x,cz=EX.pos.z;const after=near(snapAll(),cx,cz);const before=window.__before?near(window.__before,cx,cz):null;if(before){let diff=0;for(const k of after)if(!before.has(k)){diff++;(window.__dk=window.__dk||[]).push('+'+k);}for(const k of before)if(!after.has(k)){diff++;(window.__dk=window.__dk||[]).push('-'+k);}worstFlip=Math.max(worstFlip,diff);tot+=after.size;checks++;}gc=SEA.gc.clone();}
+    if(!EX.pc.equals(pc)){patchMoves++;const cur=psnap();for(const[k,y]of cur){if(pPrev.has(k)){patchCommon++;patchDiff=Math.max(patchDiff,Math.abs(pPrev.get(k)-y));}}pc=EX.pc.clone();}pPrev=psnap();
+    // 魚の上下の揺れ：1 匹ずつ y の二階差分
+    {const m=new THREE.Matrix4(),v=new THREE.Vector3();for(let j=0;j<SEA.fish.count;j+=7){SEA.fish.getMatrixAt(j,m);v.setFromMatrixPosition(m);const jn=SEA.schools[Math.floor(j/28)].jn||0,q=fPrev[j];if(q&&q[2]===jn&&q[3]===jn){fishJ=Math.max(fishJ,Math.abs(v.y-2*q[1]+q[0]));}fPrev[j]=[q?q[1]:v.y,v.y,q?q[3]:jn,jn];}}
     window.__before=snapAll();}
-  I.ty=0;I.tBoost=false;return{start:st.map(v=>+v.toFixed(1)),rescatters:rescat,checks,avgNear:checks?Math.round(tot/checks):0,worstChanged:worstFlip,worstJump:+worstJump.toFixed(2),dk:(window.__dk||[]).slice(0,12),jk:window.__jk};});
+  I.ty=0;I.tBoost=false;return{patchMoves,patchCommon,patchDiff:+patchDiff.toFixed(4),fishJerkY:+fishJ.toFixed(4),start:st.map(v=>+v.toFixed(1)),rescatters:rescat,checks,avgNear:checks?Math.round(tot/checks):0,worstChanged:worstFlip,worstJump:+worstJump.toFixed(2),dk:(window.__dk||[]).slice(0,12),jk:window.__jk};});
 console.log(JSON.stringify(r));
-const ok=r.rescatters>=3&&r.worstChanged===0&&r.worstJump<1.5&&r.avgNear>20;console.log(errs.slice(0,4).join('\n')||(ok?'安定':'不安定'));await b.close();
+const ok=r.rescatters>=3&&r.worstChanged===0&&r.worstJump<1.5&&r.avgNear>20&&r.patchMoves>=2&&r.patchCommon>100&&r.patchDiff<.001&&r.fishJerkY<.03;console.log(errs.slice(0,4).join('\n')||(ok?'安定':'不安定'));await b.close();
