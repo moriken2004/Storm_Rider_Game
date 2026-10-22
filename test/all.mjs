@@ -19,6 +19,9 @@ const T=[
   ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
   ['機体の作り（浮き・面の重なり）','acheck.mjs',[],o=>(o.match(/浮き 0  重なり 0/g)||[]).length===8&&/エラーなし/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=24;}],   // 岸壁に掛けた防舷材のタイヤは壁から下がっているので候補に入る（係留船を基地から外したため 16→24）
+  ['AquaTopia の当たり判定（岸壁・流木・防波堤）','exphys.mjs',[],o=>/当たり判定よし/.test(o)],
+  ['AquaTopia の森のカメラ（揺れない）','camjit.mjs',[],o=>/揺れなし/.test(o)],
+  ['AquaTopia の海底の安定（置き直しで入れ替わらない）','seastable.mjs',[],o=>/安定/.test(o)&&!/不安定/.test(o)],
   ['AquaTopia（水上・陸上・潜航・後始末）','explore.mjs',[],o=>/エラーなし/.test(o)&&/"ex":"land"/.test(o)&&/"ex":"dive"/.test(o)],
   ['設定画面の機体プレビュー（水没・激突・再挑戦・一時停止のあと）','preview2.mjs',[],o=>/^問題なし/m.test(o)],
   ['理想的でない環境（遅いCPU・裏のタブ・WebGLの喪失）','stress.mjs',['a','c','d'],o=>/^問題なし/m.test(o),true],

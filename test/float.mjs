@@ -6,7 +6,7 @@ await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window
 const r=await p.evaluate(()=>{const S=__SR,T=S.camera.constructor;let root=S.camera;const sc=window.__SR.scene||null;
   // シーンを探す
   let scene=null;S.P.mesh.traverseAncestors(a=>{if(a.isScene)scene=a;});const B=scene.children.find(c=>c.userData&&c.userData.hangar);
-  const meshes=[];B.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh&&o.visible&&!(o.material&&o.material.transparent)){const bx=new THREE.Box3().setFromObject(o),sz=new THREE.Vector3();bx.getSize(sz);if(Math.max(sz.x,sz.y,sz.z)<400)meshes.push(o);}});
+  const meshes=[];B.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh&&o.visible&&!(o.material&&o.material.transparent)){const bx=new THREE.Box3().setFromObject(o),sz=new THREE.Vector3();bx.getSize(sz);if(Math.max(sz.x,sz.y,sz.z)<700)meshes.push(o);   /* 岸壁（640m）も部品に入れる：防舷材は岸壁に付いている */}});
   B.updateMatrixWorld(true);const out=[],boxes=meshes.map(m=>new THREE.Box3().setFromObject(m));
   // 触れ合う部品をまとめ（外形の箱を 0.3m 広げて判定）、まとまりのどれも地面に届いていないものを浮いているとみなす
   const N=meshes.length,par=[...Array(N).keys()],fd=i=>{while(par[i]!==i)i=par[i]=par[par[i]];return i;},ex=boxes.map(bx=>bx.clone().expandByScalar(.3));
