@@ -1,0 +1,32 @@
+// 海の検査：サンゴ礁・アマモ場・カジメ・フジツボ（接写）・魚の群れとサメ/エイ/イカ/ヒラメ・航跡・潜るしぶき。node test/seainsp.mjs
+import puppeteer from 'puppeteer';import {execFileSync} from 'child_process';
+const dir=new URL('./out/',import.meta.url).pathname;
+const b=await puppeteer.launch({headless:'new',protocolTimeout:900000,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});const p=await b.newPage();await p.setViewport({width:960,height:540});
+const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message));p.on('console',m=>{const t=m.text();if((m.type()==='error'||/shader error|ERROR:/.test(t))&&!/Failed to load resource/.test(t))errs.push('CONSOLE '+t.replace(/\n/g,' ').slice(0,300));});
+await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR&&document.getElementById("load").hidden',{timeout:200000});
+await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById('bExplore').click();});await p.waitForFunction('EX.on&&!exLoading',{timeout:120000,polling:100});
+// ページ内の道具：条件に合う海底を探す、潜った状態に置く、固定カメラ、コマを進めて重さを測る
+await p.evaluate(()=>{window.__find=(f)=>{for(let r=200;r<2600;r+=37)for(let a=0;a<6.28;a+=.11){const x=BASE.x+Math.cos(a)*r,z=BASE.z+Math.sin(a)*r;if(f(x,z,exGround(x,z)))return[x,z];}return null;};
+  window.__go=(x,z,depth,cam,look,n)=>{EX.pos.set(x,-depth,z);EX.depth=depth;EX.spd=0;EX.camFix=cam?[cam[0],cam[1],cam[2],look[0],look[1],look[2]]:null;EX.prevD=depth;const S=__SR,gl=S.renderer.getContext(),px=new Uint8Array(4);let ms=0;
+    for(let i=0;i<(n||40);i++){const t0=performance.now();S.step(1/30);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);if(i>=(n||40)-10)ms+=performance.now()-t0;}return +(ms/10).toFixed(1);};});
+const shots=[],log=[];const shot=async n=>{const f=dir+'sea_'+n+'.png';await p.screenshot({path:f});shots.push(f);};
+const view=async(n,js)=>{const r=await p.evaluate(js);log.push(n.padEnd(8)+' '+JSON.stringify(r));await shot(n);};
+await view('reef',()=>{const q=__find((x,z,h)=>h<-3.5&&h>-12&&hash2(Math.floor(x/40),Math.floor(z/40),91)>.62);if(!q)return 'なし';const[x,z]=q,h=exGround(x,z);const ms=__go(x,z,-h-2.5,null,null,30);
+  const ms2=__go(x,z,-h-2.5,[x+7,h+2.2,z+4],[x,h+.6,z],20);return{h:+h.toFixed(1),ms:ms2,n:SEA.n};});
+await view('eel',()=>{const q=__find((x,z,h)=>h<-3&&h>-6&&hash2(Math.floor(x/30),Math.floor(z/30),92)<.45&&hash2(Math.floor(x/40),Math.floor(z/40),91)<=.58);if(!q)return 'なし';const[x,z]=q,h=exGround(x,z);__go(x,z,-h-2,null,null,30);return{h:+h.toFixed(1),ms:__go(x,z,-h-2,[x+5,h+1.4,z+3],[x,h+.3,z],20),eel:SEA.n.eel};});
+await view('kelp',()=>{const q=__find((x,z,h)=>h<-6&&h>-12&&hash2(Math.floor(x/25),Math.floor(z/25),93)>.8&&hash2(Math.floor(x/40),Math.floor(z/40),91)<=.58);if(!q)return 'なし';const[x,z]=q,h=exGround(x,z);__go(x,z,-h-2,null,null,30);return{h:+h.toFixed(1),ms:__go(x,z,-h-2,[x+6,h+1.6,z+5],[x,h+2,z],20),kelp:SEA.n.kelp};});
+await view('barn',()=>{const x=BASE.x+770,z=BASE.z-1310;EX.pos.set(x,0,z);EX.depth=0;for(let i=0;i<5;i++)__SR.step(1/30);const m=new THREE.Matrix4(),pp=new THREE.Vector3(),q=new THREE.Quaternion(),sc=new THREE.Vector3();let best=null;
+  for(let i=0;i<EX.rocks.count;i++){EX.rocks.getMatrixAt(i,m);m.decompose(pp,q,sc);if(pp.y>-.6&&pp.y<1&&sc.x>.4&&(!best||sc.x>best.s))best={p:pp.clone(),s:sc.x};}if(!best)return 'なし';
+  const c=best.p;const ms=__go(c.x+8,c.z+8,0,[c.x+best.s*1.45,c.y+best.s*.8,c.z+best.s*1.1],[c.x,c.y+best.s*.3,c.z],30);return{rock:[+c.y.toFixed(2),+best.s.toFixed(2)],barn:SEA.n.barn,mus:SEA.n.mus,ms};});
+await view('life',()=>{const q=__find((x,z,h)=>h<-12&&h>-40);if(!q)return 'なし';const[x,z]=q,h=exGround(x,z);let ms=__go(x,z,8,null,null,200);ms=__go(x,z,8,null,null,10);
+  const vis=SEA.mov.filter(f=>f.ok).reduce((o,f)=>{o[f.kind]=(o[f.kind]||0)+1;return o;},{});return{h:+h.toFixed(1),ms,vis};});
+await view('wake',()=>{const x=BASE.x+1900,z=BASE.z+150;EX.pos.set(x,0,z);EX.depth=0;EX.camFix=null;EX.yaw=Math.PI*.5;const I=__SR.input;for(let i=0;i<180;i++){I.ty=1;I.tx=i>90?.35:0;__SR.step(1/30);}I.ty=I.tx=0;
+  const p=EX.pos,fx=-Math.sin(EX.yaw),fz=-Math.cos(EX.yaw);EX.camFix=[p.x-fx*14+fz*6,9,p.z-fz*14-fx*6,p.x-fx*10,0,p.z-fz*10];__SR.step(1/30);__SR.step(1/30);return{pts:EXWK.pts.filter(Boolean).length,spd:+EX.spd.toFixed(1)};});
+await view('splash',()=>{const x=BASE.x+1900,z=BASE.z+250;EX.camFix=null;EX.pos.set(x,0,z);EX.depth=0;EX.prevD=0;for(let i=0;i<20;i++)__SR.step(1/30);const I=__SR.input;
+  EX.camFix=[x+9,2.4,z+5,x,.3,z];for(let i=0;i<9;i++){I.tBoost=true;__SR.step(1/30);}I.tBoost=false;return{depth:+EX.depth.toFixed(2)};});
+await view('surface',()=>{const x=BASE.x+1900,z=BASE.z+350;EX.camFix=null;EX.pos.set(x,-4,z);EX.depth=4;EX.prevD=4;for(let i=0;i<10;i++)__SR.step(1/30);const I=__SR.input;
+  EX.camFix=[x+9,2.4,z+5,x,.3,z];let n=0;while(EX.depth>.29&&n<200){I.tAct=true;__SR.step(1/30);n++;}for(let i=0;i<8;i++){I.tAct=true;__SR.step(1/30);}I.tAct=false;return{n,depth:+EX.depth.toFixed(2)};});
+for(const l of log)console.log(l);
+const fl=[...shots];while(fl.length%3)fl.push(fl[0]);const rows=fl.length/3;
+execFileSync('/opt/homebrew/bin/ffmpeg',['-v','error','-y',...fl.flatMap(f=>['-i',f]),'-filter_complex',fl.map((_,i)=>'['+i+']scale=640:-1['+i+'s]').join(';')+';'+fl.map((_,i)=>'['+i+'s]').join('')+'xstack=inputs='+fl.length+':layout='+fl.map((_,i)=>{const cx=i%3,cy=Math.floor(i/3);return (cx?Array(cx).fill('w0').join('+'):'0')+'_'+(cy?Array(cy).fill('h0').join('+'):'0');}).join('|'),dir+'sea_grid.jpg']);
+console.log(errs.slice(0,6).join('\n')||'エラーなし');await b.close();

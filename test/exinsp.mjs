@@ -12,6 +12,14 @@ const V=[
  ['apron',[1150,-100],[1160,6.2,-110],[1150,4.6,-95]],
  ['ground',[-300,-1000],[-292,20.5,-1006],[-300,17.5,-985]],
  ['push',[1150,-150],[1155,8,-138],[1140,4.6,-150]],
+ ['forest',[-300,-1000],[-318,22,-1030],[-300,24,-990]],
+ ['grassz',[-300,-1000],[-296,19.6,-1010],[-300,18.5,-1000]],
+ ['roofA',[300,330],[372,41,350],[390,31,372]],
+ ['roofB',[300,330],[230,36,330],[300,28,400]],
+ ['tower',[300,330],[172,32,330],[200,20,360]],
+ ['pipe',[1150,-150],[1146,10,-150],[1200,6,-125]],
+ ['contEnd',[1240,470],[1212,16,500],[1190,6,450]],
+ ['road',[700,330],[690,30,340],[720,22,300]],
  ['start',[1420,150],[1440,4,150],[1400,2,150]],
  ['boat',[1420,150],[1414,2.6,145],[1420,1,150]],
 ];
@@ -19,7 +27,7 @@ const want=process.argv[2]?process.argv[2].split(','):null;const views=V.filter(
 const b=await puppeteer.launch({headless:'new',protocolTimeout:900000,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});const p=await b.newPage();await p.setViewport({width:960,height:540});
 const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message));p.on('console',m=>{const t=m.text();if((m.type()==='error'||/shader error|ERROR:/.test(t))&&!/Failed to load resource/.test(t))errs.push('CONSOLE '+t.replace(/\n/g,' ').slice(0,400));});
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR&&document.getElementById("load").hidden',{timeout:200000});
-await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById('bExplore').click();});
+await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById('bExplore').click();});await p.waitForFunction('EX.on&&!exLoading',{timeout:120000,polling:100});
 const shots=[];
 for(const[n,bp,c,l]of views){const ms=await p.evaluate((bp,c,l)=>{const S=__SR;const x=BASE.x+bp[0],z=BASE.z+bp[1];EX.pos.set(x,Math.max(0,exGround(x,z)),z);EX.depth=0;EX.vel&&EX.vel.set(0,0,0);EX.spd=0;
   EX.camFix=[BASE.x+c[0],c[1],BASE.z+c[2],BASE.x+l[0],l[1],BASE.z+l[2]];const gl=S.renderer.getContext(),px=new Uint8Array(4);let ms=0;for(let i=0;i<40;i++){const t0=performance.now();S.step(1/30);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);if(i>=30)ms+=performance.now()-t0;}return +(ms/10).toFixed(1);},bp,c,l);

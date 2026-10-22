@@ -669,7 +669,11 @@ function islandH(x,z){
 }
 const inPort=(x,z)=>x>1070&&x<1310&&z>-215&&z<515;
 const ROAD_PTS=[[210,300],[470,300],[560,312],[640,326],[800,300],[960,240],[1060,200],[1112,190]];
-function nearRoad(x,z,r){r=r||15;for(let i=0;i<ROAD_PTS.length-1;i++){const[a,b]=[ROAD_PTS[i],ROAD_PTS[i+1]],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz)));if(Math.hypot(a[0]+dx*t-x,a[1]+dz*t-z)<r)return true;}return false;}
+// 道路の中心線：路面と同じなめらかな曲線を 4m ごとの点にして、その点列からの距離で判定する（折れ線のままだと曲がり角で数 m ずれる）
+let ROAD_SMP=null;
+function roadSmp(){if(ROAD_SMP)return ROAD_SMP;const P=ROAD_PTS,out=[],cr=(p0,p1,p2,p3,t)=>{const t2=t*t,t3=t2*t;return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);};
+  for(let i=0;i<P.length-1;i++){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)],L=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.ceil(L/4);for(let k=0;k<n;k++){const t=k/n;out.push([cr(p0[0],p1[0],p2[0],p3[0],t),cr(p0[1],p1[1],p2[1],p3[1],t)]);}}out.push(P[P.length-1]);return ROAD_SMP=out;}
+function nearRoad(x,z,r){r=r||15;const S=roadSmp();if(x<190-r||x>1130+r||z<170-r||z>340+r)return false;for(let i=0;i<S.length-1;i++){const a=S[i],b=S[i+1],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1)));if(Math.hypot(a[0]+dx*t-x,a[1]+dz*t-z)<r)return true;}return false;}
 // 継ぎ目なく並ぶ地表テクスチャを作る。rgb=色（ガンマ2で格納）a=高さ。別に勾配テクスチャ（凹凸用）
 const GT={};
 function buildGroundTex(){
@@ -783,7 +787,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
   // 森：ごつごつした樹冠を森のマスクに沿って密に植える
   {const tgm=crownGeo(22,7),tmat=leafMat();
     const N=9000,im=new THREE.InstancedMesh(tgm,tmat,N),d=new THREE.Object3D(),rd=mulberry(5),tc=new THREE.Color();let n=0,g=0;
-    while(n<N&&g++<120000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,16))continue;
+    while(n<N&&g++<120000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,18))continue;
       if(h<6||h>235||(Math.abs(x-30)<270&&Math.abs(z-130)<1420)||(Math.abs(x-250)<330&&Math.abs(z-150)<440))continue;
       if(rd()>forestMask(x,z)*.95+.05)continue;
       if(Math.abs(islandH(x+10,z)-h)+Math.abs(islandH(x,z+10)-h)>9)continue;
@@ -792,7 +796,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
     im.count=n;im.instanceColor.needsUpdate=true;im.frustumCulled=false;B.userData.trees=im;B.add(im);}
   // 低木の茂み：森の縁に多く、草地にもまばらに（のっぺりした草地を崩す）
   {const sg=crownGeo(8,23),sm=leafMat(),N=13000,im=new THREE.InstancedMesh(sg,sm,N),d=new THREE.Object3D(),rd=mulberry(29),tc=new THREE.Color();let n=0,g=0;
-    while(n<N&&g++<160000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,9))continue;
+    while(n<N&&g++<160000){const x=(rd()-.5)*3300,z=(rd()-.5)*3700,h=islandH(x,z);if(inPort(x,z)||nearRoad(x,z,14))continue;
       if(h<4||h>240||(Math.abs(x-30)<200&&Math.abs(z-130)<1400)||(Math.abs(x-250)<300&&Math.abs(z-150)<420))continue;
       if(Math.abs(islandH(x+6,z)-h)+Math.abs(islandH(x,z+6)-h)>4.5)continue;   // 崖などの急斜面には生やさない
       const fm=forestMask(x,z),p=.12+.88*Math.max(0,1-Math.abs(fm-.45)*2.2);if(rd()>p)continue;
@@ -819,7 +823,7 @@ diffuseColor.rgb=tc;`).replace('#include <roughnessmap_fragment>','#include <rou
       d.position.set(x+lx*H,h-.3+H*.98,z+lz*H);d.rotation.set(0,rd()*6,0);const s=.8+rd()*.5;d.scale.set(s,s,s);d.updateMatrix();crown.setMatrixAt(n,d.matrix);n++;}
     crown.count=trunk.count=n;crown.frustumCulled=trunk.frustumCulled=false;B.add(crown);B.add(trunk);B.userData.palms=[crown,trunk];}
   // 岸辺の小物：砂浜と草地の境目の草むら、波打ち際の上の流木と小石（崖・港・道・滑走路は避ける）
-  {const okAt=(x,z)=>!inPort(x,z)&&!nearRoad(x,z,12)&&cliffAt(x,z)<.2&&!(Math.abs(x-30)<120&&Math.abs(z-130)<1500);
+  {const okAt=(x,z)=>!inPort(x,z)&&!nearRoad(x,z,15)&&cliffAt(x,z)<.2&&!(Math.abs(x-30)<120&&Math.abs(z-130)<1500);
     // 草むら：細い葉を十字に重ねた板（切り抜き）
     const gc=document.createElement('canvas');gc.width=128;gc.height=128;const gx=gc.getContext('2d'),gr=mulberry(5150);
     for(let i=0;i<70;i++){const x0=10+gr()*108,h=40+gr()*84,lean=(gr()-.5)*40;gx.strokeStyle=['#5f6f35','#74813f','#8a8a4a','#4f5f2c','#9a9258'][Math.floor(gr()*5)];gx.lineWidth=1.2+gr()*1.6;gx.beginPath();gx.moveTo(x0,128);gx.quadraticCurveTo(x0+lean*.3,128-h*.6,x0+lean,128-h);gx.stroke();}
@@ -1069,7 +1073,12 @@ diffuseColor.rgb=c;`);};
     for(const[u,b]of units){const wp=new V3();u.getWorldPosition(wp);const pv=u.userData.unit.pivot;cols.push([b.min.x,b.min.y,b.min.z,b.max.x,b.max.y,b.max.z,0,0,u.userData.unit.kind,[wp.x+pv[0],wp.z+pv[1],wp.x+pv[2],wp.z+pv[3]],u]);}   // [9] 倒れるときの支点の範囲（脚）、[10] そのグループ
     // コンテナの区画（一括描画なので部品からは拾えない）：区画ごとに 1 つ。[11] 区画の番号
     {const cn=LOD.userData.cont;if(cn){LOD.updateMatrixWorld(true);cn.blocks.forEach((k,i)=>{const a=new V3(k.box[0],k.box[1],k.box[2]).applyMatrix4(LOD.matrixWorld),b=new V3(k.box[3],k.box[4],k.box[5]).applyMatrix4(LOD.matrixWorld);cols.push([Math.min(a.x,b.x),a.y,Math.min(a.z,b.z),Math.max(a.x,b.x),b.y,Math.max(a.z,b.z),0,0,5,null,null,i]);});}}
-    B.userData.colliders=cols;}
+    B.userData.colliders=cols;
+    {const ex=[];B.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||skip(o)||o.userData.dyn)return;for(let q=o;q&&q!==B;q=q.parent)if(q.userData.dyn||q.userData.push)return;const m=Array.isArray(o.material)?o.material[0]:o.material;if(m.transparent||m.depthWrite===false)return;
+        bx.setFromObject(o);const sx=bx.max.x-bx.min.x,sz=bx.max.z-bx.min.z,hy=bx.max.y-bx.min.y;if(sx>320||sz>320||hy<.35)return;if(sx*sz>2500&&hy<.12*Math.max(sx,sz))return;
+        const gy=Math.max(islandH((bx.min.x+bx.max.x)/2-BASE.x,(bx.min.z+bx.max.z)/2-BASE.z),0);if(bx.max.y<gy+.45||bx.min.y>gy+3.6)return;ex.push([bx.min.x,bx.min.y,bx.min.z,bx.max.x,bx.max.y,bx.max.z]);});
+      const cn=LOD.userData.cont;if(cn){LOD.updateMatrixWorld(true);const m4=new THREE.Matrix4(),pp=new V3();for(let i=0;i<cn.im.count;i++){cn.im.getMatrixAt(i,m4);pp.setFromMatrixPosition(m4);if(pp.y>4.6+3)continue;pp.applyMatrix4(LOD.matrixWorld);ex.push([pp.x-1.22,pp.y-1.3,pp.z-3.03,pp.x+1.22,pp.y+1.3,pp.z+3.03]);}}
+      B.userData.exCols=ex;}}
   weatherize(B);
   for(const o of B.userData.spin||[])o.userData.dyn=1;for(const o of(B.userData.detail&&B.userData.detail.userData.flags)||[])o.userData.dyn=1;
   mergeStatic(HG);mergeStatic(LOD);mergeStatic(B.userData.lodLH);mergeStatic(B);
@@ -2127,7 +2136,7 @@ function buildPort(B,M){
   {const cg=new THREE.BoxGeometry(2.44,2.59,6.06),cm=containerMat();const im=new THREE.InstancedMesh(cg,cm,2600),d=new THREE.Object3D(),cc=new THREE.Color();let n=0;
     const pal=[0xa8321e,0x1f5f8a,0x2f7a4a,0xc98a1c,0x7a7f84,0x8a3a5a,0xd8d4c8,0x244a6a];
     // ヤード：2 列×10 区画のブロック（各 6 列×8 個）。区画の端ほど低く、ところどころ空き
-    const blocks=[];for(const bx of[1166,1188])for(let bz=-112;bz<450;bz+=60)if(!(bz>100&&bz<230&&bx<1170))blocks.push([bx,bz,6,8]);
+    const blocks=[];for(const bx of[1164,1190])for(let bz=-112;bz+7*6.5+3.2<=Z1-8;bz+=60)if(!(bz>100&&bz<230&&bx<1170))blocks.push([bx,bz,6,8]);   /* 岸壁の端（Z1）から 8m 内側まで。列の間は車とボートが通れる 7m */
     const cb=[];
     for(const[bx,bz,nx,nz]of blocks){const i0=n;let top=QY;
     for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const edge=j===0||j===nz-1;const hh=r()<.08?0:Math.min(4,1+Math.floor(r()*3.2)+(edge?-1:0)+(r()<.25?1:0));for(let k=0;k<hh&&n<2600;k++){d.position.set(bx+i*2.75,QY+1.3+k*2.62,bz+j*6.5);d.rotation.set(0,0,0);d.scale.set(1,1,1);d.updateMatrix();im.setMatrixAt(n,d.matrix);cc.copy(CONT_PAL[Math.floor(r()*CONT_PAL.length)]);im.setColorAt(n,cc);n++;top=Math.max(top,QY+k*2.62+2.6);}}
@@ -2145,7 +2154,11 @@ function buildPort(B,M){
   // 燃料タンク 3 基と配管
   for(let k=0;k<3;k++){const t=new THREE.Mesh(new THREE.CylinderGeometry(7,7,11,24),wht);t.position.set(1128,QY+5.5,-60+k*19);t.castShadow=true;B.add(t);const top=new THREE.Mesh(new THREE.SphereGeometry(7,24,8,0,6.3,0,1.2),wht);top.scale.y=.3;top.position.set(1128,QY+11-7*Math.cos(1.2)*.3,-60+k*19);B.add(top);
     const st=new THREE.Mesh(new THREE.TorusGeometry(7.05,.12,6,28),yel);st.rotation.x=Math.PI/2;st.position.set(1128,QY+8,-60+k*19);B.add(st);}
-  {const p=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,150,8),steel);p.rotation.z=Math.PI/2;p.position.set(1210,QY+.8,-70);B.add(p);for(let x=1140;x<=1280;x+=10){box(B,.25,.55,.9,darkM,x,QY+.27,-70);box(B,.25,.12,.9,darkM,x,QY+.5,-70);}}
+  {const H=5.6,ZP=-128,XP=1138;   /* 配管橋：タンクの脇から北へ（コンテナ区画の外側）→ 岸壁まで東へ。車とボートが下をくぐれる高さ */
+    const run=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0),a=Math.atan2(x1-x0,z1-z0);for(const o of[-.35,.35]){const p=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,L,10),steel);p.rotation.order='YXZ';p.rotation.set(Math.PI/2,a,0);p.position.set((x0+x1)/2+Math.cos(a)*o,QY+H+.25,(z0+z1)/2-Math.sin(a)*o);B.add(p);}
+      const n=Math.max(1,Math.round(L/12));for(let k=0;k<=n;k++){const t=k/n,x=x0+(x1-x0)*t,z=z0+(z1-z0)*t,ca=Math.cos(a),sa=Math.sin(a);for(const sd of[-1,1])box(B,.3,H,.3,darkM,x+ca*sd,QY+H/2,z-sa*sd);const cb=box(B,2.3,.3,.3,darkM,x,QY+H,z);cb.rotation.y=a;}};
+    run(XP,-58,XP,ZP);run(XP,ZP,1284,ZP);
+    for(let k=0;k<3;k++){const v=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,H-3,8),steel);v.position.set(XP-.6,QY+3+(H-3)/2,-60+k*19);B.add(v);const h2=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,3.2,8),steel);h2.rotation.z=Math.PI/2;h2.position.set(XP-2.2,QY+3.2,-60+k*19);B.add(h2);}}
   // 水面に映す灯り：[x,z,高さ,色]（game.js が夕方に水面の縦の光の帯を出す）
   B.userData.refl=[[1668,44,15.4,[3.5,.25,.15]],[1668,246,15.4,[.25,3.2,.6]],[X1+2,60,QY+35,[2.4,2.2,1.7]],[X1+2,230,QY+35,[2.4,2.2,1.7]],[X1-1,-150,QY+30,[2.6,2.4,1.9]],[X1-1,120,QY+30,[2.6,2.4,1.9]],[X1-1,300,QY+30,[2.6,2.4,1.9]],[X1-1,455,QY+30,[2.6,2.4,1.9]],[X1+44,60,QY+38,[3.4,.25,.15]],[X1+44,230,QY+38,[3.4,.25,.15]]];
   // 照明塔 4 基
@@ -2504,10 +2517,10 @@ function detailBase(B0,M){
   bld(150,14,76,330,RWY_Y+7,400,wallA);bld(104,10,52,322,RWY_Y+19,400,wallB);
   box(B,154,.6,80,copperM,330,RWY_Y+14.3,400,true);
   for(const s of[-1,1]){const end=new THREE.Mesh(new THREE.CylinderGeometry(38,38,14,32,1,false,0,Math.PI),wallA.clone());end.material.map=wallA.map;end.rotation.y=s>0?-Math.PI/2:Math.PI/2;end.position.set(330+s*75,RWY_Y+7,400);end.castShadow=true;B.add(end);
-    const cap=new THREE.Mesh(new THREE.CylinderGeometry(39.5,39.5,.6,32,1,false,0,Math.PI),copperM);cap.rotation.y=s>0?-Math.PI/2:Math.PI/2;cap.position.set(330+s*75,RWY_Y+14.3,400);B.add(cap);}
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(39.5,39.5,.6,32,1,false,0,Math.PI),copperM);cap.rotation.y=s>0?-Math.PI/2:Math.PI/2;cap.position.set(330+s*75,RWY_Y+14.27,400);B.add(cap);}   /* 屋根の板と上面がそろうとちらつくので少し下げる */
   {// 上層の棟に、低いかまぼこ形の銅屋根と真鍮のリブ
-    const vg=new THREE.CylinderGeometry(26,26,104,32);vg.rotateZ(Math.PI/2);const vault=new THREE.Mesh(vg,copperM);vault.scale.set(1,.3,1);vault.position.set(322,RWY_Y+24.2,400);vault.castShadow=true;B.add(vault);
-    for(let k=-4;k<=4;k++){const rib=new THREE.Mesh(new THREE.TorusGeometry(26.25,.35,6,32),brassM);rib.rotation.y=Math.PI/2;rib.scale.set(1,.3,1);rib.position.set(322+k*12.5,RWY_Y+24.2,400);B.add(rib);}
+    const vg=new THREE.CylinderGeometry(25.5,25.5,103,32,1,false,0,Math.PI);vg.rotateZ(Math.PI/2);const vault=new THREE.Mesh(vg,copperM);vault.scale.set(1,.3,1);vault.position.set(322,RWY_Y+24.01,400);   /* 壁の面と重ならないよう 0.5m 内側に（重なるとちらつく） */vault.castShadow=true;B.add(vault);
+    for(let k=-4;k<=4;k++){const rib=new THREE.Mesh(new THREE.TorusGeometry(25.75,.35,6,32,Math.PI),brassM);rib.rotation.y=Math.PI/2;rib.scale.set(1,.3,1);rib.position.set(322+k*12.5,RWY_Y+24.01,400);B.add(rib);}
     const cup=new THREE.Mesh(new THREE.SphereGeometry(9,24,12,0,6.283,0,1.571),roof);cup.position.set(286,RWY_Y+35,400);B.add(cup);const cdr=new THREE.Mesh(new THREE.CylinderGeometry(9,9.6,11,24),M.paleM);cdr.position.set(286,RWY_Y+29.5,400);B.add(cdr);
     const cr=new THREE.Mesh(new THREE.TorusGeometry(9.2,.4,6,28),brassM);cr.rotation.x=Math.PI/2;cr.position.set(286,RWY_Y+35,400);B.add(cr);
     const fin=new THREE.Mesh(new THREE.ConeGeometry(.9,9,8),brassM);fin.position.set(286,RWY_Y+48.5,400);B.add(fin);

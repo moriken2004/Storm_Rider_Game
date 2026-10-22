@@ -4,10 +4,10 @@ const dir=new URL('./out/',import.meta.url).pathname;
 const b=await puppeteer.launch({headless:'new',protocolTimeout:900000,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});const p=await b.newPage();await p.setViewport({width:960,height:540});
 const errs=[];p.on('pageerror',e=>errs.push('PAGEERR '+e.message));p.on('console',m=>{const t=m.text();if((m.type()==='error'||/shader error|ERROR:/.test(t))&&!/Failed to load resource/.test(t))errs.push('CONSOLE '+t.replace(/\n/g,' ').slice(0,300));});
 await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR&&document.getElementById("load").hidden',{timeout:200000});
-await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById('bExplore').click();});
+await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById('bExplore').click();});await p.waitForFunction('EX.on&&!exLoading',{timeout:120000,polling:100});
 const run=(n,inp,setup)=>p.evaluate((n,inp,setup)=>{const S=__SR,I=S.input;if(setup){(0,eval)(setup);EX.cam.set(EX.pos.x+9,EX.pos.y+5,EX.pos.z+9);}const gl=S.renderer.getContext(),px=new Uint8Array(4);let ms=0;
   for(let i=0;i<n;i++){I.tx=inp.x||0;I.ty=inp.y||0;I.tBoost=!!inp.dive;I.tAct=!!inp.up;const t0=performance.now();S.step(1/30);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);ms+=performance.now()-t0;}
-  I.tx=I.ty=0;I.tBoost=I.tAct=false;return{mode:S.G.mode,ex:EX.mode,pos:[EX.pos.x-BASE.x,EX.pos.y,EX.pos.z-BASE.z].map(v=>+v.toFixed(1)),depth:+EX.depth.toFixed(1),spd:+EX.spd.toFixed(1),gnd:+exGround(EX.pos.x,EX.pos.z).toFixed(1),ms:+(ms/n).toFixed(1),grass:EX.grass.count,rocks:EX.rocks.count,weed:EX.weed.count,coral:EX.coral.count};},n,inp,setup);
+  I.tx=I.ty=0;I.tBoost=I.tAct=false;return{mode:S.G.mode,ex:EX.mode,pos:[EX.pos.x-BASE.x,EX.pos.y,EX.pos.z-BASE.z].map(v=>+v.toFixed(1)),depth:+EX.depth.toFixed(1),spd:+EX.spd.toFixed(1),gnd:+exGround(EX.pos.x,EX.pos.z).toFixed(1),ms:+(ms/n).toFixed(1),grass:EX.grass.count,rocks:EX.rocks.count,eel:SEA.n?SEA.n.eel:0,coral:SEA.n?SEA.n.cB+SEA.n.cM+SEA.n.soft:0,barn:SEA.n?SEA.n.barn:0};},n,inp,setup);
 const shots=[],out=[];const shot=async(name)=>{const f=dir+'ex_'+name+'.png';await p.screenshot({path:f});shots.push(f);};
 out.push(['水上で前進',await run(150,{y:1})]);await shot('water');
 out.push(['浜へ（陸へ上がる）',await run(240,{y:1},"EX.pos.set(BASE.x+420,0,BASE.z-1900);EX.yaw=Math.PI;EX.depth=0;")]);await shot('land');

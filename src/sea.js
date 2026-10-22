@@ -1,0 +1,200 @@
+// ───────────────────────── AquaTopia の海の生き物と海底 ─────────────────────────
+// 魚の群れ・イカ・ヒラメ・エイ・サメ（泳ぐ動きは頂点シェーダ）、サンゴ礁・アマモ場・カジメの林、潮間帯のフジツボ。
+// どれもボートのまわりだけに置き、海の中にいるときだけ描く。
+const SEA={on:false};
+
+// 泳ぐ物の材質：iPh（動きの位相）で尾を振る・翼を打つ・外套を脈打たせる。背は暗く腹は明るい（カウンターシェーディング）
+function seaSwimMat(key,vcode,fcode,o){o=o||{};const m=std({color:0xffffff,roughness:o.ro==null?.45:o.ro,metalness:o.me==null?.15:o.me,side:o.ds?THREE.DoubleSide:THREE.FrontSide,transparent:!!o.tr,opacity:o.op||1});
+  m.onBeforeCompile=sh=>{Object.assign(sh.uniforms,{uT:U.uTime,tN2:U.tNoise2});
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nuniform float uT;attribute float iPh;varying vec3 vLp;varying float vPh;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvLp=position;vPh=iPh;{float ph=uT+iPh;'+vcode+'}');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uT;uniform sampler2D tN2;varying vec3 vLp;varying float vPh;')
+      .replace('#include <color_fragment>','#include <color_fragment>\n{vec3 c=diffuseColor.rgb;'+fcode+'diffuseColor.rgb=c;}');};
+  m.customProgramCacheKey=()=>'sea'+key;return m;}
+function seaIM(geo,mat,n,sh){const m=new THREE.InstancedMesh(geo,mat,n);m.count=0;m.frustumCulled=false;m.castShadow=!!sh;m.receiveShadow=true;m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(n*3).fill(1),3);
+  const ph=new Float32Array(n);for(let i=0;i<n;i++)ph[i]=Math.random()*40;geo.setAttribute('iPh',new THREE.InstancedBufferAttribute(ph,1));scene.add(m);return m;}
+// 頂点を並べて形を作る小さな道具
+function seaGeo(pos,idx){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();return g;}
+function seaMerge(list){const gs=list.map(g=>g.index?g.toNonIndexed():g);let n=0;for(const g of gs)n+=g.attributes.position.count;const P=new Float32Array(n*3),N=new Float32Array(n*3);let o=0;
+  for(const g of gs){if(!g.attributes.normal)g.computeVertexNormals();P.set(g.attributes.position.array,o*3);N.set(g.attributes.normal.array,o*3);o+=g.attributes.position.count;}
+  const m=new THREE.BufferGeometry();m.setAttribute('position',new THREE.BufferAttribute(P,3));m.setAttribute('normal',new THREE.BufferAttribute(N,3));return m;}
+// 紡錘形の胴（頭が -z、長さ 1）：断面は縦長の楕円、尾の付け根で細くなる。背びれ・尾びれ・胸びれ付き
+function seaBodyGeo(o){const R=o.r,S=14,K=18,pos=[],idx=[];
+  const rad=t=>{const a=Math.sin(Math.PI*Math.pow(t,o.blunt||.62));return Math.max(.012,R*a*(1-.75*Math.max(0,t-.78)/.22));};
+  for(let k=0;k<=K;k++){const t=k/K,z=-.5+t*.9,r=rad(t);for(let s=0;s<S;s++){const a=s/S*Math.PI*2;pos.push(Math.cos(a)*r*(o.w||.55),Math.sin(a)*r+(o.hump||0)*r*Math.max(0,Math.sin(a))*(1-t),z);}}
+  for(let k=0;k<K;k++)for(let s=0;s<S;s++){const a=k*S+s,b=k*S+(s+1)%S,c=a+S,d=b+S;idx.push(a,c,b,b,c,d);}
+  const tip=pos.length/3;pos.push(0,0,-.52);for(let s=0;s<S;s++)idx.push(tip,s,(s+1)%S);
+  const parts=[seaGeo(pos,idx)];
+  // 尾びれ（二又）、背びれ、胸びれ、（サメは）しりびれ
+  const tri=(a,b,c)=>{const g=seaGeo([...a,...b,...c],[0,1,2,0,2,1]);parts.push(g);};
+  const tz=.4,th=o.tail||.17;tri([0,0,tz-.03],[0,th,tz+.16],[0,th*.25,tz+.07]);tri([0,0,tz-.03],[0,-th*(o.lowTail||1),tz+.15],[0,-th*.25,tz+.07]);
+  const dh=o.dorsal||.1,dz=o.dz||-.05;tri([0,R*.95,dz-.12],[0,R*.95+dh,dz+.02],[0,R*.9,dz+.18]);
+  const pf=o.pect||.07;for(const s of[-1,1])tri([s*R*.5,-R*.35,-.22],[s*(R*.5+pf*1.6),-R*.7,-.12],[s*R*.48,-R*.4,-.1]);
+  if(o.anal)tri([0,-R*.9,.18],[0,-R*.9-o.anal,.28],[0,-R*.85,.32]);
+  return seaMerge(parts);}
+// 尾を振る：後ろほど大きく。速く泳ぐ物ほど細かく
+const SEA_WAG='float w=smoothstep(-0.35,0.5,position.z);transformed.x+=sin(ph*WF-position.z*5.0)*WA*w*w+sin(ph*WF*0.5)*WA*0.25;';
+const SEA_FISHF='float up=smoothstep(-0.03,0.06,vLp.y);c=mix(c*vec3(1.05,1.08,1.1)+0.12,c*0.42,up);'+
+  'float ln=smoothstep(0.012,0.0,abs(vLp.y-0.005))*0.25;c*=1.0-ln;'+
+  'float ey=smoothstep(0.022,0.012,length(vec2(vLp.z+0.4,vLp.y-0.022)));c=mix(c,vec3(0.02),ey);'+
+  'c*=0.85+0.3*texture2D(tN2,vLp.zy*3.0+vPh).b;';
+
+function seaInit(){if(SEA.ok)return;SEA.ok=true;const g=new THREE.Group();scene.add(g);SEA.g=g;
+  // 魚（群れ 10 × 28）
+  SEA.fish=seaIM(seaBodyGeo({r:.13,tail:.16,dorsal:.07,pect:.05}),seaSwimMat('fish',SEA_WAG.replace(/WF/g,'9.0').replace(/WA/g,'0.06'),SEA_FISHF,{ro:.3,me:.35}),280);
+  // 礁の小魚（色の派手な平たい魚）
+  SEA.reef=seaIM(seaBodyGeo({r:.22,w:.3,tail:.13,dorsal:.14,dz:0,pect:.04,blunt:.5,anal:.1}),seaSwimMat('reef',SEA_WAG.replace(/WF/g,'7.0').replace(/WA/g,'0.05'),
+    'float st=smoothstep(0.35,0.5,abs(fract(vLp.z*4.0+vPh*0.13)-0.5)*2.0);c=mix(c,vec3(0.95,0.93,0.88),st*step(0.5,fract(vPh*0.37)));float ey=smoothstep(0.03,0.018,length(vec2(vLp.z+0.38,vLp.y-0.04)));c=mix(c,vec3(0.02),ey);',{ro:.35,me:.1}),90);
+  // サメ：細長い胴、高い背びれ、上が長い尾、大きな胸びれ
+  SEA.shark=seaIM(seaBodyGeo({r:.1,w:.62,tail:.2,lowTail:.55,dorsal:.13,dz:-.08,pect:.13,anal:.04,blunt:.5}),seaSwimMat('shark',SEA_WAG.replace(/WF/g,'2.2').replace(/WA/g,'0.07'),
+    'float up=smoothstep(-0.04,0.05,vLp.y);c=mix(vec3(0.78,0.8,0.8),vec3(0.27,0.31,0.34),up)*(0.85+0.25*texture2D(tN2,vLp.zx*2.0).b);float ey=smoothstep(0.012,0.006,length(vec2(vLp.z+0.4,vLp.y-0.01)));c=mix(c,vec3(0.01),ey);'+
+    'float gl=step(0.0,-vLp.y+0.03)*smoothstep(0.004,0.0,abs(fract((vLp.z+0.3)*28.0)-0.5)-0.46)*step(-0.33,vLp.z)*step(vLp.z,-0.2);c*=1.0-gl*0.5;',{ro:.55,me:.05}),3,true);
+  // エイ：菱形の平たい体を羽ばたかせ、細い尾を引く
+  {const pos=[0,.05,0],idx=[],RG=7,S=28;for(let k=1;k<=RG;k++){const f=k/RG;for(let s=0;s<S;s++){const a=s/S*Math.PI*2,ca=Math.cos(a),sa=Math.sin(a),R=1/(Math.abs(ca)/.5+Math.abs(sa)/(sa<0?.36:.3));pos.push(ca*R*f,.05*(1-f*f)*(1-Math.abs(ca)*.5),sa*R*f*(sa<0?1:1.05));}}
+    for(let s=0;s<S;s++)idx.push(0,1+(s+1)%S,1+s);for(let k=0;k<RG-1;k++)for(let s=0;s<S;s++){const a=1+k*S+s,b=1+k*S+(s+1)%S,c=a+S,d=b+S;idx.push(a,b,c,b,d,c);}
+    const body=seaGeo(pos,idx),tail=new THREE.CylinderGeometry(.004,.012,.9,5);tail.rotateX(Math.PI/2);tail.translate(0,0,.72);
+    SEA.ray=seaIM(seaMerge([body,tail]),seaSwimMat('ray','float ax=abs(position.x);transformed.y+=sin(ph*2.2-ax*3.0)*ax*0.32;transformed.x+=step(0.3,position.z)*sin(ph*1.5-position.z*4.0)*0.05*(position.z-0.3);',
+      'float b=gl_FrontFacing?1.0:0.0;c=mix(vec3(0.86,0.84,0.8),c*(0.75+0.5*texture2D(tN2,vLp.xz*2.5+vPh).b),b);c=mix(c,c*0.6,smoothstep(0.22,0.4,length(vLp.xz*vec2(1.0,1.4)))*b*0.5);',{ds:true,ro:.6,me:0}),6,true);}
+  // イカ：外套（先が前）とひれ、頭から後ろへ流れる 8 本の腕。外套は脈打ち、色素の斑点が透ける
+  {const mant=new THREE.CylinderGeometry(.075,.0,.5,14,6);mant.rotateX(Math.PI/2);mant.translate(0,0,-.18);const head=new THREE.SphereGeometry(.07,12,8);head.scale(1,.9,1.1);head.translate(0,0,.1);
+    const fin=seaGeo([0,0,-.42,.15,0,-.36,0,0,-.22, 0,0,-.42,-.15,0,-.36,0,0,-.22],[0,1,2,0,2,1,3,4,5,3,5,4]);const arms=[mant,head,fin];
+    for(let k=0;k<8;k++){const a=k/8*Math.PI*2,c=new THREE.CylinderGeometry(.006,.016,.32+(k<2?.18:0),5);c.rotateX(Math.PI/2);c.translate(Math.cos(a)*.035,Math.sin(a)*.035,.32+(k<2?.09:0));arms.push(c);}
+    SEA.squid=seaIM(seaMerge(arms),seaSwimMat('squid','float pu=sin(ph*3.0);transformed.xy*=1.0+0.1*pu*step(position.z,0.05);transformed.x+=step(0.15,position.z)*sin(ph*3.0-position.z*9.0)*0.02*(position.z-0.15)*6.0;',
+      'float sp=smoothstep(0.62,0.75,texture2D(tN2,vLp.xz*9.0+vLp.y*4.0+vPh).b);c=mix(c,vec3(0.55,0.16,0.12),sp*0.7);c+=vec3(0.06,0.05,0.07);',{ro:.25,me:0,tr:true,op:.82}),24);}
+  // ヒラメ：砂に伏せた楕円の平たい体、ふちのひれ、上に目。背は砂の色の斑
+  {const pos=[0,.035,0],idx=[],S=26,RG=5;for(let k=1;k<=RG;k++){const f=k/RG;for(let s=0;s<S;s++){const a=s/S*Math.PI*2;const fr=k===RG?1.18:1;pos.push(Math.cos(a)*.21*f*fr,(.035*(1-f*f))*(k===RG?0:1),Math.sin(a)*.42*f*fr+(Math.sin(a)>0?.04*f:0));}}
+    for(let s=0;s<S;s++)idx.push(0,1+(s+1)%S,1+s);for(let k=0;k<RG-1;k++)for(let s=0;s<S;s++){const a=1+k*S+s,b=1+k*S+(s+1)%S,c=a+S,d=b+S;idx.push(a,b,c,b,d,c);}
+    const eyes=[-1,1].map(s=>{const e=new THREE.SphereGeometry(.018,8,6);e.translate(s*.035+.03,.04,-.28);return e;});
+    SEA.flat=seaIM(seaMerge([seaGeo(pos,idx),...eyes]),seaSwimMat('flat','float rr=length(position.xz*vec2(2.4,1.2));transformed.y+=sin(ph*4.0-position.z*12.0)*0.012*smoothstep(0.38,0.5,rr);',
+      'vec2 q=vLp.xz*vec2(14.0,14.0)+vPh;float n=texture2D(tN2,q).b,n2=texture2D(tN2,q*2.7).b;c*=0.62+0.55*n;c=mix(c,c*1.5+0.05,smoothstep(0.78,0.86,n2)*0.6);c=mix(c,c*0.35,smoothstep(0.7,0.8,texture2D(tN2,q*0.6+3.0).b)*0.5);'+
+      'c=mix(c,vec3(0.03),smoothstep(0.02,0.012,min(length(vLp.xz-vec2(-0.005,-0.28)),length(vLp.xz-vec2(0.065,-0.28)))));',{ro:.8,me:0}),10);}
+  // 海底：サンゴ（枝・脳・テーブル・ウミウチワ・ソフトコーラル）、アマモ、カジメ、フジツボ
+  const cm=(k,f,o)=>seaSwimMat(k,o&&o.v||'',f,Object.assign({ro:.8,me:0},o||{}));
+  const polyp='c*=0.78+0.32*texture2D(tN2,vLp.xz*11.0+vLp.y*7.0).b;c*=0.7+0.3*smoothstep(-0.1,0.6,vLp.y);';
+  SEA.coralB=seaIM(seaCoralBranch(11),cm('cB',polyp+'c=mix(c,c*vec3(1.25,1.15,1.3)+0.06,smoothstep(0.55,0.9,vLp.y)*0.6);'),420,true);
+  {const g2=new THREE.SphereGeometry(.5,28,14,0,Math.PI*2,0,Math.PI/2);const p=g2.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);const k=1+.06*Math.sin(x*9+z*4)*Math.cos(z*8);p.setXYZ(i,x*k,y*.75*k,z*k);}g2.computeVertexNormals();
+    SEA.coralM=seaIM(g2,cm('cM','float m=sin((vLp.x*31.0+texture2D(tN2,vLp.xz*1.3).b*14.0)+sin(vLp.z*27.0+texture2D(tN2,vLp.zx*1.7+0.5).b*12.0)*2.0);c*=0.62+0.45*smoothstep(-0.4,0.6,m);c*=0.85+0.25*texture2D(tN2,vLp.xz*5.0).b;'),160,true);}
+  {const pl=new THREE.CylinderGeometry(.5,.46,.035,24,1);const p=pl.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),a=Math.atan2(z,x),k=1+.12*Math.sin(a*5)+.06*Math.sin(a*11+1);p.setX(i,x*k);p.setZ(i,z*k);}
+    pl.translate(0,.32,0);const st=new THREE.CylinderGeometry(.04,.07,.32,7);st.translate(0,.16,0);SEA.coralT=seaIM(seaMerge([pl,st]),cm('cT',polyp+'c*=1.0-0.4*smoothstep(0.3,0.0,vLp.y);'),70,true);}
+  SEA.fan=seaIM(seaFanGeo(),seaSwimMat('fan','transformed.x+=sin(ph*0.9+position.y*1.5)*0.05*position.y;','c*=0.75+0.35*texture2D(tN2,vLp.xy*6.0).b;',{ds:true,ro:.85,me:0}),90);
+  SEA.soft=seaIM(seaSoftGeo(),seaSwimMat('soft','float k=max(0.0,position.y);transformed.x+=sin(ph*1.3+position.y*3.0)*0.06*k;transformed.z+=cos(ph*1.1)*0.04*k;','c=mix(c*0.6,c*1.2+0.05,smoothstep(0.0,0.4,vLp.y));',{ro:.7,me:0}),140);
+  SEA.eel=seaIM(seaRibbonGeo(7,.012,1,.22),seaSwimMat('eel','float k=position.y;transformed.x+=(sin(ph*0.9+position.y*1.7)*0.18+sin(ph*2.1)*0.04)*k*k;transformed.z+=cos(ph*0.7)*0.1*k*k;','c*=0.55+0.6*smoothstep(0.0,1.0,vLp.y);c=mix(c,c*vec3(1.2,1.15,0.8),smoothstep(0.75,1.0,vLp.y)*0.4);',{ds:true,ro:.6,me:0}),2600);
+  SEA.kelp=seaIM(seaKelpGeo(),seaSwimMat('kelp','float k=position.y;transformed.x+=(sin(ph*0.6+position.y*0.9)*0.12+sin(ph*1.7)*0.03)*k*k;transformed.z+=cos(ph*0.5+position.y)*0.07*k*k;','c*=0.6+0.5*smoothstep(0.0,1.0,vLp.y);c*=0.85+0.3*texture2D(tN2,vLp.xy*vec2(9.0,2.0)).b;',{ds:true,ro:.45,me:0}),320,true);
+  SEA.barn=seaIM(seaBarnacleGeo(),seaSwimMat('barn','',
+    'float rb=pow(abs(sin(atan(vLp.z,vLp.x)*9.0)),0.6),gl=0.5+0.5*sin(vLp.y*70.0);c*=(0.55+0.45*rb)*(0.85+0.15*gl);c*=1.0-0.35*pow(abs(cos(atan(vLp.z,vLp.x)*3.0)),12.0);c*=0.6+0.5*smoothstep(0.0,0.5,vLp.y);c=mix(c,vec3(0.05,0.05,0.04),smoothstep(0.62,0.66,vLp.y)*smoothstep(0.24,0.18,length(vLp.xz)));'+
+    'c=mix(c,c*vec3(0.8,0.95,0.7),smoothstep(0.6,0.8,texture2D(tN2,vLp.xz*3.0+vPh).b)*0.5);',{ro:.75,me:0}),3200);
+  SEA.mus=seaIM(seaMusselGeo(),seaSwimMat('mus','','c*=0.55+0.6*pow(abs(sin(length(vLp.xz-vec2(0.0,-0.5))*40.0)),3.0)*0.4+0.3;c+=vec3(0.02,0.03,0.06)*smoothstep(0.0,0.1,vLp.y);',{ro:.3,me:.2}),900);
+  SEA.all=[SEA.fish,SEA.reef,SEA.shark,SEA.ray,SEA.squid,SEA.flat,SEA.coralB,SEA.coralM,SEA.coralT,SEA.fan,SEA.soft,SEA.eel,SEA.kelp,SEA.barn,SEA.mus];
+  // 動く物の状態
+  SEA.schools=[];for(let k=0;k<10;k++)SEA.schools.push({p:new V3(),v:new V3(1,0,0),seed:k*7.3,col:new THREE.Color().setHSL([.58,.55,.6,.1,.12,.52,.6,.08,.55,.5][k],[.25,.35,.2,.5,.45,.3,.2,.6,.15,.25][k],.55)});
+  SEA.fishD=[];for(let i=0;i<280;i++)SEA.fishD.push({sc:Math.floor(i/28),o:new V3((Math.random()-.5)*5,(Math.random()-.5)*2.2,(Math.random()-.5)*5),ph:Math.random()*6.28,s:.75+Math.random()*.5,prev:new V3(),yaw:0,pit:0});
+  SEA.mov=[];   // サメ・エイ・イカ・ヒラメ・礁の魚：1 匹ずつ
+  const add=(kind,n)=>{for(let i=0;i<n;i++)SEA.mov.push({kind,i,p:new V3(),prev:new V3(),yaw:0,pit:0,t:Math.random()*100,seed:Math.random()*1000,home:new V3(),ok:false});};
+  add('shark',3);add('ray',6);add('squid',24);add('flat',10);add('reef',90);
+  for(const m of[SEA.shark,SEA.ray,SEA.squid,SEA.flat,SEA.reef,SEA.fish])m.count=m.instanceMatrix.count;
+  for(let i=0;i<280;i++)SEA.fish.setColorAt(i,SEA.schools[Math.floor(i/28)].col);
+  const pal=[[.98,.55,.12],[.95,.85,.15],[.2,.45,.95],[.92,.3,.55],[.3,.8,.85],[.98,.98,.95]];for(let i=0;i<90;i++){const c=pal[i%pal.length];SEA.reef.setColorAt(i,new THREE.Color(c[0],c[1],c[2]));}
+  for(let i=0;i<24;i++)SEA.squid.setColorAt(i,new THREE.Color(.95,.78,.72));for(let i=0;i<10;i++)SEA.flat.setColorAt(i,new THREE.Color(.62,.55,.42));
+  for(let i=0;i<6;i++)SEA.ray.setColorAt(i,new THREE.Color(.36,.32,.27));for(let i=0;i<3;i++)SEA.shark.setColorAt(i,new THREE.Color(.5,.55,.58));
+  for(const m of SEA.all)if(m.instanceColor)m.instanceColor.needsUpdate=true;SEA.gc=new V3(1e9,0,1e9);}
+
+// 枝サンゴ：根元から分かれる太めの枝（3 段）
+function seaCoralBranch(seed){const r=mulberry(seed),parts=[];const br=(a,dir,len,rad,d)=>{const b=a.clone().addScaledVector(dir,len);const c=new THREE.CylinderGeometry(rad*.7,rad,len,6);
+    c.applyMatrix4(new THREE.Matrix4().compose(a.clone().lerp(b,.5),new THREE.Quaternion().setFromUnitVectors(new V3(0,1,0),dir),new V3(1,1,1)));parts.push(c);
+    if(d<3){const n=d===0?4:2+(r()<.5?1:0);for(let k=0;k<n;k++){const nd=dir.clone().add(new V3((r()-.5)*1.2,.3+r()*.5,(r()-.5)*1.2)).normalize();br(b,nd,len*(.62+r()*.2),rad*.72,d+1);}}
+    else{const t=new THREE.SphereGeometry(rad*.75,6,4);t.translate(b.x,b.y,b.z);parts.push(t);}};
+  br(new V3(0,0,0),new V3(0,1,0),.28,.06,0);return seaMerge(parts);}
+// ウミウチワ：扇形の網目（板に格子の穴を開けた形）
+function seaFanGeo(){const pos=[],idx=[];const N=18,M=9;for(let j=0;j<=M;j++)for(let i=0;i<=N;i++){const a=(i/N-.5)*2.3,rr=j/M;pos.push(Math.sin(a)*rr*.55,Math.cos(a)*rr*.8*(1-.1*Math.cos(a*3)),0);}
+  for(let j=0;j<M;j++)for(let i=0;i<N;i++){if(((i*7+j*3)%5)===0&&j>1)continue;const a=j*(N+1)+i,b=a+1,c=a+N+1,d=c+1;idx.push(a,b,c,b,d,c);}return seaGeo(pos,idx);}
+// ソフトコーラル・イソギンチャク：根元から広がる細い触手の束
+function seaSoftGeo(){const parts=[];const r=mulberry(77);for(let k=0;k<16;k++){const a=k/16*Math.PI*2+r()*.3,l=.25+r()*.25,c=new THREE.ConeGeometry(.022,l,5);c.translate(0,l/2,0);c.rotateX(Math.sin(a)*.45);c.rotateZ(-Math.cos(a)*.45);parts.push(c);}
+  const base=new THREE.CylinderGeometry(.08,.11,.12,10);base.translate(0,.06,0);parts.push(base);return seaMerge(parts);}
+// アマモ：細長い葉の束（NB 枚、高さ 1 に正規化、先が少し細る）
+function seaRibbonGeo(NB,w,h,spread){const pos=[],idx=[];let v=0;const SG=6;for(let b=0;b<NB;b++){const a=b*2.4,ox=Math.cos(a)*spread*((b*3)%4)/4,oz=Math.sin(a)*spread*((b*3)%4)/4,hh=h*(.65+.35*((b*5)%4)/3),px=-Math.sin(a),pz=Math.cos(a);
+    for(let k=0;k<=SG;k++){const t=k/SG,ww=w*(1-.5*t);pos.push(ox+px*ww+Math.cos(a)*t*.08,t*hh,oz+pz*ww+Math.sin(a)*t*.08,ox-px*ww+Math.cos(a)*t*.08,t*hh,oz-pz*ww+Math.sin(a)*t*.08);}
+    for(let k=0;k<SG;k++){const q=v+k*2;idx.push(q,q+1,q+2,q+1,q+3,q+2);}v+=(SG+1)*2;}return seaGeo(pos,idx);}
+// カジメ：茎の上に幅広の葉が数枚（高さ 1 に正規化）
+function seaKelpGeo(){const parts=[];const st=new THREE.CylinderGeometry(.012,.02,.6,6);st.translate(0,.3,0);parts.push(st);
+  for(let k=0;k<6;k++){const a=k*1.05,l=.38+.12*(k%3),g=new THREE.PlaneGeometry(.09,l,1,5);const p=g.attributes.position;for(let i=0;i<p.count;i++){const y=p.getY(i)+l/2;p.setX(i,p.getX(i)*(1-.6*(y/l)**2)+Math.sin(y*12)*.008);p.setY(i,y);p.setZ(i,Math.sin(y/l*2.5)*.06);}
+    g.rotateZ(-.35-.15*(k%2));g.rotateY(a);g.translate(0,.55+k*.03,0);parts.push(g);}return seaMerge(parts);}
+// フジツボ：6 枚の殻板の継ぎ目が縦の溝になった火山形。上の口に 2 枚の蓋、殻板には細い横じま（成長線）
+function seaBarnacleGeo(){const S=36,K=8,pos=[],idx=[];for(let k=0;k<=K;k++){const t=k/K,y=t*.62,r0=1-.62*Math.pow(t,1.15);for(let s=0;s<S;s++){const a=s/S*Math.PI*2,rib=1+.09*Math.pow(Math.abs(Math.cos(a*3)),8)-.05*Math.pow(Math.abs(Math.sin(a*3)),.5)+.03*Math.sin(t*40)*(1-t);pos.push(Math.cos(a)*r0*rib,y,Math.sin(a)*r0*rib);}}
+  for(let k=0;k<K;k++)for(let s=0;s<S;s++){const a=k*S+s,b=k*S+(s+1)%S,c=a+S,d=b+S;idx.push(a,c,b,b,c,d);}
+  // 口の内側へ落ち込む縁と、2 枚の蓋（くちばし形）
+  const top=K*S,in0=pos.length/3;for(let s=0;s<S;s++){const a=s/S*Math.PI*2;pos.push(Math.cos(a)*.3,.55,Math.sin(a)*.3);}for(let s=0;s<S;s++){const a=top+s,b=top+(s+1)%S,c=in0+s,d=in0+(s+1)%S;idx.push(a,c,b,b,c,d);}
+  const ct=pos.length/3;pos.push(0,.52,0);for(let s=0;s<S;s++)idx.push(ct,in0+(s+1)%S,in0+s);
+  const g=seaGeo(pos,idx);const lids=[-1,1].map(s=>{const l=new THREE.SphereGeometry(.16,8,4,0,Math.PI);l.scale(1,.35,.9);l.rotateY(s>0?0:Math.PI);l.translate(s*.02,.56,0);return l;});return seaMerge([g,...lids]);}
+// ムラサキイガイ：細長い 2 枚貝（縦に立って束になる）
+function seaMusselGeo(){const g=new THREE.SphereGeometry(.5,12,8);const p=g.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);const t=(z+.5);p.setXYZ(i,x*.42*(.4+.6*t),y*.28,z*1.0);}g.rotateX(-1.1);g.translate(0,.35,0);g.computeVertexNormals();return g;}
+
+// 岩の形の表面：向き nrm（単位）に一番近い頂点の距離と法線（岩の形は exRockGeo と同じ物を使う）
+function seaRockPrep(){if(SEA.rk)return;const g=EX.rocks.geometry,pa=g.attributes.position,na=g.attributes.normal,D=[];for(let i=0;i<pa.count;i++){const v=new V3(pa.getX(i),pa.getY(i),pa.getZ(i));const L=v.length();D.push({d:v.clone().divideScalar(L),L,n:new V3(na.getX(i),na.getY(i),na.getZ(i))});}SEA.rk=D;}
+let _rkBest=null;function seaRockR(d){seaRockPrep();let b=null,bd=-2;for(const q of SEA.rk){const k=q.d.dot(d);if(k>bd){bd=k;b=q;}}_rkBest=b;return b.L*Math.max(.9,bd)*.985;}
+function seaRockN(d){return _rkBest.n.clone();}
+// ── 置き直し（ボートが 12m 動くごと）：決まった格子ごとに乱数を固定して置く
+function seaScatter(cx,cz){seaInit();const d=new THREE.Object3D(),col=new THREE.Color(),s=[0,0,0,0];const n={cB:0,cM:0,cT:0,fan:0,soft:0,eel:0,kelp:0,barn:0,mus:0};
+  const put=(m,key,x,y,z,sc,ry,c,rx,rz)=>{if(n[key]>=m.instanceMatrix.count)return false;d.position.set(x,y,z);d.rotation.set(rx||0,ry,rz||0);if(typeof sc==='number')d.scale.setScalar(sc);else d.scale.set(sc[0],sc[1],sc[2]);d.updateMatrix();m.setMatrixAt(n[key],d.matrix);if(c)m.setColorAt(n[key],c);n[key]++;return true;};
+  const R=70;const G=1.6;
+  for(let z=Math.floor((cz-R)/G);z<=Math.ceil((cz+R)/G);z++)for(let x=Math.floor((cx-R)/G);x<=Math.ceil((cx+R)/G);x++){const wx=x*G+hash2(x,z,81)*G,wz=z*G+hash2(x,z,82)*G,dd=(wx-cx)**2+(wz-cz)**2;if(dd>R*R)continue;
+    terrSample(wx,wz,s);const h=s[0],cl=s[3];if(h>2.2)continue;const rnd=k=>hash2(x,z,k);
+    // 帯の種類：サンゴ礁（深さ 2〜18m・40m 区画の 4 割）、アマモ場（砂地 1.2〜9m・30m 区画の半分）、カジメの林（岩場 3〜16m）
+    const reef=h<-2&&h>-18&&hash2(Math.floor(wx/40),Math.floor(wz/40),91)>.58,eel=!reef&&h<-1.2&&h>-9&&cl<.25&&hash2(Math.floor(wx/30),Math.floor(wz/30),92)<.5,kelp=!reef&&h<-3&&h>-16&&(cl>.2||hash2(Math.floor(wx/25),Math.floor(wz/25),93)>.82);
+    if(reef&&dd<55*55)for(let rep=0;rep<2;rep++){const t=hash2(x,z,83+rep*31);const gy=exGround(wx+rep*.7,wz-rep*.5);if(rep){if(t>.6)continue;}
+      if(t<.34){const c=col.setHSL([.08,.11,.06,.9,.13,.58][Math.floor(rnd(84)*6)],.22+.25*rnd(85),.34+.16*rnd(86));put(SEA.coralB,'cB',wx,gy-.05,wz,.7+1.3*rnd(87),rnd(88)*6.3,c);}
+      else if(t<.5){put(SEA.coralM,'cM',wx,gy-.08,wz,[.6+1.1*rnd(87),.6+1.0*rnd(89),.6+1.1*rnd(90)],rnd(88)*6.3,col.setHSL(.09+.07*rnd(84),.28,.38+.14*rnd(85)));}
+      else if(t<.58){put(SEA.coralT,'cT',wx,gy-.05,wz,.55+.9*rnd(87),rnd(88)*6.3,col.setHSL(.1+.04*rnd(84),.25,.4+.1*rnd(85)));}
+      else if(t<.7){put(SEA.fan,'fan',wx,gy-.03,wz,.8+1.0*rnd(87),rnd(88)*6.3,col.setHSL([.95,.02,.1,.8][Math.floor(rnd(84)*4)],.45,.38));}
+      else if(t<.88){put(SEA.soft,'soft',wx,gy-.02,wz,.7+.9*rnd(87),rnd(88)*6.3,col.setHSL([.85,.12,.5,.95,.15,.1][Math.floor(rnd(84)*6)],.35,.45+.12*rnd(85)));}}
+    if(eel&&dd<42*42){for(let k=0;k<4;k++){const ox=(rnd(100+k)-.5)*G,oz=(rnd(110+k)-.5)*G,gx=wx+ox,gz=wz+oz;put(SEA.eel,'eel',gx,exGround(gx,gz)-.03,gz,[.9+.4*rnd(120+k),.6+.7*rnd(130+k)*Math.min(1,-h/3),.9+.4*rnd(120+k)],rnd(140+k)*6.3,col.setRGB(.13+.06*rnd(150+k),.3+.08*rnd(160+k),.08));}}
+    if(kelp&&dd<55*55&&rnd(94)<.6){const hh=Math.min(-h-1,2+3.5*rnd(95));put(SEA.kelp,'kelp',wx,exGround(wx,wz)-.05,wz,[1.3+.5*rnd(99),hh,1.3+.5*rnd(99)],rnd(96)*6.3,col.setRGB(.32+.1*rnd(97),.24+.06*rnd(98),.08));}}
+  // フジツボとイガイ：潮間帯（水面の 1.6m 下〜1.4m 上）の岩に群生。岩の上半分の面に、外向きに張り付ける
+  const R2=40;if(EX.rocks){const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new V3(),sc=new V3(),up=new V3(0,1,0),nrm=new V3(),qq=new THREE.Quaternion();
+    for(let i=0;i<EX.rocks.count;i++){EX.rocks.getMatrixAt(i,m4);m4.decompose(p,q,sc);if(p.y<-1.8||p.y>1.5||(p.x-cx)**2+(p.z-cz)**2>R2*R2)continue;
+      const NB=Math.min(90,Math.round(30+sc.x*sc.z*60));for(let k=0;k<NB;k++){const a=hash2(i,k,201)*6.283,u=hash2(i,k,202)*1.3-.3,sq=Math.sqrt(Math.max(0,1-u*u));nrm.set(Math.cos(a)*sq,u,Math.sin(a)*sq);
+        const sr=seaRockR(nrm);const lp=nrm.clone().multiplyScalar(sr).applyQuaternion(q).multiply(sc).add(p);if(lp.y>1.4||lp.y<-1.6)continue;const wn=seaRockN(nrm).applyQuaternion(q).divide(sc).normalize();
+        qq.setFromUnitVectors(up,wn);d.position.copy(lp);d.quaternion.copy(qq);const bs=.012+.016*hash2(i,k,203);
+        if(lp.y<-.2&&hash2(i,k,204)<.35){if(n.mus<SEA.mus.instanceMatrix.count){d.rotateY(hash2(i,k,205)*6.3);d.scale.setScalar(.035+.025*hash2(i,k,206));d.updateMatrix();SEA.mus.setMatrixAt(n.mus,d.matrix);SEA.mus.setColorAt(n.mus,col.setRGB(.06,.07,.1));n.mus++;}continue;}
+        if(n.barn>=SEA.barn.instanceMatrix.count)break;d.scale.set(bs,bs*(.8+.6*hash2(i,k,207)),bs);d.updateMatrix();SEA.barn.setMatrixAt(n.barn,d.matrix);const w=.36+.16*hash2(i,k,208);SEA.barn.setColorAt(n.barn,col.setRGB(w,w*.95,w*.86));n.barn++;
+        // まわりに小さな株を何個か
+        for(let j=0;j<3&&n.barn<SEA.barn.instanceMatrix.count;j++){const off=new V3((hash2(i,k*3+j,209)-.5)*.07,0,(hash2(i,k*3+j,210)-.5)*.07).applyQuaternion(qq);d.position.copy(lp).add(off);const b2=bs*(.4+.5*hash2(i,k*3+j,211));d.scale.set(b2,b2,b2);d.updateMatrix();SEA.barn.setMatrixAt(n.barn,d.matrix);SEA.barn.setColorAt(n.barn,col);n.barn++;}}}}
+  const map={cB:SEA.coralB,cM:SEA.coralM,cT:SEA.coralT,fan:SEA.fan,soft:SEA.soft,eel:SEA.eel,kelp:SEA.kelp,barn:SEA.barn,mus:SEA.mus};
+  for(const k in map){const m=map[k];m.count=n[k];m.instanceMatrix.needsUpdate=true;m.instanceColor.needsUpdate=true;}SEA.gc.set(cx,0,cz);SEA.n=n;
+  // 礁の魚とヒラメの居場所：礁の帯・砂地から選び直す
+  for(const f of SEA.mov)f.ok=false;}
+
+// 生き物の居場所を探す：ボートのまわりで条件に合う海底
+function seaFindHome(f,cx,cz,want){for(let k=0;k<24;k++){const a=Math.random()*6.283,r=want.r0+Math.random()*(want.r1-want.r0),x=cx+Math.cos(a)*r,z=cz+Math.sin(a)*r,h=exGround(x,z);
+    if(h<want.hmax&&h>want.hmin&&(!want.reef||hash2(Math.floor(x/40),Math.floor(z/40),91)>.58)){f.home.set(x,h,z);return true;}}return false;}
+const _so=new THREE.Object3D();
+// 向きは実際に動いた方向から決める（頭が進む向き）
+function seaFace(o,prev,cur,f,dt,k){const dx=cur.x-prev.x,dy=cur.y-prev.y,dz=cur.z-prev.z,h=Math.hypot(dx,dz);if(h>1e-4){const ty=Math.atan2(-dx,-dz);let dyaw=ty-f.yaw;dyaw=Math.atan2(Math.sin(dyaw),Math.cos(dyaw));f.yaw+=dyaw*Math.min(1,dt*(k||6));f.pit=damp(f.pit,Math.atan2(dy,h)*.8,4,dt);}
+  o.rotation.set(f.pit,f.yaw,0,'YXZ');}
+function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12||Math.abs(p.z-SEA.gc.z)>12)seaScatter(p.x,p.z);
+  for(const m of SEA.all)m.visible=show||m===SEA.barn||m===SEA.mus;if(!show)return;const t=U.uTime.value;   /* 潮間帯のフジツボ・イガイは水の上からも見える */
+  // 魚の群れ：群れの中心がボートのまわりを、ゆるい曲線でさまよう（水深に合わせて海底と水面の間）
+  SEA.schools.forEach((sc,k)=>{const a=t*.05+sc.seed,r=14+k*2.8+6*Math.sin(t*.07+k);sc.p.set(p.x+Math.cos(a)*r+Math.sin(t*.13+k)*4,0,p.z+Math.sin(a*1.1)*r);const gy=exGround(sc.p.x,sc.p.z);sc.p.y=Math.max(gy+1.6,Math.min(-1.8,gy*.45+Math.sin(t*.2+k)*1.5));sc.ok=gy<-3;});
+  const o=_so;for(let i=0;i<SEA.fishD.length;i++){const f=SEA.fishD[i],sc=SEA.schools[f.sc];
+    const cur=_gv.copy(sc.p).add(f.o);cur.x+=Math.sin(t*.9+f.ph)*.8;cur.y+=Math.sin(t*1.3+f.ph*2)*.25;cur.z+=Math.cos(t*.8+f.ph)*.8;
+    if(!f.init){f.prev.copy(cur);f.init=true;}o.position.copy(cur);seaFace(o,f.prev,cur,f,dt,8);f.prev.copy(cur);o.scale.setScalar(sc.ok?.35*f.s:0);o.updateMatrix();SEA.fish.setMatrixAt(i,o.matrix);}
+  SEA.fish.instanceMatrix.needsUpdate=true;
+  // 1 匹ずつ動く物
+  const cnt={shark:0,ray:0,squid:0,flat:0,reef:0};const M={shark:SEA.shark,ray:SEA.ray,squid:SEA.squid,flat:SEA.flat,reef:SEA.reef};
+  for(const f of SEA.mov){f.t+=dt;const m=M[f.kind],idx=cnt[f.kind]++;
+    if(!f.ok){const w={shark:{r0:22,r1:40,hmin:-80,hmax:-9},ray:{r0:8,r1:35,hmin:-30,hmax:-3},squid:{r0:6,r1:30,hmin:-60,hmax:-4},flat:{r0:3,r1:28,hmin:-25,hmax:-1.5},reef:{r0:3,r1:40,hmin:-18,hmax:-2,reef:true}}[f.kind];
+      f.ok=seaFindHome(f,p.x,p.z,w);if(f.ok){f.p.copy(f.home);f.p.y=f.home.y+1;f.prev.copy(f.p);f.yaw=Math.random()*6.28;}}
+    if(f.ok&&f.home.distanceTo(_gv.set(p.x,f.home.y,p.z))>75)f.ok=false;
+    if(!f.ok){o.position.set(0,-1e4,0);o.scale.setScalar(0);o.updateMatrix();m.setMatrixAt(idx,o.matrix);continue;}
+    f.prev.copy(f.p);const H=f.home,sd=f.seed;let sc=1;
+    if(f.kind==='shark'){const a=f.t*.06+sd,r=12+4*Math.sin(f.t*.05+sd);f.p.set(H.x+Math.cos(a)*r,0,H.z+Math.sin(a)*r);const gy=exGround(f.p.x,f.p.z);f.p.y=Math.min(-3,Math.max(gy+2.5,H.y*.5));sc=2.6+.4*((f.i*7)%3);}
+    else if(f.kind==='ray'){const a=f.t*.09*(f.i%2?1:-1)+sd,r=6+3*Math.sin(f.t*.07+sd);f.p.set(H.x+Math.cos(a)*r,0,H.z+Math.sin(a)*r*.8);f.p.y=exGround(f.p.x,f.p.z)+.6+.4*Math.sin(f.t*.3+sd);sc=1.4+.6*((f.i*5)%3)/2;}
+    else if(f.kind==='squid'){const grp=Math.floor(f.i/6),a=f.t*.05+grp*1.7,r=5+grp*1.5;const pulse=Math.max(0,Math.sin(f.t*3.0+f.i));f.u=(f.u||0)+dt*(.15+.9*pulse*pulse);
+      f.p.set(H.x+Math.cos(a+f.u*.08)*r+(f.i%6-2.5)*.7,H.y+3+Math.sin(f.t*.4+f.i)*.6+(f.i%3)*.4,H.z+Math.sin(a+f.u*.08)*r+((f.i*5)%6-2.5)*.5);f.p.y=Math.min(f.p.y,-1.5);sc=.6+.25*((f.i*3)%4)/3;}
+    else if(f.kind==='flat'){const dB=Math.hypot(p.x-f.p.x,p.z-f.p.z);if(dB<4.5&&p.y<-.5&&!f.flee){f.flee=1.6;f.fv=new V3(f.p.x-p.x,0,f.p.z-p.z).normalize();}
+      if(f.flee>0){f.flee-=dt;f.p.addScaledVector(f.fv,dt*2.6);f.p.y=exGround(f.p.x,f.p.z)+.12+Math.sin(Math.min(1,f.flee/1.6)*Math.PI)*.4;}else{f.flee=0;f.p.y=exGround(f.p.x,f.p.z)+.03;}sc=.9+.6*((f.i*3)%4)/3;}
+    else{const a=f.t*.4+sd,r=1.2+.8*Math.sin(f.t*.3+sd);f.p.set(H.x+Math.cos(a)*r,H.y+.6+.5*Math.sin(f.t*.5+sd),H.z+Math.sin(a*1.3)*r);sc=.12+.1*((f.i*7)%4)/3;}
+    o.position.copy(f.p);if(f.kind==='flat'&&!(f.flee>0))o.rotation.set(0,f.yaw,0,'YXZ');else seaFace(o,f.prev,f.p,f,dt,f.kind==='shark'?1.5:5);
+    if(f.kind==='squid'){/* イカは外套の先（-z）が前。動いた向きに向ける */}
+    o.scale.setScalar(sc);o.updateMatrix();m.setMatrixAt(idx,o.matrix);}
+  for(const k in M)M[k].instanceMatrix.needsUpdate=true;}
+function seaOff(){if(!SEA.ok)return;for(const m of SEA.all)m.visible=false;SEA.gc.set(1e9,0,1e9);}
