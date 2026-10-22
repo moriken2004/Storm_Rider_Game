@@ -222,6 +222,9 @@ vWxP=(modelMatrix*wq).xyz;vWxN=normalize(mat3(modelMatrix)*nq);}`);
   float chip=smoothstep(0.83,0.86,texture2D(tWN,tp/0.31+0.2).b*0.5+f4*0.6)*mt*step(0.3,roughness);c=mix(c,vec3(0.21,0.11,0.06)*(0.55+0.7*f1),chip*fd*0.7);
   float rs=smoothstep(0.55,0.85,texture2D(tWN,vec2(dot(vWxP.xz,vec2(0.71,0.71))*1.3,vWxP.y*0.04)).b)*vt*mt;c=mix(c,c*vec3(0.8,0.62,0.48),rs*fd*0.35*step(0.3,roughness));
   c*=1.0-vt*fd*0.18*smoothstep(0.6,0.9,texture2D(tWN,vec2(dot(vWxP.xz,vec2(0.71,0.71))*2.1,vWxP.y*0.09+0.3)).b);   // 縦の雨筋
+  {float y=vWxP.y,tide=smoothstep(-2.2,-1.4,y)*(1.0-smoothstep(1.0,1.6,y))*vt;   // 水際（潮の満ち引きの帯）：濡れて暗く、フジツボの白い粒、下は海藻の緑、水中は藻で暗い緑
+   c*=mix(1.0,0.55,(1.0-smoothstep(0.4,1.5,y))*vt);float bd=smoothstep(0.74,0.8,texture2D(tWN,tp/0.05+0.2).b)*smoothstep(0.4,0.6,texture2D(tWN,tp/0.9).b);c=mix(c,vec3(0.62,0.6,0.55)*(0.8+0.3*f1),bd*tide*0.85);
+   c=mix(c,vec3(0.07,0.12,0.05)*(0.7+0.6*f3),smoothstep(-0.3,-1.2,y)*vt*smoothstep(0.35,0.6,f4)*0.75);c=mix(c,c*vec3(0.45,0.6,0.5),smoothstep(-1.0,-3.0,y)*vt);}
   diffuseColor.rgb=c;}}`).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor*(0.85+0.3*texture2D(tWN,vWxP.xz/9.0+vWxP.y/13.0).b),0.04,1.0);').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
 if(uExD>0.5){vec3 nw=normalize(vWxN);vec2 tp=exTp(vWxP,nw);float fd=1.0-smoothstep(15.0,70.0,length(vViewPosition)),up=smoothstep(0.6,0.95,nw.y);
  float h=(texture2D(tWN,tp/0.21).b*0.6+texture2D(tWN,tp/0.067+0.3).b*0.4)*0.006+up*(smoothstep(0.82,0.9,texture2D(tWN,vWxP.xz/0.045).b)*0.004-min(1.0,exCrk(vWxP))*0.012);h*=fd;
@@ -665,7 +668,12 @@ function islandH(x,z){
   const ap=(1-smooth(380,520,Math.abs(x-250)))*(1-smooth(480,640,Math.abs(z-150)));
   // 港の敷地は岸壁の高さより少し下で平らにする
   const pm=smooth(1080,1108,x)*(1-smooth(1286,1296,x))*smooth(-200,-174,z)*(1-smooth(474,500,z));
-  return lerp(lerp(h,RWY_Y-.15,Math.max(w,ap)),4.2,pm);
+  h=lerp(lerp(h,RWY_Y-.15,Math.max(w,ap)),4.2,pm);
+  // 港の泊地は浚渫して深く（岸壁の前は 15m、外へ 12m）。港口の外の航路も 12m まで掘る。岸壁の面でほぼ垂直に落とす
+  {const u=sat((x-1282)/358),zn=-246+96*u,zs=556-116*u;const bm=smooth(1293,1301,x)*(1-smooth(1640,1665,x))*smooth(zn-2,zn+16,z)*(1-smooth(zs-16,zs+2,z));
+    const ch=smooth(1630,1660,x)*(1-smooth(1900,2150,x))*(1-smooth(55,85,Math.abs(z-145)));const dep=-12-3*(1-smooth(1340,1420,x))+(fbm2(x*.02,z*.02)-.5)*1.6;
+    const k=Math.max(bm,ch);if(k>0)h=Math.min(h,lerp(h,dep,k));}
+  return h;
 }
 const inPort=(x,z)=>x>1070&&x<1310&&z>-215&&z<515;
 const ROAD_PTS=[[210,300],[470,300],[560,312],[640,326],[800,300],[960,240],[1060,200],[1112,190]];
@@ -2069,7 +2077,7 @@ function buildPort(B,M){
   const steel=col(0x8b9298,.4,.8),rust=col(0x7a4a2e,.85,.3),yel=col(0xd9a21b,.55,.3),red=col(0xb3261c,.6,.2),grn=col(0x1f8a4c,.6,.2),wht=col(0xe6e4dc,.7,.05),asph=col(0x3c3e41,.92,0),quayM=col(0x9a9890,.9,0);
   const QY=4.6,X0=1105,X1=1292,Z0=-170,Z1=470;
   // 岸壁（上面は舗装、海側に防舷材と車止め）
-  box(B,X1-X0,18,Z1-Z0,quayM,(X0+X1)/2,QY-9,(Z0+Z1)/2,true);{const c=document.createElement('canvas');c.width=1024;c.height=2048;const x=c.getContext('2d');x.scale(2,2);x.fillStyle='#46484a';x.fillRect(0,0,512,1024);
+  box(B,X1-X0,24,Z1-Z0,quayM,(X0+X1)/2,QY-12,(Z0+Z1)/2,true);   /* 浚渫した泊地（15m）の底まで届く岸壁 */{const c=document.createElement('canvas');c.width=1024;c.height=2048;const x=c.getContext('2d');x.scale(2,2);x.fillStyle='#46484a';x.fillRect(0,0,512,1024);
     for(let i=0;i<2600;i++){const g=52+r()*36|0;x.fillStyle='rgba('+g+','+g+','+(g+2)+','+(.05+r()*.08)+')';x.fillRect(r()*512,r()*1024,6+r()*60,6+r()*60);}
     x.strokeStyle='rgba(20,21,22,.7)';x.lineWidth=1.5;for(let i=1;i<10;i++){x.beginPath();x.moveTo(i*51.2,0);x.lineTo(i*51.2,1024);x.stroke();}for(let j=1;j<32;j++){x.beginPath();x.moveTo(0,j*32);x.lineTo(512,j*32);x.stroke();}
     for(let i=0;i<50;i++){x.fillStyle='rgba(10,10,11,'+(.1+r()*.25)+')';x.beginPath();x.ellipse(r()*512,r()*1024,8+r()*40,6+r()*26,r()*3,0,7);x.fill();}

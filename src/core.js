@@ -396,10 +396,10 @@ const raysMat=new THREE.ShaderMaterial({uniforms:{tSrc:{value:null},uSun:{value:
   for(int i=0;i<18;i++){c+=texture2D(tSrc,uv).rgb*w;w*=0.93;uv+=d;}gl_FragColor=vec4(c/9.0,1.0);}`});
 const finalMat=new THREE.ShaderMaterial({
   uniforms:{tHDR:{value:null},tBloom:{value:null},tRays:{value:null},tDepth:U.tDepth,uTime:U.uTime,uRain:{value:0},uRainAng:{value:0.3},uExp:{value:0.9},uFade:{value:0},uWhite:{value:0},
-    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uWash:{value:0},uUnder:{value:0},uUwD:{value:0},uCamNF:{value:new THREE.Vector2(1,90000)},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
+    uHurt:{value:0},uAspect:{value:1},uScr:{value:0},uPx:{value:new THREE.Vector2()},uGloomF:{value:0},uGoldF:{value:0},uIndoorF:{value:0},uRays:{value:0},uLens:{value:0},uWash:{value:0},uUnder:{value:0},uUwD:{value:0},uUwVis:{value:26},uUwUp:{value:new THREE.Vector3(.5,1.4,0)},tNz:U.tNoise2,uCamNF:{value:new THREE.Vector2(1,90000)},uDof:{value:0},uFocus:{value:50},uSun:raysMat.uniforms.uSun,uHeat:{value:new THREE.Vector4()},uHeatR:{value:0},uHeatAmt:{value:0},uHeatD:{value:0}},
   vertexShader:FS_VERT,depthTest:false,depthWrite:false,
   fragmentShader:`
-uniform vec2 uCamNF;uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uWash,uUnder,uUwD,uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
+uniform vec2 uCamNF;uniform sampler2D tHDR,tBloom,tRays,tDepth;uniform float uTime,uRain,uRainAng,uExp,uFade,uWhite,uHurt,uAspect,uScr,uIndoorF,uGloomF,uGoldF,uRays,uLens,uWash,uUnder,uUwD,uUwVis;uniform vec3 uUwUp;uniform sampler2D tNz;uniform float uDof,uFocus,uHeatR,uHeatAmt,uHeatD;uniform vec2 uPx,uSun;uniform vec4 uHeat;
 varying vec2 vUv;
 float sat(float x){return clamp(x,0.0,1.0);}
 float h1(float n){return fract(sin(n*127.1)*43758.5453);}
@@ -460,8 +460,13 @@ void main(){
       col=mix(col,a/ws,sat(coc*3.0));}}
   col+=texture2D(tBloom,suv).rgb*0.42;
   // 海の中：遠いほど青緑に霞み、深いほど暗い。水がゆらぐ
-  if(uUnder>0.5){float zz=texture2D(tDepth,suv).x;float zl=zz>=0.999999?400.0:uCamNF.x*uCamNF.y/(uCamNF.y-zz*(uCamNF.y-uCamNF.x));float lt=exp(-uUwD*0.045);
-    vec3 wc=vec3(0.02,0.13,0.15)*(0.35+0.9*lt);float f=1.0-exp(-zl/26.0);col=mix(col*vec3(0.7,0.92,0.96),wc,f);}
+  if(uUnder>0.5){float zz=texture2D(tDepth,suv).x;float zl=zz>=0.999999?400.0:uCamNF.x*uCamNF.y/(uCamNF.y-zz*(uCamNF.y-uCamNF.x));float lt=exp(-uUwD*0.05);
+    // 水の色：浅いと明るい青緑、深いと暗い群青。遠い物ほど赤から先に吸われ、見通し（uUwVis）の先は水の色に溶ける
+    vec3 wc=mix(vec3(0.045,0.2,0.2),vec3(0.008,0.045,0.1),smoothstep(4.0,38.0,uUwD))*(0.3+0.9*lt);
+    col*=exp(-min(zl,80.0)*vec3(0.085,0.028,0.02));float f=1.0-exp(-zl/uUwVis);col=mix(col,wc,f);
+    // 水面から差し込む光の筋：真上の方向（uUwUp）から放射状に、揺らぎながら。水の中の距離ぶんだけ積もり、深いほど弱い
+    {vec2 d=(vUv-uUwUp.xy)*vec2(uAspect,1.0);float an=atan(d.x,d.y),r=length(d);float n=texture2D(tNz,vec2(an*1.6+uTime*0.015,0.37)).b*0.6+texture2D(tNz,vec2(an*4.3-uTime*0.022,0.71)).b*0.4;
+     float sh=smoothstep(0.5,0.85,n)*exp(-r*1.1)*(0.4+0.6*uUwUp.z)*lt*min(zl,45.0)/45.0;col+=vec3(0.55,0.8,0.78)*sh*0.32*(0.4+0.6*lt);}}
   // 光条とレンズフレア
   if(uRays>0.01){col+=texture2D(tRays,vUv).rgb*uRays*0.16;
     vec2 gv=vec2(1.0)-vUv;col+=texture2D(tBloom,0.5+(gv-0.5)*0.55).rgb*vec3(0.35,0.55,0.9)*0.05*uRays+texture2D(tBloom,0.5+(gv-0.5)*1.6).rgb*vec3(0.9,0.6,0.3)*0.03*uRays;

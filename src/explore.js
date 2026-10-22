@@ -91,8 +91,15 @@ function terrSample(x,z,out){const T=baseGroup.userData.terr;if(!T){out[0]=-30;o
   const i00=iz*N+ix,i10=i00+1,i01=i00+N,i11=i01+1,H=T.h,C=T.c;
   out[0]=(H[i00]*(1-u)+H[i10]*u)*(1-v)+(H[i01]*(1-u)+H[i11]*u)*v;
   for(let k=0;k<3;k++)out[k+1]=(C[i00*3+k]*(1-u)+C[i10*3+k]*u)*(1-v)+(C[i01*3+k]*(1-u)+C[i11*3+k]*u)*v;
-  if(Math.abs(x-BASE.x)>T.w/2-1||Math.abs(z-BASE.z)>T.d/2-1)out[0]=-40;return out;}
-const _ts=[0,0,0,0];
+  if(Math.abs(x-BASE.x)>T.w/2-1||Math.abs(z-BASE.z)>T.d/2-1)out[0]=-40;if(out[0]<0)out[0]=Math.min(out[0],exShoreH(x,z));   /* 海の底は水の色と同じ深さの図（陸から離れるほど深い大陸棚） */out[4]=out[5]=out[6]=0;if(out[0]<-.6)exSeabed(x,z,out);return out;}
+// 海底の地形と底質（海の中だけ）：沖の砂の波、岩礁の尾根と張り出し、深場の溝、泥の平原。out[4]=岩 out[5]=泥 out[6]=貝殻まじりの砂利
+function exSeabed(x,z,out){const h=out[0],lx=x-BASE.x,lz=z-BASE.z,w=smooth(-.6,-3.2,h)*(1-.85*exHarb(x,z));if(w<=0)return;
+  const rz=Math.min(1,smooth(.56,.72,vnoise2(lx/90+3.3,lz/90+7.1))+out[3]*.8)*smooth(-1.5,-4,h),rg=Math.pow(1-Math.abs(2*vnoise2(lx/26+11.2,lz/26+5.4)-1),3),
+    oc=rz*(rg*3.4+vnoise2(lx/5.5+1.7,lz/5.5+9.3)*1.2+vnoise2(lx/1.9,lz/1.9)*.35),mud=smooth(-20,-34,h),
+    a=vnoise2(lx/320+2,lz/320+8)*3.5,sw=Math.sin((lx*Math.cos(a)+lz*Math.sin(a))/8.5*6.283+vnoise2(lx/45,lz/45)*5)*.38*(1-rz)*(1-mud)*smooth(-2.5,-6,h),
+    gv=1-Math.abs(2*vnoise2(lx/75+20.3,lz/75+.7)-1),gl=-smooth(.86,.97,gv)*2.2*smooth(-9,-18,h)*(1-rz);
+  out[0]=h+w*(oc+sw+gl)*(1-.55*mud);out[4]=w*Math.min(1,rz*(.35+rg*1.3+.4*vnoise2(lx/4,lz/4)));out[5]=w*mud*(1-rz);out[6]=w*smooth(.6,.74,vnoise2(lx/33+40.2,lz/33+3.3))*(1-rz)*(1-mud);}
+const _ts=[0,0,0,0,0,0,0];
 function exGround(x,z){return terrSample(x,z,_ts)[0];}
 // ── 細かい地面（ボートのまわり 240m 四方）
 const EXP_N=192,EXP_S=1.25,EXP_HALF=EXP_N*EXP_S/2;
@@ -102,19 +109,22 @@ function exBuildPatch(){const N=EXP_N+1,n=N*N,pos=new Float32Array((n+N*4)*3),co
   const edges=[[0,1,0],[N-1,0,1],[N*N-1,-1,0],[N*(N-1),0,-1]];let sk=n;const ring=[];for(let k=0;k<N;k++)ring.push(k);for(let k=1;k<N;k++)ring.push(k*N+N-1);for(let k=N-2;k>=0;k--)ring.push((N-1)*N+k);for(let k=N-2;k>0;k--)ring.push(k*N);
   const skirt=ring.map((v,i)=>[v,n+i]);for(let i=0;i<skirt.length;i++){const[a,b]=skirt[i],[c,d]=skirt[(i+1)%skirt.length];idx.push(a,b,c,c,b,d);}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((n+ring.length)*3),3));g.setAttribute('color',new THREE.BufferAttribute(new Float32Array((n+ring.length)*3),3));
-  g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array((n+ring.length)*3),3));g.setIndex(idx);g.userData.ring=ring;
+  g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array((n+ring.length)*3),3));g.setAttribute('aSub',new THREE.BufferAttribute(new Float32Array((n+ring.length)*3),3));g.setIndex(idx);g.userData.ring=ring;
   const tm=baseGroup.userData.terrMat,m=std({vertexColors:true,roughness:.95,metalness:0});
   m.onBeforeCompile=sh=>{tm.onBeforeCompile(sh);Object.assign(sh.uniforms,{uUw:EXU.uUw,uBoat:EXU.uBoat});
-    sh.vertexShader=sh.vertexShader.replace('vWP=(modelMatrix*vec4(position,1.0)).xyz;','transformed.y+=exMic(position.xz)*(1.0-0.6*vColor.r);vWP=(modelMatrix*vec4(transformed,1.0)).xyz;')
-      .replace('#include <common>','#include <common>\nuniform sampler2D tN2;\nfloat exMic(vec2 p){float a=textureLod(tN2,p/3.3,0.0).b,b=textureLod(tN2,p/0.93+0.31,0.0).b;float uw=1.0-smoothstep(-1.5,0.5,position.y);float rp=sin(dot(p,vec2(0.82,0.57))*3.1+a*4.0)*0.06*uw;return (a-0.5)*0.32+(b-0.5)*0.07+rp;}');
+    sh.vertexShader=sh.vertexShader.replace('vWP=(modelMatrix*vec4(position,1.0)).xyz;','vSub=aSub;transformed.y+=exMic(position.xz)*(1.0-0.6*vColor.r)*(1.0-0.7*aSub.y);vWP=(modelMatrix*vec4(transformed,1.0)).xyz;')
+      .replace('#include <common>','#include <common>\nuniform sampler2D tN2;attribute vec3 aSub;varying vec3 vSub;\nfloat exMic(vec2 p){float a=textureLod(tN2,p/3.3,0.0).b,b=textureLod(tN2,p/0.93+0.31,0.0).b;float uw=1.0-smoothstep(-1.5,0.5,position.y);float rp=sin(dot(p,vec2(0.82,0.57))*3.1+a*4.0)*0.06*uw;return (a-0.5)*0.32+(b-0.5)*0.07+rp;}');
     sh.fragmentShader=sh.fragmentShader.replace('if(hgt<-1.2)discard;','').replace('if(vWP.x>uDet.x&&vWP.x<uDet.z&&vWP.z>uDet.y&&vWP.z<uDet.w)discard;','')
-      .replace('#include <common>','#include <common>\nuniform float uUw;uniform vec2 uBoat;')
+      .replace('#include <common>','#include <common>\nuniform float uUw;uniform vec2 uBoat;varying vec3 vSub;')
       .replace('diffuseColor.rgb=tc;',`
 // 海の中：砂の海底に、揺らめく光の模様（コースティクス）。深いほど暗く青く
 if(hgt<0.3){float uw=1.0-smoothstep(-0.6,0.3,hgt);vec2 q=vWP.xz;float c1=texture2D(tN2,q/7.0+vec2(uT*0.021,uT*0.013)).b,c2=texture2D(tN2,q/5.3-vec2(uT*0.017,-uT*0.019)+0.4).b;
   float ca=pow(1.0-abs(c1-c2)*2.2,7.0);float dd=clamp(-hgt,0.0,40.0);
   vec3 sf=mix(sand*1.05,vec3(0.32,0.30,0.22)*(0.7+0.6*n3),smoothstep(0.55,0.75,texture2D(tN2,q/23.0).b)*0.5);
-  tc=mix(tc,sf,uw*smoothstep(0.0,2.0,-hgt));tc*=mix(vec3(1.0),exp(-dd*0.035)*vec3(0.65,0.92,1.0),uw);tc+=vec3(0.55,0.75,0.78)*ca*uw*exp(-dd*0.06)*0.6;}
+  {float gs=texture2D(tN2,q/0.09).b,gs2=texture2D(tN2,q/0.035+0.4).b;vec3 grv=sf*vec3(0.85,0.82,0.76)*(0.55+0.7*gs);grv=mix(grv,vec3(0.86,0.82,0.74),smoothstep(0.8,0.88,gs2)*0.7);sf=mix(sf,grv,vSub.z);   // 貝殻まじりの砂利
+   vec3 md=vec3(0.19,0.2,0.16)*(0.75+0.35*n3)*(0.9+0.2*texture2D(tN2,q/2.0).b);md=mix(md,md*0.7,smoothstep(0.6,0.75,texture2D(tN2,q/0.6).b)*0.4);sf=mix(sf,md,vSub.y);   // 深場の泥（細かな穴と生き物の這った跡）
+   vec3 rk=rock*vec3(0.85,0.9,0.85)*(0.7+0.5*texture2D(tN2,q/1.3).b);rk=mix(rk,vec3(0.18,0.24,0.12)*(0.6+0.7*n3),smoothstep(0.5,0.75,texture2D(tN2,q/3.1+0.3).b)*0.45*(1.0-smoothstep(4.0,20.0,dd)));sf=mix(sf,rk,smoothstep(0.15,0.6,vSub.x));}   // 岩（浅いと藻が付く）
+  tc=mix(tc,sf,uw*smoothstep(0.0,2.0,-hgt));tc*=mix(vec3(1.0),exp(-dd*vec3(0.075,0.03,0.02)),uw);tc+=vec3(0.55,0.75,0.78)*ca*uw*exp(-dd*0.06)*0.6;}
 // 波打ち際：寄せては返す波の届く高さ（場所と時間でゆらぐ）、その下は濡れて暗く光る砂、先端に泡の縁と残る泡の網、少し上に漂着した海藻の帯、乾いた砂に貝殻の粒
 float exWetK=0.0;
 {float fd=1.0-smoothstep(30.0,120.0,length(vViewPosition));float sb=max(mSand,1.0-smoothstep(1.5,4.0,hgt))*(1.0-smoothstep(0.35,0.6,slope));
@@ -159,12 +169,20 @@ function exWakeUpdate(dt,p,fx,fz){if(!EXWK.m)exWakeInit();const on=EX.mode==='wa
     for(let k=0;k<2;k++){const u=k?1:-1,x=q.x+px*(c+u*hw),z=q.z+pz*(c+u*hw);P[(o+k)*3]=x;P[(o+k)*3+1]=exWave(x,z)+.05;P[(o+k)*3+2]=z;A[(o+k)*2]=age;A[(o+k)*2+1]=u;}}
   g.attributes.position.needsUpdate=g.attributes.aA.needsUpdate=true;EXWK.m.visible=any;
   const R=EXWK.ring;R.visible=on;R.position.set(p.x,exWave(p.x,p.z)+.04,p.z);R.rotation.y=EX.yaw;R.material.uniforms.uSpd.value=Math.abs(EX.spd);}
-function exWakeOff(){if(EXWK.m){EXWK.m.visible=EXWK.ring.visible=false;EXWK.pts.length=0;}}
+// マリンスノー：カメラのまわり 40m の箱に漂う小さな粒（箱の中で繰り返して、いつも周りにある）。ゆっくり沈み、揺らぐ
+function exSnowInit(){const N=1800,P=new Float32Array(N*3),S=new Float32Array(N);for(let i=0;i<N;i++){P[i*3]=Math.random()*40;P[i*3+1]=Math.random()*40;P[i*3+2]=Math.random()*40;S[i]=Math.random();}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(P,3));g.setAttribute('aS',new THREE.BufferAttribute(S,1));
+  const m=new THREE.ShaderMaterial({uniforms:{uT:U.uTime,uCam:{value:new V3()},uK:{value:1}},transparent:true,depthWrite:false,
+    vertexShader:'uniform float uT,uK;uniform vec3 uCam;attribute float aS;varying float vA;void main(){vec3 p=position;p.y-=uT*(0.08+0.12*aS);p.x+=sin(uT*0.3+aS*30.0)*0.6;p.z+=cos(uT*0.23+aS*17.0)*0.6;'+
+      'vec3 w=mod(p-uCam+20.0,40.0)-20.0+uCam;if(w.y>-0.4)w.y=-1e4;vec4 mv=viewMatrix*vec4(w,1.0);float d=-mv.z;gl_Position=projectionMatrix*mv;gl_PointSize=clamp((1.2+2.4*aS)*120.0/max(d,0.5),1.0,6.0);vA=(1.0-smoothstep(10.0,20.0,d))*(0.25+0.35*aS)*uK;}',
+    fragmentShader:'varying float vA;void main(){vec2 c=gl_PointCoord-0.5;float a=smoothstep(0.5,0.1,length(c))*vA;if(a<0.01)discard;gl_FragColor=vec4(vec3(0.75,0.85,0.82),a);}'});
+  EX.snow=new THREE.Points(g,m);EX.snow.frustumCulled=false;EX.snow.visible=false;scene.add(EX.snow);}
+function exWakeOff(){if(EX.snow)EX.snow.visible=false;if(EXWK.m){EXWK.m.visible=EXWK.ring.visible=false;EXWK.pts.length=0;}}
 const EXU={uUw:{value:0},uBoat:{value:new THREE.Vector2(1e9,1e9)}};
-function exPlacePatch(cx,cz){const P2=EX.patch,g=P2.geometry,pa=g.attributes.position.array,ca=g.attributes.color.array,N=EXP_N+1,x0=cx-EXP_HALF,z0=cz-EXP_HALF,s=[0,0,0,0];
-  for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i,x=x0+i*EXP_S,z=z0+j*EXP_S;terrSample(x,z,s);pa[k*3]=x;pa[k*3+1]=s[0];pa[k*3+2]=z;ca[k*3]=s[1];ca[k*3+1]=s[2];ca[k*3+2]=s[3];}
-  const ring=g.userData.ring,n=N*N;ring.forEach((v,i)=>{pa[(n+i)*3]=pa[v*3];pa[(n+i)*3+1]=pa[v*3+1]-3;pa[(n+i)*3+2]=pa[v*3+2];ca[(n+i)*3]=ca[v*3];ca[(n+i)*3+1]=ca[v*3+1];ca[(n+i)*3+2]=ca[v*3+2];});
-  g.attributes.position.needsUpdate=g.attributes.color.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();
+function exPlacePatch(cx,cz){const P2=EX.patch,g=P2.geometry,pa=g.attributes.position.array,ca=g.attributes.color.array,sa=g.attributes.aSub.array,N=EXP_N+1,x0=cx-EXP_HALF,z0=cz-EXP_HALF,s=[0,0,0,0,0,0,0];
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i,x=x0+i*EXP_S,z=z0+j*EXP_S;terrSample(x,z,s);pa[k*3]=x;pa[k*3+1]=s[0];pa[k*3+2]=z;ca[k*3]=s[1];ca[k*3+1]=s[2];ca[k*3+2]=s[3];sa[k*3]=s[4];sa[k*3+1]=s[5];sa[k*3+2]=s[6];}
+  const ring=g.userData.ring,n=N*N;ring.forEach((v,i)=>{pa[(n+i)*3]=pa[v*3];pa[(n+i)*3+1]=pa[v*3+1]-3;pa[(n+i)*3+2]=pa[v*3+2];ca[(n+i)*3]=ca[v*3];ca[(n+i)*3+1]=ca[v*3+1];ca[(n+i)*3+2]=ca[v*3+2];for(let c=0;c<3;c++)sa[(n+i)*3+c]=sa[v*3+c];});
+  g.attributes.position.needsUpdate=g.attributes.color.needsUpdate=g.attributes.aSub.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();
   DETU.uDet.value.set(x0+.4,z0+.4,x0+EXP_N*EXP_S-.4,z0+EXP_N*EXP_S-.4);EX.pc.set(cx,0,cz);}
 // ── まわりの小物：草（陸）、石（浜・崖・海底）、海藻・珊瑚（海底）、魚（海中）。決まった格子ごとに乱数を固定して置く（動いても同じ物が同じ所に）
 const hash2=(x,z,k)=>{const v=Math.sin(x*127.1+z*311.7+k*74.7)*43758.5453;return v-Math.floor(v);};
@@ -286,6 +304,7 @@ async function exStartAsync(){if(exLoading||EX.on)return;exLoading=true;const L=
     st(70,'光と影を準備しています');await y();try{renderer.compile(scene,camera);}catch(e){}
     st(90,'まもなく出発');await y();if(typeof window.__SR!=='undefined'&&EX.on)__SR.step(1/60);
     st(100,'出発');await y();}
+  catch(e){console.error('AquaTopia の準備に失敗',e);try{stopExplore();}catch(_){}showTitle();}
   finally{exLoading=false;L.classList.add('out');setTimeout(()=>{if(L.classList.contains('out'))L.hidden=true;},500);}}
 function startExplore(){exInit();EX.on=true;G.mode='explore';document.body.classList.add('explore');$('tbA').textContent='浮く';$('tbB').textContent='潜る';
   ['title','hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('exhud').hidden=false;
@@ -361,6 +380,9 @@ function exploreUpdate(dt){const I=input,b=EX.b,p=EX.pos;EX.t+=dt;
   // 海中：見上げた水面、色と霞、魚の群れ
   const uw=camera.position.y<exWave(camera.position.x,camera.position.z)-.15;EX.surf.visible=uw;EX.surf.position.set(camera.position.x,exWave(camera.position.x,camera.position.z)*.3,camera.position.z);
   if(EX.camUw!==undefined&&EX.camUw!==uw){if(!uw){G.lensWet=1;G.wash=.7;}else{for(let k=0;k<26;k++)bpart(BOOM.water,camera.position.x+brn(-1,1),camera.position.y-brn(.2,1),camera.position.z+brn(-1,1),brn(-.3,.3),brn(.5,1.5),brn(-.3,.3),brn(.6,1.4),.05,brn(.08,.2),{g:1.5,dr:.5,a:.7,c:_bc.setRGB(.85,.94,.97)});}}EX.camUw=uw;
+  {const fu=finalMat.uniforms,cd=Math.max(0,-camera.position.y);fu.uUwVis.value=lerp(34,15,smooth(3,36,cd));
+    _gv.copy(camera.position);_gv.y+=300;_gv.project(camera);const dir=camera.getWorldDirection(new V3());if(_gv.z<1&&_gv.z>-1)fu.uUwUp.value.set(_gv.x*.5+.5,_gv.y*.5+.5,Math.max(0,dir.y));else fu.uUwUp.value.set(.5,2.2,0);
+    if(!EX.snow)exSnowInit();EX.snow.visible=uw;EX.snow.material.uniforms.uCam.value.copy(camera.position);EX.snow.material.uniforms.uK.value=lerp(.5,1,smooth(2,25,cd));}
   finalMat.uniforms.uUnder.value=uw?1:0;finalMat.uniforms.uUwD.value=Math.max(0,-camera.position.y);EXU.uUw.value=uw?1:0;finalMat.uniforms.uCamNF.value.set(camera.near,camera.far);
   seaUpdate(dt,p,EX.depth>.2||uw);
   // 計器
