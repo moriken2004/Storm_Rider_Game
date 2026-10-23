@@ -1818,6 +1818,52 @@ const inPort=(x,z)=>x>1070&&x<1310&&z>-215&&z<515;
 // 飛行場の構内道路（[x0,z0,x1,z1,幅]）：管制塔（200,360）の基部の前は東へ迂回する。草や木はこの上に生やさない
 const AIR_ROADS=[[210,-240,210,318,9],[210,318,224,338,9],[224,338,224,384,9],[224,384,210,402,9],[210,400,252,400,9],[210,400,210,620,9],[210,620,535,640,9],[60,975,210,620,9],[210,-40,420,-40,8]];
 function onAirRoad(x,z,m){for(const r of AIR_ROADS){const dx=r[2]-r[0],dz=r[3]-r[1],L2=dx*dx+dz*dz,t=Math.max(0,Math.min(1,((x-r[0])*dx+(z-r[1])*dz)/L2));if(Math.hypot(r[0]+dx*t-x,r[1]+dz*t-z)<r[4]/2+(m||0))return true;}return false;}
+// 道路網：まっすぐな区間の集まり（[x0,z0,x1,z1,幅]）を、つながりのある線として作り直す。
+//  ・端が他の区間の途中に乗っていれば、そこで区間を分ける（丁字路）
+//  ・2 本だけがつながる点は 1 本の線にまとめ、折れ目は丸く結ぶ（長方形の切り欠きや白線の途切れを出さない）
+//  ・3 本以上が集まる点（交差点）は白線のない舗装の面にし、各道路は手前で止める。角は縁石のように丸め、白線を角に沿って回す
+//  arms：他の作り方の道路が交差点につながる所（[x,z,向きx,向きz,幅]）
+function roadNet(B,segs,y,lineMat,asphMat,edgeMat,arms){const nodes=[],key=(x,z)=>{for(const n of nodes)if(Math.hypot(n.x-x,n.z-z)<3)return n;const n={x,z,e:[]};nodes.push(n);return n;};
+  let S=segs.map(s=>s.slice());
+  // 丁字路：端が他の区間の途中に乗っていたら分ける
+  for(let pass=0;pass<3;pass++){const out=[];for(const s of S){let cut=null;for(const t of S){if(t===s)continue;for(const[px,pz]of[[t[0],t[1]],[t[2],t[3]]]){const dx=s[2]-s[0],dz=s[3]-s[1],L2=dx*dx+dz*dz,u=((px-s[0])*dx+(pz-s[1])*dz)/L2;if(u>.03&&u<.97&&Math.hypot(s[0]+dx*u-px,s[1]+dz*u-pz)<1.5){cut=[s[0]+dx*u,s[1]+dz*u];break;}}if(cut)break;}
+      for(const a of arms||[]){if(cut)break;const dx=s[2]-s[0],dz=s[3]-s[1],L2=dx*dx+dz*dz,u=((a[0]-s[0])*dx+(a[1]-s[1])*dz)/L2;if(u>.03&&u<.97&&Math.hypot(s[0]+dx*u-a[0],s[1]+dz*u-a[1])<1.5)cut=[s[0]+dx*u,s[1]+dz*u];}
+      if(cut){out.push([s[0],s[1],cut[0],cut[1],s[4]],[cut[0],cut[1],s[2],s[3],s[4]]);}else out.push(s);}S=out;}
+  for(const s of S){const a=key(s[0],s[1]),b=key(s[2],s[3]);if(a===b)continue;const e={a,b,w:s[4],used:false};a.e.push(e);b.e.push(e);}
+  for(const a of arms||[]){const n=key(a[0],a[1]);n.arm=(n.arm||[]).concat([a]);}
+  const deg=n=>n.e.length+(n.arm?n.arm.length:0);
+  // 線にまとめる：交差点（3 本以上）か行き止まりから出発して、2 本の点を通り抜ける
+  const lines=[],walk=(n,e)=>{const pts=[n];let cur=n,ed=e,w=e.w;while(true){ed.used=true;const nx=ed.a===cur?ed.b:ed.a;pts.push(nx);w=Math.max(w,ed.w);cur=nx;if(deg(cur)!==2||cur.arm)break;const ne=cur.e.find(q=>!q.used);if(!ne)break;ed=ne;}lines.push({pts,w});};
+  for(const n of nodes)if(deg(n)!==2||n.arm)for(const e of n.e)if(!e.used)walk(n,e);
+  for(const n of nodes)for(const e of n.e)if(!e.used)walk(n,e);   /* 輪になっている所 */
+  const J=n=>deg(n)>=3||(n.arm&&deg(n)>=2),jr=n=>{let w=0;for(const e of n.e)w=Math.max(w,e.w);for(const a of n.arm||[])w=Math.max(w,a[4]);return w*.5+3.5;};
+  // 中心線：折れ目を丸めて 2m ごとの点に。交差点側の端は手前で止める
+  const center=L=>{const P=L.pts.map(n=>[n.x,n.z]),out=[];const R=Math.min(14,L.w*1.6);
+    out.push(P[0]);for(let i=1;i<P.length-1;i++){const a=P[i-1],b=P[i],c=P[i+1],l1=Math.hypot(b[0]-a[0],b[1]-a[1]),l2=Math.hypot(c[0]-b[0],c[1]-b[1]);const d1=[(b[0]-a[0])/l1,(b[1]-a[1])/l1],d2=[(c[0]-b[0])/l2,(c[1]-b[1])/l2];const t=Math.min(R,l1*.45,l2*.45);
+      const p0=[b[0]-d1[0]*t,b[1]-d1[1]*t],p2=[b[0]+d2[0]*t,b[1]+d2[1]*t];for(let k=0;k<=8;k++){const u=k/8,q=1-u;out.push([q*q*p0[0]+2*q*u*b[0]+u*u*p2[0],q*q*p0[1]+2*q*u*b[1]+u*u*p2[1]]);}}out.push(P[P.length-1]);
+    const sm=[out[0]];for(let i=1;i<out.length;i++){const a=sm[sm.length-1],b=out[i],l=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.max(1,Math.ceil(l/2));for(let k=1;k<=n;k++)sm.push([a[0]+(b[0]-a[0])*k/n,a[1]+(b[1]-a[1])*k/n]);}
+    const n0=L.pts[0],n1=L.pts[L.pts.length-1],t0=J(n0)?jr(n0):0,t1=J(n1)?jr(n1):0;const dist=(q,n)=>Math.hypot(q[0]-n.x,q[1]-n.z);return sm.filter(q=>dist(q,n0)>=t0-.01&&dist(q,n1)>=t1-.01);};
+  const strip=(C,hw,mat,y0,uv)=>{if(C.length<2)return null;const P=[],U=[],I=[];let d=0;for(let i=0;i<C.length;i++){const p=C[Math.min(C.length-1,i+1)],q=C[Math.max(0,i-1)],dx=p[0]-q[0],dz=p[1]-q[1],l=Math.hypot(dx,dz)||1,nx=-dz/l,nz=dx/l;if(i)d+=Math.hypot(C[i][0]-C[i-1][0],C[i][1]-C[i-1][1]);
+      P.push(C[i][0]+nx*hw,y0,C[i][1]+nz*hw,C[i][0]-nx*hw,y0,C[i][1]-nz*hw);U.push(uv?1:0,d/40,uv?0:1,d/40);if(i){const a=(i-1)*2;I.push(a,a+2,a+1,a+1,a+2,a+3);}}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();const m=new THREE.Mesh(g,mat);m.receiveShadow=true;B.add(m);return m;};
+  const ends=new Map();
+  for(const L of lines){const C=center(L);strip(C,L.w/2,lineMat,y,false);if(C.length>=2){for(const[n,i,j]of[[L.pts[0],0,1],[L.pts[L.pts.length-1],C.length-1,C.length-2]]){if(!J(n))continue;const p=C[i],q=C[j],dx=p[0]-q[0],dz=p[1]-q[1],l=Math.hypot(dx,dz)||1;(ends.get(n)||ends.set(n,[]).get(n)).push({x:p[0],z:p[1],dx:-dx/l,dz:-dz/l,hw:L.w/2});}}}
+  // 交差点：各道路の端（とつながる他の道路）の左右の角を角度順に並べ、隣り合う道路の縁は丸い縁石で結ぶ。白線も縁石に沿って
+  for(const n of nodes){if(!J(n))continue;const E=(ends.get(n)||[]).slice();for(const a of n.arm||[]){const r0=jr(n),l=Math.hypot(a[2],a[3]);E.push({x:n.x+a[2]/l*r0,z:n.z+a[3]/l*r0,dx:a[2]/l,dz:a[3]/l,hw:a[4]/2});   /* 向きは交差点から外へ（ほかの道路の端と同じ） */}
+    if(E.length<2)continue;for(const e of E)e.ang=Math.atan2(e.z-n.z,e.x-n.x);E.sort((p,q)=>p.ang-q.ang);
+    const ring=[],edges=[];for(let i=0;i<E.length;i++){const e=E[i],f=E[(i+1)%E.length],nx=-e.dz,nz=e.dx;   /* e の左の角 → f の右の角 */
+      // e の「角度が増える側」の角（eR）から、次の道路 f の「角度が減る側」の角（fR と呼ぶ）へ縁石を回す
+      const eL=[e.x-nx*e.hw,e.z-nz*e.hw],eR0=[e.x+nx*e.hw,e.z+nz*e.hw],fnx=-f.dz,fnz=f.dx,fR=[f.x-fnx*f.hw,f.z-fnz*f.hw];
+      ring.push(eL,eR0);   /* 道路の口 */
+      // 縁石の弧：e の左の縁の線と f の右の縁の線の交わりを控えにした 2 次曲線（ほぼ平行なら直線）
+      const S0=eR0,ex=-e.dx,ez=-e.dz,fx=-f.dx,fz=-f.dz,den=ex*fz-ez*fx;let ctl=[(S0[0]+fR[0])/2,(S0[1]+fR[1])/2];if(Math.abs(den)>.15){const t=((fR[0]-S0[0])*fz-(fR[1]-S0[1])*fx)/den;if(t>0&&t<25)ctl=[S0[0]+ex*t,S0[1]+ez*t];}
+      const arc=[];for(let k=1;k<8;k++){const u=k/8,q=1-u;arc.push([q*q*S0[0]+2*q*u*ctl[0]+u*u*fR[0],q*q*S0[1]+2*q*u*ctl[1]+u*u*fR[1]]);}ring.push(...arc);edges.push([S0,...arc,fR]);}
+    // 白線のない舗装：中心から扇形に
+    const P=[n.x,y+.005,n.z],U=[n.x/8,n.z/8],I=[];ring.forEach(q=>{P.push(q[0],y+.005,q[1]);U.push(q[0]/8,q[1]/8);});for(let i=0;i<ring.length;i++){I.push(0,1+((i+1)%ring.length),1+i);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();const m=new THREE.Mesh(g,asphMat);m.receiveShadow=true;B.add(m);
+    for(const ed of edges){const C2=[];for(let i=0;i<ed.length;i++){const a=ed[Math.max(0,i-1)],b=ed[Math.min(ed.length-1,i+1)];C2.push(ed[i]);}   /* 縁石沿いの白線（道路の縁の白線の続き） */
+      const inset=[];for(let i=0;i<C2.length;i++){const a=C2[Math.max(0,i-1)],b=C2[Math.min(C2.length-1,i+1)],dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz)||1,cx=n.x-C2[i][0],cz=n.z-C2[i][1],s2=Math.sign(-dz*cx+dx*cz)||1;inset.push([C2[i][0]+(-dz/l)*s2*.45,C2[i][1]+(dx/l)*s2*.45]);}
+      strip(inset,.08,edgeMat,y+.012,false);}}}
 const harbRev=(x,z)=>smooth(1150,1185,x)*(1-smooth(1500,1560,x))*Math.max(smooth(-290,-268,z)*(1-smooth(-168,-160,z)),smooth(462,470,z)*(1-smooth(580,600,z)));   // 港内の護岸の範囲
 const ROAD_PTS=[[210,300],[470,300],[560,312],[640,326],[800,300],[960,240],[1060,200],[1112,190]];
 // 道路の中心線：路面と同じなめらかな曲線を 4m ごとの点にして、その点列からの距離で判定する（折れ線のままだと曲がり角で数 m ずれる）
@@ -3758,13 +3804,20 @@ function buildPort(B,M){
   {const smp=[];{const P=ROAD_PTS,cr=(p0,p1,p2,p3,t)=>{const t2=t*t,t3=t2*t;return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);};
       for(let i=0;i<P.length-1;i++){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)],L=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]),n=Math.ceil(L/4);
         for(let k=0;k<n;k++){const t=k/n;smp.push([cr(p0[0],p1[0],p2[0],p3[0],t),cr(p0[1],p1[1],p2[1],p3[1],t)]);}}smp.push(P[P.length-1]);}
+    // 描かれる地形の高さ（粗い網目の補間。式の高さより高い所がある）：道路が地面に埋もれないように、こちらにも合わせる
+    const TT=B.parent&&B.parent.userData.terr,gH=(x,z)=>{let h=islandH(x,z);if(TT){const fx=clamp((x+TT.w/2)/TT.dx,0,TT.nx-1.001),fz=clamp((z+TT.d/2)/TT.dz,0,TT.nz-1.001),ix=Math.floor(fx),iz=Math.floor(fz),u=fx-ix,v=fz-iz,i0=iz*TT.nx+ix,H=TT.h;h=Math.max(h,(H[i0]*(1-u)+H[i0+1]*u)*(1-v)+(H[i0+TT.nx]*(1-u)+H[i0+TT.nx+1]*u)*v);}return h;};
     const N=smp.length,tg=[],hh=[];for(let i=0;i<N;i++){const p=smp[Math.min(N-1,i+1)],q=smp[Math.max(0,i-1)],dx=p[0]-q[0],dz=p[1]-q[1],l=Math.hypot(dx,dz)||1;tg.push([dx/l,dz/l]);const nx=-dz/l,nz=dx/l,[x,z]=smp[i];
-      hh.push(Math.max(islandH(x,z),islandH(x+nx*4,z+nz*4),islandH(x-nx*4,z-nz*4),QY));}
+      hh.push(Math.max(gH(x,z),gH(x+nx*4,z+nz*4),gH(x-nx*4,z-nz*4),QY));}
     const hs=hh.map((_,i)=>{let a2=0,w=0;for(let k=-6;k<=6;k++){const j=Math.min(N-1,Math.max(0,i+k));a2+=hh[j];w++;}return Math.max(a2/w,hh[i]-.2)+.3;});
-    const path=[];let acc=0;for(let i=0;i<N;i++){if(i)acc+=Math.hypot(smp[i][0]-smp[i-1][0],smp[i][1]-smp[i-1][1]);path.push({x:smp[i][0],y:hs[i],z:smp[i][1],d:acc,tx:tg[i][0],tz:tg[i][1]});}
+    // 起点は飛行場の道路の高さから、終点（岸壁の手前 45m から）は岸壁の舗装の高さへなだらかに（段差・乗り上げを出さない）
+    {let d0=0;for(let i=0;i<N;i++){if(i)d0+=Math.hypot(smp[i][0]-smp[i-1][0],smp[i][1]-smp[i-1][1]);const a=1-Math.min(1,d0/40),sa=a*a*(3-2*a);hs[i]=hs[i]*(1-sa)+(RWY_Y-.08)*sa;
+      const x=smp[i][0],b=Math.min(1,Math.max(0,(x-(X0-45))/40)),sb=b*b*(3-2*b);if(sb>0){const nx=-tg[i][1],nz=tg[i][0],z=smp[i][1];hs[i]=Math.max(hs[i]*(1-sb)+(QY+.05)*sb,gH(x,z)+.08,gH(x+nx*4,z+nz*4)+.08,gH(x-nx*4,z-nz*4)+.08);}}}
+    // 終点を岸壁の上へ 14m 延ばす（向きはそのまま、高さは岸壁）
+    {const a=smp[N-1],b=smp[N-2],dx=a[0]-b[0],dz=a[1]-b[1],l=Math.hypot(dx,dz);for(let k=1;k<=7;k++){smp.push([a[0]+dx/l*k*2,a[1]+dz/l*k*2]);tg.push(tg[N-1]);hs.push(QY+.05);}}
+    const path=[];let acc=0;const N0=N;for(let i=0;i<smp.length;i++){if(i)acc+=Math.hypot(smp[i][0]-smp[i-1][0],smp[i][1]-smp[i-1][1]);path.push({x:smp[i][0],y:hs[i],z:smp[i][1],d:acc,tx:tg[i][0],tz:tg[i][1]});}
     B.userData.roadPath=path;
     // 帯状の面を作る：オフセット o0〜o1、高さは関数で
-    const strip=(o0,o1,y0f,y1f,mat,uw)=>{const P=[],U=[],I=[];path.forEach((q,i)=>{const nx=-q.tz,nz=q.tx;for(const[o,yf,u]of[[o0,y0f,0],[o1,y1f,1]]){const x=q.x+nx*o,z=q.z+nz*o;P.push(x,yf(q,x,z),z);U.push(u*(uw||1),q.d/12);}if(i<N-1){const a2=i*2;I.push(a2,a2+1,a2+2,a2+1,a2+3,a2+2);}});
+    const strip=(o0,o1,y0f,y1f,mat,uw,arr)=>{arr=arr||path;const P=[],U=[],I=[];arr.forEach((q,i)=>{const nx=-q.tz,nz=q.tx;for(const[o,yf,u]of[[o0,y0f,0],[o1,y1f,1]]){const x=q.x+nx*o,z=q.z+nz*o;P.push(x,yf(q,x,z),z);U.push(u*(uw||1),q.d/12);}if(i<arr.length-1){const a2=i*2;I.push(a2,a2+1,a2+2,a2+1,a2+3,a2+2);}});
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.setIndex(I);g.computeVertexNormals();const m=new THREE.Mesh(g,mat);m.receiveShadow=true;B.add(m);return m;};
     const rc=document.createElement('canvas');rc.width=128;rc.height=256;const x=rc.getContext('2d'),rr=mulberry(66);x.fillStyle='#38393c';x.fillRect(0,0,128,256);
     for(let i=0;i<500;i++){const g2=44+rr()*26|0;x.fillStyle='rgba('+g2+','+g2+','+(g2+2)+',.18)';x.fillRect(rr()*128,rr()*256,1+rr()*4,2+rr()*16);}
@@ -3772,10 +3825,22 @@ function buildPort(B,M){
     x.fillStyle='#e7e4da';x.fillRect(5,0,3,256);x.fillRect(120,0,3,256);x.fillStyle='#d9a21b';x.fillRect(62,0,4,150);
     const rt=new THREE.CanvasTexture(rc);rt.encoding=THREE.sRGBEncoding;rt.wrapT=THREE.RepeatWrapping;rt.anisotropy=8;
     const flat=q=>q.y,po={polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2};
-    strip(-4,4,flat,flat,std(Object.assign({map:rt,roughness:.88,metalness:0},po)));
-    const gravel=std(Object.assign({color:lin(0x7c7a72),roughness:.95,metalness:0},po));strip(4,5.4,flat,q=>q.y-.05,gravel);strip(-5.4,-4,q=>q.y-.05,flat,gravel);
+    // 路面は飛行場の交差点の手前（7.5m）から岸壁の上まで。路肩・盛り土は岸壁の縁の手前まで
+    const st0=path.findIndex(q=>Math.hypot(q.x-path[0].x,q.z-path[0].z)>=7.5),pRoad=path.slice(Math.max(0,st0-1)),pSide=pRoad.filter(q=>q.x<X0-1.5);
+    strip(-4,4,flat,flat,std(Object.assign({map:rt,roughness:.88,metalness:0},po)),1,pRoad);
+    const gravel=std(Object.assign({color:lin(0x7c7a72),roughness:.95,metalness:0},po));strip(4,5.4,flat,q=>q.y-.05,gravel,1,pSide);strip(-5.4,-4,q=>q.y-.05,flat,gravel,1,pSide);
     const bank=std(Object.assign({color:lin(0x56603a),roughness:1,metalness:0,side:THREE.DoubleSide},po)),gy=(q,x,z)=>Math.max(islandH(x,z),QY-1)-.15;
-    strip(5.4,10,q=>q.y-.05,gy,bank);strip(-10,-5.4,gy,q=>q.y-.05,bank);
+    strip(5.4,10,q=>q.y-.05,gy,bank,1,pSide);strip(-10,-5.4,gy,q=>q.y-.05,bank,1,pSide);
+    // 港の入口：岸壁の上で扇形に広がる舗装（道路の幅 8m から 30m へ、角は丸く）と、縁の白線
+    {const e=path[path.length-1],ex=e.tx,ez=e.tz,nx=-ez,nz=ex,x0=X0+.5,z0=e.z+(x0-e.x)*ez/ex,L2=22,ring=[],ctr=[x0+ex*L2*.5,z0+ez*L2*.5];
+      const side=sd=>{const pts=[];for(let k=0;k<=10;k++){const u=k/10,w=4+(15-4)*u*u,a=[x0+ex*L2*u+nx*sd*w,z0+ez*L2*u+nz*sd*w];pts.push(a);}return pts;};
+      const L1=side(-1),R1=side(1);ring.push(...L1,...R1.reverse());const P=[ctr[0],QY+.045,ctr[1]],U=[ctr[0]/8,ctr[1]/8],I=[];for(const q of ring){P.push(q[0],QY+.045,q[1]);U.push(q[0]/8,q[1]/8);}for(let i=0;i<ring.length;i++)I.push(0,1+i,1+((i+1)%ring.length));
+      const at=document.createElement('canvas');at.width=at.height=64;const ax=at.getContext('2d');ax.fillStyle='#38393c';ax.fillRect(0,0,64,64);for(let i=0;i<120;i++){const g3=44+rr()*26|0;ax.fillStyle='rgba('+g3+','+g3+','+(g3+2)+',.18)';ax.fillRect(rr()*64,rr()*64,1+rr()*3,1+rr()*3);}const atx=new THREE.CanvasTexture(at);atx.encoding=THREE.sRGBEncoding;atx.wrapS=atx.wrapT=THREE.RepeatWrapping;
+      const g4=new THREE.BufferGeometry();g4.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g4.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g4.setIndex(I);g4.computeVertexNormals();
+      const am=new THREE.Mesh(g4,std(Object.assign({map:atx,roughness:.88,metalness:0,side:THREE.DoubleSide},po,{polygonOffsetFactor:-3,polygonOffsetUnits:-4})));am.receiveShadow=true;B.add(am);
+      const wl=std(Object.assign({color:lin(0xe7e4da),roughness:.8,metalness:0,side:THREE.DoubleSide},po,{polygonOffsetFactor:-4,polygonOffsetUnits:-6}));
+      for(const pts of[side(-1),side(1)]){const P2=[],I2=[];pts.forEach((q,i)=>{const sgn=Math.sign((q[0]-ctr[0])*nx+(q[1]-ctr[1])*nz);const a=[q[0]-nx*sgn*.35,q[1]-nz*sgn*.35];P2.push(a[0],QY+.05,a[1],a[0]-nx*sgn*.15,QY+.05,a[1]-nz*sgn*.15);if(i){const b2=(i-1)*2;I2.push(b2,b2+1,b2+2,b2+1,b2+3,b2+2);}});
+        const g5=new THREE.BufferGeometry();g5.setAttribute('position',new THREE.Float32BufferAttribute(P2,3));g5.setIndex(I2);g5.computeVertexNormals();B.add(new THREE.Mesh(g5,wl));}}
     // ガードレール：路面と地面の差が 1.2m を超える区間の両側（支柱と波形の板を一括描画）
     {const pm=std({color:lin(0xb8bcbe),roughness:.4,metalness:.8}),pg=new THREE.BoxGeometry(.16,1.1,.16),bg=new THREE.BoxGeometry(1,1,1),posts=new THREE.InstancedMesh(pg,pm,900),rails=new THREE.InstancedMesh(bg,pm,900),d=new THREE.Object3D();let np=0,nr=0;
       for(const sd of[-1,1]){let prev=null;for(let i=0;i<N;i+=1){const q=path[i],nx=-q.tz*sd,nz=q.tx*sd,x2=q.x+nx*5,z2=q.z+nz*5,drop=q.y-islandH(q.x+nx*8,q.z+nz*8);
@@ -4093,9 +4158,12 @@ function detailBase(B0,M){
     x.fillStyle='#d8d8d0';x.fillRect(3,0,2,h);x.fillRect(w-5,0,2,h);x.fillStyle='#d9a21b';for(let y=0;y<h;y+=64)x.fillRect(w/2-1,y,2,36);},[1,1]);
   let roadN=0;const road=(x0,z0,x1,z1,wd)=>{const ri=roadN++;const L=Math.hypot(x1-x0,z1-z0),t=roadT.clone();t.needsUpdate=true;t.repeat.set(1,L/40);const m=new THREE.Mesh(new THREE.PlaneGeometry(wd,L),std({map:t,roughness:.9,metalness:0,polygonOffset:true,polygonOffsetFactor:-ri,polygonOffsetUnits:-ri*2}));
     m.rotation.set(-Math.PI/2,0,-Math.atan2(x1-x0,z1-z0),'YXZ');m.rotation.order='YXZ';m.rotation.y=Math.atan2(x1-x0,z1-z0);m.rotation.x=-Math.PI/2;m.rotation.z=0;m.position.set((x0+x1)/2,RWY_Y-.1+ri*.03,(z0+z1)/2);m.receiveShadow=true;B.add(m);};
-  for(const r of AIR_ROADS)road(r[0],r[1],r[2],r[3],r[4]+(r[2]!==r[0]&&r[3]!==r[1]?1.2:0));   /* 斜めの区間は継ぎ目が開かないよう少し広く */
+  {const lt=roadT.clone();lt.needsUpdate=true;lt.wrapS=lt.wrapT=THREE.RepeatWrapping;const po={polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-6};
+    const lineM=std(Object.assign({map:lt,roughness:.9,metalness:0},po)),asphT=cv(128,128,(x,w,h)=>{x.fillStyle='#303236';x.fillRect(0,0,w,h);for(let i=0;i<220;i++){const g=40+r()*30|0;x.fillStyle='rgba('+g+','+g+','+g+',.12)';x.fillRect(r()*w,r()*h,2+r()*8,2+r()*8);}},[1,1]);asphT.wrapS=asphT.wrapT=THREE.RepeatWrapping;
+    const asphM=std(Object.assign({map:asphT,roughness:.9,metalness:0,side:THREE.DoubleSide},po,{polygonOffsetFactor:-4,polygonOffsetUnits:-8})),edgeM=std(Object.assign({color:lin(0xd8d8d0),roughness:.8,metalness:0},po,{polygonOffsetFactor:-5,polygonOffsetUnits:-10}));
+    roadNet(B,AIR_ROADS,RWY_Y-.08,lineM,asphM,edgeM,[[ROAD_PTS[0][0],ROAD_PTS[0][1],1,0,8]]);}   /* 港への道路（別の作り方）が東へ分かれる所も交差点に */
   // 街灯
-  for(let z=-220;z<=600;z+=58){const p=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,9,6),copperM);p.position.set(216,RWY_Y+4.5,z);B.add(p);{const gb=new THREE.Mesh(new THREE.SphereGeometry(.55,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.9,1.3)}));gb.position.set(216,RWY_Y+9.4,z);B.add(gb);const cp=new THREE.Mesh(new THREE.ConeGeometry(.7,.6,8),copperM);cp.position.set(216,RWY_Y+10.1,z);B.add(cp);}
+  for(let z=-220;z<=600;z+=58){if(Math.hypot(216-ROAD_PTS[0][0],z-ROAD_PTS[0][1])<14||onAirRoad(216,z,.8)||Math.abs(z+40)<10)continue;   /* 分岐の口や道路の上には立てない */const p=new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,9,6),copperM);p.position.set(216,RWY_Y+4.5,z);B.add(p);{const gb=new THREE.Mesh(new THREE.SphereGeometry(.55,10,8),new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.9,1.3)}));gb.position.set(216,RWY_Y+9.4,z);B.add(gb);const cp=new THREE.Mesh(new THREE.ConeGeometry(.7,.6,8),copperM);cp.position.set(216,RWY_Y+10.1,z);B.add(cp);}
     const s=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.4,2.1,1.5),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));s.position.set(216,RWY_Y+9.4,z);s.scale.set(3.2,3.2,1);B.add(s);}
   // 駐車場と車
   {const lot=new THREE.Mesh(new THREE.PlaneGeometry(46,30),std({color:lin(0x35383b),roughness:.9}));lot.rotation.x=-Math.PI/2;lot.position.set(240,RWY_Y-.02,470);lot.receiveShadow=true;B.add(lot);
