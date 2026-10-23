@@ -270,7 +270,7 @@ function exInit(){if(!BOOM.init)boomInit();if(EX.b)return;
       'float n=texture2D(tN2,vW.xz/9.0+vec2(uT*0.02,uT*0.013)).b*0.6+texture2D(tN2,vW.xz/3.7-vec2(uT*0.031,0.0)).b*0.4;'+
       'vec3 c=mix(vec3(0.03,0.16,0.18),vec3(0.35,0.62,0.62)+uSun*0.08,w)*(0.75+0.5*n);c+=vec3(1.0,0.95,0.85)*pow(n,8.0)*w*1.5;gl_FragColor=vec4(c,1.0);}'}));
   EX.surf.visible=false;EX.surf.frustumCulled=false;scene.add(EX.surf);
-  seaInit();exCratesInit();
+  seaInit();exCratesInit();exDynInit();exKrakenBuild();   /* 巨大イカと光は最初から作っておく（途中で光を足すと全部の材質のシェーダが作り直しになり固まる） */
   // 水を透かして見せる物（層 1）：地面パッチ・岩・海の生き物・ボート。明かりも層 1 で照らす
   {const L1=o=>o.traverse(q=>q.layers.enable(1));L1(EX.patch);L1(EX.rocks);L1(EX.b);for(const m of SEA.all)L1(m);scene.traverse(q=>{if(q.isLight)q.layers.enable(1);});}
   // 水面に映す物（層 2）：ボート・船（係留・航行）・港の施設・島の地形と岩・護岸。明かりも層 2 で
@@ -294,9 +294,28 @@ function exRockBumps(){EX.rbg=new Map();const m4=new THREE.Matrix4(),q=new THREE
     for(let a=Math.floor((ps.x-r)/8);a<=Math.floor((ps.x+r)/8);a++)for(let c=Math.floor((ps.z-r)/8);c<=Math.floor((ps.z+r)/8);c++){const k=a*100000+c;let l=EX.rbg.get(k);if(!l)EX.rbg.set(k,l=[]);l.push(b);}}}
 // 立てる高さ：地面か、0.7m までの段で乗れる物の上面（岸壁・舗装の台など）。上面は細かな凹凸がないので 0.2 下げて返す（あとで +0.22）
 function exStandH(x,z,lvl){let g=exGround(x,z);for(const b of exBumpsNear(x,z)){const t=exBumpTop(b,x,z)-.2;if(t>g&&t<lvl+2.4)g=t;}for(const c of exColsNear(x,z,1)){if(c[4]<=g||c[4]>lvl+.7)continue;const dx=x-c[6],dz=z-c[7];if(Math.abs(dx*c[10]+dz*c[11])<=c[8]&&Math.abs(dx*c[12]+dz*c[13])<=c[9])g=c[4]-.2;}return g;}
+// 動く物の当たり判定：船（係留・航行）、トレーラー、門型クレーン、格納庫の扉、駐機中の機体。開始時に物ごとの部品の箱を物自身の座標で作り、毎コマ近くの物だけ今の位置と向きへ動かす
+function exDynInit(){const L=[],bx=new THREE.Box3(),inv=new THREE.Matrix4(),m4=new THREE.Matrix4();
+  const addObj=(o,maxY)=>{o.updateMatrixWorld(true);inv.copy(o.matrixWorld).invert();const boxes=[];
+    o.traverse(q=>{if(!q.isMesh||!q.visible)return;const mt=Array.isArray(q.material)?q.material[0]:q.material;if(mt.transparent||mt.depthWrite===false)return;if(!q.geometry.boundingBox)q.geometry.computeBoundingBox();
+      if(q.isInstancedMesh){const gb=q.geometry.boundingBox;for(let i=0;i<q.count;i++){q.getMatrixAt(i,m4);m4.premultiply(q.matrixWorld).premultiply(inv);bx.copy(gb).applyMatrix4(m4);if(bx.min.y<maxY)boxes.push(bx.clone());}return;}
+      m4.multiplyMatrices(inv,q.matrixWorld);bx.copy(q.geometry.boundingBox).applyMatrix4(m4);if(bx.isEmpty()||bx.min.y>=maxY)return;const sz=bx.getSize(new V3());if(sz.x<.15&&sz.z<.15)return;boxes.push(bx.clone());});
+    if(boxes.length>220){/* 部品が多いときは近い物をまとめる（2m 格子） */const mp=new Map();for(const b of boxes){const k=Math.round((b.min.x+b.max.x)/4)+'_'+Math.round((b.min.z+b.max.z)/4);const e=mp.get(k);if(e)e.union(b);else mp.set(k,b.clone());}boxes.length=0;for(const b of mp.values())boxes.push(b);}
+    if(boxes.length)L.push({o,boxes,r:Math.max(...boxes.map(b=>Math.hypot(Math.max(Math.abs(b.min.x),Math.abs(b.max.x)),Math.max(Math.abs(b.min.z),Math.abs(b.max.z)))))});};
+  if(typeof ships!=='undefined')for(const sh of ships)addObj(sh.m,6);
+  baseGroup.traverse(o=>{if(!o.userData.dyn||o.userData.push||o.userData.carton||o.isInstancedMesh)return;for(let q=o.parent;q&&q!==baseGroup;q=q.parent)if(q.userData.dyn||q.userData.push)return;if(!o.visible||o.userData.flag)return;
+    bx.setFromObject(o);if(bx.isEmpty())return;const sz=bx.getSize(new V3());if(Math.max(sz.x,sz.z)<1||Math.max(sz.x,sz.z)>400)return;addObj(o,1e9);});   /* 動く物は今の位置に関係なく（走る前は原点にいることもある） */
+  scene.children.forEach(o=>{if(o.userData&&o.userData.wingAt&&o.visible)addObj(o,1e9);});   // 駐機中の機体
+  EX.dyn=L;}
+const _dq=new V3(),_dc=new V3();
+function exDynNear(x,z,r,out){if(!EX.dyn)return;for(const d of EX.dyn){const o=d.o;if(!o.visible||!o.parent)continue;const w=o.matrixWorld.elements,ox=w[12],oz=w[14];if(Math.hypot(ox-x,oz-z)>d.r+r+3)continue;
+    const exx=w[0],exz=w[2],fx=w[8],fz=w[10],la=Math.hypot(exx,exz)||1,lb=Math.hypot(fx,fz)||1;
+    for(const b of d.boxes){_dc.set((b.min.x+b.max.x)/2,(b.min.y+b.max.y)/2,(b.min.z+b.max.z)/2).applyMatrix4(o.matrixWorld);const hx=(b.max.x-b.min.x)/2*la,hz=(b.max.z-b.min.z)/2*lb;if(Math.hypot(_dc.x-x,_dc.z-z)>Math.hypot(hx,hz)+r+1)continue;
+      const wy0=w[13]+(b.min.y)*w[5],wy1=w[13]+(b.max.y)*w[5];
+      out.push([_dc.x-Math.max(hx,hz),Math.min(wy0,wy1),_dc.z-Math.max(hx,hz),_dc.x+Math.max(hx,hz),Math.max(wy0,wy1),_dc.z+Math.max(hx,hz),_dc.x,_dc.z,hx,hz,exx/la,exz/la,fx/lb,fz/lb]);}}}
 // 細かい当たり判定を 32m の格子に分けて、近くの箱だけを調べる
 function exColsNear(x,z,r){r=r||6;const L=baseGroup.userData.exCols;if(!L)return[];if(!EX.cg){EX.cg=new Map();for(const c of L){for(let i=Math.floor(c[0]/32);i<=Math.floor(c[3]/32);i++)for(let j=Math.floor(c[2]/32);j<=Math.floor(c[5]/32);j++){const k=i*100000+j;let a=EX.cg.get(k);if(!a)EX.cg.set(k,a=[]);a.push(c);}}}
-  const out=[],seen=new Set();for(let i=Math.floor((x-r)/32);i<=Math.floor((x+r)/32);i++)for(let j=Math.floor((z-r)/32);j<=Math.floor((z+r)/32);j++){const a=EX.cg.get(i*100000+j);if(a)for(const c of a)if(!seen.has(c)){seen.add(c);out.push(c);}}return out;}
+  const out=[],seen=new Set();exDynNear(x,z,r,out);for(let i=Math.floor((x-r)/32);i<=Math.floor((x+r)/32);i++)for(let j=Math.floor((z-r)/32);j<=Math.floor((z+r)/32);j++){const a=EX.cg.get(i*100000+j);if(a)for(const c of a)if(!seen.has(c)){seen.add(c);out.push(c);}}return out;}
 // ボートと車両の当たり：車両の向きの箱にボートの円（半径 2.5m）を当て、めり込みを重さの比で分け合う。車両は押された勢いで滑って回り、摩擦で止まる
 function exPush(dt,p,fx,fz){if(!EX.push)return;const R=2.5,bv=_gv.set(fx*EX.spd,0,fz*EX.spd);
   for(const c of EX.push){const o=c.o;o.getWorldPosition(_pw);const dx0=p.x-_pw.x,dz0=p.z-_pw.z;
@@ -370,13 +389,13 @@ function exKraken(dt,p){const deep=EX.depth>45;if(!EX.krT)EX.krT=0;const K=EX.kr
   if(EX.krT>KR.T_WARN||(K&&K.phase>=2)){const k=exKrakenBuild();k.t+=dt;
     if(k.phase===0){k.phase=1;k.t=0;const a=Math.random()*6.283;k.dir.set(Math.cos(a),0,Math.sin(a));}
     // 予兆：暗がりの 30m 先をゆっくり回る、目と青い筋が光る。低い唸り
-    if(k.phase===1){k.g.visible=true;{const cd=camera.getWorldDirection(_kt);const a0=Math.atan2(cd.z,cd.x),a=a0+Math.sin(k.t*.25)*.9;k.dir.set(Math.cos(a),0,Math.sin(a));}   /* カメラの前方の扇形を行き来する（見えるところで予兆を見せる） */k.pos.set(p.x+k.dir.x*(18+3*Math.sin(k.t*.4)),p.y-3+Math.sin(k.t*.6)*2,p.z+k.dir.z*(18+3*Math.sin(k.t*.4)));KR.glow.value=1.2+.8*Math.sin(k.t*2.0);
+    if(k.phase===1){k.g.visible=true;{const cd=camera.getWorldDirection(_kt);const a0=Math.atan2(cd.z,cd.x),a=a0+Math.sin(k.t*.25)*.9;k.dir.set(Math.cos(a),0,Math.sin(a));}   /* カメラの前方の扇形を行き来する（見えるところで予兆を見せる） */{const R=18+3*Math.sin(k.t*.4),x=p.x+k.dir.x*R,z=p.z+k.dir.z*R,fl=Math.max(exGround(x,z),exGround(x+3,z),exGround(x,z+3),exGround(x-3,z),exGround(x,z-3));k.pos.set(x,Math.min(-9.5,Math.max(fl+12,p.y-3+Math.sin(k.t*.6)*2)),z);}   /* 海底に刺さらない（腕の長さぶん上）・水面から外套が出ない */KR.glow.value=1.2+.8*Math.sin(k.t*2.0);
       if(w){w.hidden=false;w.textContent='深度45m超過　何かが近づいている……　残り '+Math.max(0,Math.ceil(KR.T_ATK-EX.krT))+' 秒';}
       if(AU.ctx&&(EX.krHum=(EX.krHum||0)-dt)<=0){EX.krHum=1.6;tone(AU.sfx,'sine',38,30,AU.ctx.currentTime,1.6,.35,.4);}
       if(EX.krT>=KR.T_ATK){k.phase=2;k.t=0;EX.krLock=true;k.from=k.pos.clone();}
       if(!deep&&EX.krT<KR.T_WARN){k.phase=0;k.g.visible=false;if(w)w.hidden=true;}}
     // 襲いかかる（1.6 秒）→ 巻き付く（1.8 秒）→ 電撃（3.2 秒）→ ゲームオーバー
-    if(k.phase===2){const u=Math.min(1,k.t/1.6),e=u*u*(3-2*u);{const ax=p.x-camera.position.x,az=p.z-camera.position.z,al=Math.hypot(ax,az)||1;k.away=[ax/al,az/al];}k.pos.copy(k.from).lerp(_kv.set(p.x+k.away[0]*2.2,p.y+5.2,p.z+k.away[1]*2.2),e);KR.glow.value=.8+.2*Math.sin(k.t*9);if(w)w.textContent='巨大電気イカだ！';if(u>=1){k.phase=3;k.t=0;}}
+    if(k.phase===2){const u=Math.min(1,k.t/1.6),e=u*u*(3-2*u);{const ax=p.x-camera.position.x,az=p.z-camera.position.z,al=Math.hypot(ax,az)||1;k.away=[ax/al,az/al];}k.pos.copy(k.from).lerp(_kv.set(p.x+k.away[0]*2.2,p.y+5.2,p.z+k.away[1]*2.2),e);k.pos.y=Math.max(k.pos.y,exGround(k.pos.x,k.pos.z)+10);KR.glow.value=.8+.2*Math.sin(k.t*9);if(w)w.textContent='巨大電気イカだ！';if(u>=1){k.phase=3;k.t=0;}}
     if(k.phase>=3){const aw=k.away||[0,1];k.pos.set(p.x+aw[0]*2.2+Math.sin(k.t*7)*.15,p.y+5.2,p.z+aw[1]*2.2+Math.cos(k.t*6)*.15);}
     if(k.phase===3&&k.t>1.8){k.phase=4;k.t=0;}
     if(k.phase===4){KR.glow.value=1.4+Math.random();k.arcs.visible=true;k.lt.intensity=6+Math.random()*14;k.lt.position.set(p.x,p.y+1.5,p.z);const fl=$('exflash');if(fl)fl.style.opacity=(Math.random()<.35?.55+Math.random()*.4:Math.random()*.15).toFixed(2);
@@ -389,7 +408,7 @@ function exKraken(dt,p){const deep=EX.depth>45;if(!EX.krT)EX.krT=0;const K=EX.kr
     const grab=k.phase===2?Math.max(0,(k.t-1.0)/.6):k.phase>=3?1:0;
     k.arms.forEach((a,i)=>{a.m.visible=true;const an=i/10*Math.PI*2,root=_kv.set(k.pos.x+Math.cos(an)*.42,k.pos.y-1.5,k.pos.z+Math.sin(an)*.42).clone(),pts=[root];const L=a.long?17:10;
       for(let j=1;j<=6;j++){const t=j/6;const free=new V3(root.x+Math.cos(an)*t*3+Math.sin(k.t*1.4+a.ph+t*3)*t*1.5,root.y-t*L,root.z+Math.sin(an)*t*3+Math.cos(k.t*1.2+a.ph+t*2.5)*t*1.5);
-        const wa=an+t*3.2+(k.phase>=3?Math.sin(k.t*3+i)*.1:0),rr=2.45+.35*Math.sin(t*6+i),hy=p.y+.6+.9*Math.sin(t*4+i)-t*.4,wrap=new V3(p.x+Math.cos(wa)*rr,hy,p.z+Math.sin(wa)*rr);pts.push(free.lerp(wrap,Math.min(1,grab*(1.3-t*.3))));}
+        const wa=an+t*3.2+(k.phase>=3?Math.sin(k.t*3+i)*.1:0),rr=2.45+.35*Math.sin(t*6+i),hy=p.y+.6+.9*Math.sin(t*4+i)-t*.4,wrap=new V3(p.x+Math.cos(wa)*rr,hy,p.z+Math.sin(wa)*rr);const q2=free.lerp(wrap,Math.min(1,grab*(1.3-t*.3)));q2.y=Math.max(q2.y,exGround(q2.x,q2.z)+.4);pts.push(q2);}
       exArm(a,pts,a.long?.34:.42,.025);a.last=pts[pts.length-1];a.mid=pts[3];});
     if(k.phase===4){const P=k.arcs.geometry.attributes.position.array,SP=k.spk.geometry.attributes.position.array;let n=0,ns=0;k.spk.visible=true;for(const a of k.arms)for(let rep=0;rep<2;rep++){const src=rep?a.last:a.mid;let x0=src.x,y0=src.y,z0=src.z;const ang=Math.random()*6.283,x1=p.x+Math.cos(ang)*(1+Math.random()*1.4),y1=p.y+.5+Math.random()*1.3,z1=p.z+Math.sin(ang)*(1+Math.random()*1.4);
         for(let s2=1;s2<=8&&n<1198;s2++){const t=s2/8,j=(1-Math.abs(t*2-1))*.5;const x=x0+(x1-x0)/(9-s2)+(Math.random()-.5)*j,y=y0+(y1-y0)/(9-s2)+(Math.random()-.5)*j,z=z0+(z1-z0)/(9-s2)+(Math.random()-.5)*j;P[n*3]=x0;P[n*3+1]=y0;P[n*3+2]=z0;n++;P[n*3]=x;P[n*3+1]=y;P[n*3+2]=z;n++;if(ns<400&&Math.random()<.5){SP[ns*3]=x;SP[ns*3+1]=y;SP[ns*3+2]=z;ns++;}x0=x;y0=y;z0=z;}}
@@ -398,6 +417,15 @@ function exKraken(dt,p){const deep=EX.depth>45;if(!EX.krT)EX.krT=0;const K=EX.kr
     // 揺れ：捕まってからはボートとカメラが震える
     if(k.phase>=3){EX.shake=k.phase===4?.35:.12;}}
   else if(w&&!w.hidden&&(!EX.kr||EX.kr.phase<2))w.hidden=true;}
+// 読み込み中だけ、まだ出ていない物（数が 0 の一括描画・水中の水面・マリンスノー・航跡・イカ）を見える状態にして、シェーダを先に用意させる。
+// three.js は描かれた物のシェーダしか作らないので、こうしないと初めて陸に上がる・潜る瞬間に作り直しで固まる
+const _warm=[];
+function exWarmAll(on){if(on){_warm.length=0;exKrakenWarm(true);const fwd=camera.getWorldDirection(new V3()).multiplyScalar(15).add(camera.position);
+    scene.traverse(o=>{if(o.isInstancedMesh&&o.count===0&&o.instanceMatrix.count>0){_warm.push([o,'count',0,o.visible]);o.count=1;o.visible=true;const m=new THREE.Matrix4().setPosition(fwd);o.setMatrixAt(0,m);o.instanceMatrix.needsUpdate=true;}});
+    for(const o of[EX.surf,EX.snow,EXWK.m,EXWK.ring])if(o&&!o.visible){_warm.push([o,'vis',0,false]);o.visible=true;}}
+  else{exKrakenWarm(false);for(const[o,k,v,vis]of _warm){if(k==='count')o.count=v;o.visible=vis;}_warm.length=0;}}
+// 読み込み中だけ、イカの全部の部品を見える状態にしてシェーダを用意させる
+function exKrakenWarm(on){const k=EX.kr;if(!k)return;k.g.visible=on;k.arcs.visible=on;k.spk.visible=on;for(const a of k.arms)a.m.visible=on;if(on){k.g.position.copy(camera.position).add(camera.getWorldDirection(new V3()).multiplyScalar(20));}}
 function exKrakenReset(){const K=EX.kr;EX.krT=0;EX.krLock=false;EX.shake=0;const w=$('exwarn');if(w)w.hidden=true;const fl=$('exflash');if(fl)fl.style.opacity=0;if(!K)return;K.phase=0;K.t=0;K.g.visible=false;K.arcs.visible=false;if(K.spk)K.spk.visible=false;K.lt.intensity=0;for(const a of K.arms)a.m.visible=false;}
 function exGameOver(){const o=$('exover');if(o)o.hidden=false;const fl=$('exflash');if(fl)fl.style.opacity=0;EX.over=true;if(!EX.ovBound){EX.ovBound=true;$('bExRetry').onclick=()=>{SFX.ui&&SFX.ui();exRetry();};$('bExTitle').onclick=()=>{SFX.ui&&SFX.ui();$('exover').hidden=true;exKrakenReset();EX.over=false;showTitle();};}}
 function exRetry(){$('exover').hidden=true;exKrakenReset();EX.over=false;EX.pos.set(BASE.x+1420,0,BASE.z+150);EX.yaw=Math.PI*.5;EX.spd=0;EX.depth=0;EX.prevD=0;EX.camReset=true;EX.cam.set(EX.pos.x+14,5,EX.pos.z);}
@@ -470,14 +498,17 @@ const EXREF=window.EXREF={on:false,rt:null};
 // 読み込み画面を出してから、重い準備（形・草・木・シェーダの用意）をコマを分けて進める。終わったら画面を切り替える
 let exLoading=false;
 async function exStartAsync(){if(exLoading||EX.on)return;exLoading=true;const L=$('exload'),bar=L.querySelector('.bar i'),msg=L.querySelector('.m');L.classList.remove('out');L.hidden=false;
+  /* 読み込み中のミニゲーム（船体のアカフジツボはがし） */try{bnStart(L.querySelector('.bnh'));}catch(e){console.error(e);}EX.loadLock=true;const go=$('bExGo');go.hidden=true;
   const y=()=>new Promise(r=>setTimeout(r,30)),st=(k,t)=>{bar.style.width=k+'%';msg.textContent=t;};
   try{st(8,'ボートを用意しています');await y();await y();exInit();
     st(40,'島と海を細かく描いています');await y();startExplore();
-    st(70,'光と影を準備しています');await y();try{renderer.compile(scene,camera);}catch(e){}
+    st(70,'光と影を準備しています');await y();try{exWarmAll(true);renderer.compile(scene,camera);__SR.step(1/60);exWarmAll(false);}catch(e){exWarmAll(false);}
     st(90,'まもなく出発');await y();if(typeof window.__SR!=='undefined'&&EX.on)__SR.step(1/60);
-    st(100,'出発');await y();}
+    st(100,'準備完了');await y();
+    // 読み込みが終わったら「出発する」を出す（自動テストのときはそのまま進む）
+    if(!navigator.webdriver){go.textContent='出発する'+(BN.score&&BN.score()?'（はがした数 '+BN.score()+'）':'');go.hidden=false;await new Promise(res=>{const iv=setInterval(()=>{if(BN.score)go.textContent='出発する'+(BN.score()?'（はがした数 '+BN.score()+'）':'');},300);const f=()=>{clearInterval(iv);go.removeEventListener('click',f);res();};go.addEventListener('click',f);});}}
   catch(e){console.error('AquaTopia の準備に失敗',e);try{stopExplore();}catch(_){}showTitle();}
-  finally{exLoading=false;L.classList.add('out');setTimeout(()=>{if(L.classList.contains('out'))L.hidden=true;},500);}}
+  finally{exLoading=false;EX.loadLock=false;bnStop();$('bExGo').hidden=true;L.classList.add('out');setTimeout(()=>{if(L.classList.contains('out'))L.hidden=true;},500);}}
 function startExplore(){exInit();EX.on=true;G.mode='explore';document.body.classList.add('explore');$('tbA').textContent='浮く';$('tbB').textContent='潜る';
   ['title','hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('exhud').hidden=false;
   EX.pos.set(BASE.x+1420,0,BASE.z+150);EX.yaw=Math.PI*.5;/* 港の中の水面から（東へ向いて） */EX.spd=0;EX.vel.set(0,0,0);EX.depth=0;EX.mode='water';EX.t=0;EX.b.visible=true;EX.patch.visible=true;EX.surf.visible=false;
@@ -488,7 +519,7 @@ function stopExplore(){exKrakenReset();if($('exover'))$('exover').hidden=true;EX
   DETU.uDet.value.set(1e9,1e9,-1e9,-1e9);EXU.uUw.value=0;finalMat.uniforms.uUnder.value=0;document.body.classList.remove('explore');$('exhud').hidden=true;$('tbA').textContent='発射';$('tbB').textContent='ブースト';}
 // ── 毎コマ：操縦、水上・陸上・海中の動き、カメラ、まわりの描き直し
 const EX_NOIN={x:0,y:0,boost:false,act:false,xb:false};
-function exploreUpdate(dt){const I=EX.krLock?EX_NOIN:input,b=EX.b,p=EX.pos;EX.t+=dt;
+function exploreUpdate(dt){const I=(EX.krLock||EX.loadLock)?EX_NOIN:input,b=EX.b,p=EX.pos;EX.t+=dt;
   const gnd=exStandH(p.x,p.z,p.y),wv=exWave(p.x,p.z),dive=I.boost,up=I.act;
   // 走る場所：陸（地面が水面より上）・水上・海中
   const onLand=gnd>wv-.3&&EX.depth<.3;EX.mode=onLand?'land':EX.depth>.3?'dive':'water';

@@ -211,6 +211,8 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #exwarn{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:6;color:#ffd7d0;font:600 16px/1.4 -apple-system,'Hiragino Sans',sans-serif;letter-spacing:.15em;text-shadow:0 0 10px rgba(255,80,60,.7);pointer-events:none}
 #exload{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 30%,#0e3a44,#041418 70%);color:#bfe3e6;font-size:12px;letter-spacing:.3em;opacity:1;transition:opacity .45s}
 #exload.out{opacity:0;pointer-events:none}
+#exload .bnh{display:flex;flex-direction:column;align-items:center;gap:6px}#exload canvas.bn{border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.45);cursor:none;touch-action:none}#exload .bni{font-size:13px;letter-spacing:.12em;color:#e6f6f4}
+#exload #bExGo{margin-top:6px;font:600 15px -apple-system,'Hiragino Sans',sans-serif;letter-spacing:.2em;padding:10px 26px;border-radius:10px;border:1px solid rgba(160,230,220,.6);background:rgba(40,120,120,.55);color:#e6f6f4;cursor:pointer}
 #exload .t{font-size:20px;letter-spacing:.35em;color:#e6f6f4}
 #exload .bar{width:260px;height:3px;background:rgba(255,255,255,.12);overflow:hidden;border-radius:2px}
 #exload .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5fd0c8,#e6f6f4);transition:width .3s}
@@ -419,5 +421,5 @@ body.explore #hud,body.explore #fhud,body.explore #radio,body.explore #banner,bo
 <div id="toast"></div>
 <div id="fade"></div>
 <div id="exflash"></div><div id="exover" hidden><div class="t">GAME OVER</div><div class="m">深海の巨大電気イカに捕まった……</div><div class="bs"><button id="bExRetry">浮上してやり直す</button><button id="bExTitle">タイトルへ</button></div></div><div id="exwarn" hidden></div>
-<div id="exload" hidden><div class="t">AQUATOPIA</div><div class="m">出発の準備中</div><div class="bar"><i></i></div><div class="sh"></div></div>
+<div id="exload" hidden><div class="t">AQUATOPIA</div><div class="bnh"></div><div class="m">出発の準備中</div><div class="bar"><i></i></div><div class="sh"></div><button id="bExGo" hidden>出発する</button></div>
 <div id="load"><div>気象データを読み込み中</div><div class="bar"><i id="loadBar" style="transform:scaleX(0)"></i></div></div>

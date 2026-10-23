@@ -18,6 +18,16 @@ const r=await p.evaluate(()=>{const S=__SR,I=S.input,o={};const drive=(x,z,yaw,n
   {const c=EX.push.find(v=>v.o.userData.push==='car');const w=c.o.getWorldPosition(new THREE.Vector3());let best=null,bd=1e9;for(const b of exColsNear(w.x,w.z,40)){if(b[4]<w.y+1.5||b[1]>w.y+1)continue;const d=Math.hypot(b[6]-w.x,b[7]-w.z)-Math.max(b[8],b[9]);if(d>1.5&&d<bd){bd=d;best=b;}}
     if(best){const dx=best[6]-w.x,dz=best[7]-w.z,l=Math.hypot(dx,dz);const sp=2.2*(bd+5);c.v.set(dx/l*sp,0,dz/l*sp);c.moved=true;EX.pos.set(w.x-dx/l*25,0,w.z-dz/l*25);let pen=0;for(let i=0;i<120;i++){__SR.step(1/30);const q=c.o.getWorldPosition(new THREE.Vector3());for(const b of exColsNear(q.x,q.z,1)){if(b[4]<q.y+.5||b[1]>q.y+2)continue;const ex=q.x-b[6],ez=q.z-b[7];const lx=Math.abs(ex*b[10]+ez*b[11]),lz=Math.abs(ex*b[12]+ez*b[13]);if(lx<b[8]&&lz<b[9])pen++;}}
       const q=c.o.getWorldPosition(new THREE.Vector3());o.carWall={dist0:+bd.toFixed(1),moved:+Math.hypot(q.x-w.x,q.z-w.z).toFixed(1),insideFrames:pen};}}
+  // 6) 係留中の貨物船：海から船の横腹へ（船の中心から垂直に）
+  {const sh=__SR.ships.find(x=>x.moored&&x.m.userData.kind==='cargo');const m=sh.m;m.updateMatrixWorld(true);const c=new THREE.Vector3().setFromMatrixPosition(m.matrixWorld),ax=new THREE.Vector3(1,0,0).applyQuaternion(m.quaternion);ax.y=0;ax.normalize();
+    const st=c.clone().addScaledVector(ax,40);EX.pos.set(st.x,0,st.z);EX.yaw=Math.atan2(ax.x,ax.z);EX.depth=0;EX.spd=0;EX.camReset=true;let minD=1e9;for(let i=0;i<300;i++){__SR.input.ty=1;__SR.step(1/30);const d=(EX.pos.x-c.x)*ax.x+(EX.pos.z-c.z)*ax.z;minD=Math.min(minD,d);}__SR.input.ty=0;
+    o.cargoSide={minDist:+minD.toFixed(1),halfBeam:m.userData.beam/2};}
+  // 7) トレーラー：通り道にボートを置き、トレーラーの箱の中に入り込まないか（120 コマ）
+  {const tr=(baseGroup.userData.trucks||baseGroup.userData.lodPort.userData.trucks)[0];const w=tr.getWorldPosition(new THREE.Vector3());EX.pos.set(w.x,exGround(w.x,w.z+9)+.6,w.z+9);EX.depth=0;EX.spd=0;let inside=0;for(let i=0;i<3;i++)__SR.step(1/30);
+    for(let i=0;i<120;i++){__SR.step(1/30);tr.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(tr.matrixWorld).invert(),lp=EX.pos.clone().applyMatrix4(inv);if(Math.abs(lp.x)<1.0&&Math.abs(lp.z)<6&&Math.abs(lp.y-1.5)<2.5)inside++;}
+    o.truck={insideFrames:inside};}
+  // 8) 格納庫の駐機中の機体：機首の前 16m から向かって走る
+  {const ac=scene.children.find(c=>c.userData&&c.userData.wingAt&&c.visible);if(ac){const w=ac.getWorldPosition(new THREE.Vector3());EX.pos.set(w.x,exStandH(w.x,w.z-16,99),w.z-16);EX.yaw=Math.PI;EX.depth=0;EX.spd=0;let minD=1e9;for(let i=0;i<200;i++){__SR.input.ty=1;__SR.step(1/30);minD=Math.min(minD,Math.hypot(EX.pos.x-w.x,EX.pos.z-w.z));}__SR.input.ty=0;o.aircraft={minDist:+minD.toFixed(1)};}}
   return o;});
 console.log(JSON.stringify(r,null,0));
-const ok=r.quayFromSea.x>1293.5&&r.quayFromSea.maxY<1.5&&Math.abs(r.onQuay.y-4.62)<.25&&r.besideBreakwater.z<-10&&(!r.carWall||(r.carWall.insideFrames===0&&r.carWall.moved>1&&r.carWall.moved<r.carWall.dist0+3));console.log(errs[0]||(ok?'当たり判定よし':'当たり判定に問題'));await b.close();
+const ok=r.quayFromSea.x>1293.5&&r.quayFromSea.maxY<1.5&&Math.abs(r.onQuay.y-4.62)<.25&&r.besideBreakwater.z<-10&&r.cargoSide.minDist>r.cargoSide.halfBeam+1.5&&r.truck.insideFrames===0&&(!r.aircraft||r.aircraft.minDist>3)&&(!r.carWall||(r.carWall.insideFrames===0&&r.carWall.moved>1&&r.carWall.moved<r.carWall.dist0+3));console.log(errs[0]||(ok?'当たり判定よし':'当たり判定に問題'));await b.close();

@@ -10,12 +10,15 @@ o.dive=await p.evaluate(()=>{const S=__SR,I=S.input;let q=null;for(let r=1200;r<
   if(!q)return 'なし';EX.pos.set(q[0],0,q[1]);EX.depth=0;window.__q=q;let mx=0;for(let i=0;i<60*30;i++){I.tBoost=true;S.step(1/60);mx=Math.max(mx,EX.depth);if(EX.depth>60)break;}I.tBoost=false;return{floor:+exGround(q[0],q[1]).toFixed(1),maxDepth:+mx.toFixed(1),krT:+(EX.krT||0).toFixed(1)};});
 // 浅く戻すと数え直し
 o.reset=await p.evaluate(()=>{const S=__SR;EX.krT=12;EX.depth=20;for(let i=0;i<120;i++)S.step(1/60);return +(EX.krT||0).toFixed(1);});
-o.warn=await p.evaluate(()=>{const S=__SR;EX.depth=62;EX.krT=19.5;for(let i=0;i<90;i++)S.step(1/60);return{phase:EX.kr&&EX.kr.phase,warn:!document.getElementById('exwarn').hidden,text:document.getElementById('exwarn').textContent};});
+o.warn=await p.evaluate(()=>{const S=__SR,gl=S.renderer.getContext(),px=new Uint8Array(4);EX.depth=62;EX.krT=19.5;let mx=0;for(let i=0;i<90;i++){const t0=performance.now();S.step(1/60);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);mx=Math.max(mx,performance.now()-t0);}return{phase:EX.kr&&EX.kr.phase,warn:!document.getElementById('exwarn').hidden,text:document.getElementById('exwarn').textContent,maxFrameMs:Math.round(mx)};});
 await p.screenshot({path:dir+'kr_warn.png'});
-o.attack=await p.evaluate(()=>{const S=__SR;EX.krT=29.9;for(let i=0;i<60*4;i++)S.step(1/60);return{phase:EX.kr.phase,lock:EX.krLock};});
+o.attack=await p.evaluate(()=>{const S=__SR,gl=S.renderer.getContext(),px=new Uint8Array(4);EX.krT=29.9;let mx=0;for(let i=0;i<60*4;i++){const t0=performance.now();S.step(1/60);gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);mx=Math.max(mx,performance.now()-t0);}return{phase:EX.kr.phase,lock:EX.krLock,maxFrameMs:Math.round(mx)};});
 await p.screenshot({path:dir+'kr_shock.png'});
 o.over=await p.evaluate(()=>{const S=__SR;for(let i=0;i<60*3;i++)S.step(1/60);return{phase:EX.kr.phase,over:!document.getElementById('exover').hidden};});
 await p.screenshot({path:dir+'kr_over.png'});
+o.floor=await p.evaluate(()=>{const S=__SR;document.getElementById('bExRetry').click();const q=window.__q;const fl=exGround(q[0],q[1]);EX.pos.set(q[0],fl+2,q[1]);EX.depth=-fl-2;EX.krT=21;let worst=99;
+  for(let i=0;i<120;i++){S.step(1/60);const k=EX.kr;worst=Math.min(worst,k.pos.y-(exGround(k.pos.x,k.pos.z)+11),...k.arms.map(a=>{const P=a.geo.attributes.position.array;let w=99;for(let j=0;j<P.length;j+=36)w=Math.min(w,P[j+1]-exGround(P[j],P[j+2])+.6);return w;}));}
+  return{boatDepth:+EX.depth.toFixed(1),worstClear:+worst.toFixed(2)};});
 o.retry=await p.evaluate(()=>{document.getElementById('bExRetry').click();for(let i=0;i<30;i++)__SR.step(1/60);return{over:!document.getElementById('exover').hidden,lock:EX.krLock,depth:EX.depth,krVis:EX.kr.g.visible,mode:__SR.G.mode};});
 console.log(JSON.stringify(o));
-const ok=o.dive.maxDepth>45&&o.reset<12&&o.warn.phase===1&&o.warn.warn&&o.attack.lock&&o.over.over&&!o.retry.over&&!o.retry.lock&&!o.retry.krVis;console.log(errs[0]||(ok?'深海の流れよし':'深海の流れに問題'));await b.close();
+const ok=o.warn.maxFrameMs<200&&o.attack.maxFrameMs<200&&o.floor.worstClear>-0.05&&o.dive.maxDepth>45&&o.reset<12&&o.warn.phase===1&&o.warn.warn&&o.attack.lock&&o.over.over&&!o.retry.over&&!o.retry.lock&&!o.retry.krVis;console.log(errs[0]||(ok?'深海の流れよし':'深海の流れに問題'));await b.close();
