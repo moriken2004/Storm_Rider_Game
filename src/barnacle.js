@@ -51,13 +51,21 @@ function bnHull(w,h){const c=document.createElement('canvas');c.width=w;c.height
   const ag=x.createLinearGradient(0,h*.55,0,h);ag.addColorStop(0,'rgba(70,90,40,0)');ag.addColorStop(1,'rgba(70,90,40,.35)');x.fillStyle=ag;x.fillRect(0,0,w,h);
   for(let i=0;i<60;i++){const px=r()*w,py=r()*h;x.fillStyle='rgba(255,255,255,.18)';x.beginPath();x.ellipse(px,py,2+r()*3,1.5+r()*2,0,0,7);x.fill();x.fillStyle='rgba(255,255,255,.35)';x.beginPath();x.arc(px-1,py-1,.8,0,7);x.fill();}
   return c;}
-function bnStart(host,onDone){bnStop();const cv=document.createElement('canvas');cv.className='bn';host.appendChild(cv);const ctx=cv.getContext('2d');const info=document.createElement('div');info.className='bni';host.appendChild(info);
+// スクレーパー（へら）はマウスカーソルそのものにする（絵で描くと、画面の処理が詰まったときにマウスに付いてこない）。
+// 通常の向きと、たたいた瞬間の振り下ろした向きの 2 枚。高解像度の画面用に 2 倍の絵も用意する
+function bnCursor(rot){const mk=sc=>{const c=document.createElement('canvas');c.width=c.height=48*sc;const x=c.getContext('2d');x.scale(sc,sc);x.translate(30,42);x.rotate(rot);
+    x.fillStyle='#c8ccd0';x.beginPath();x.moveTo(-10,0);x.lineTo(10,0);x.lineTo(7,-16);x.lineTo(-7,-16);x.closePath();x.fill();x.strokeStyle='#7d858c';x.lineWidth=1;x.stroke();
+    x.fillStyle='#2d5f8a';x.fillRect(-4,-40,8,25);x.fillStyle='#e0b23a';x.fillRect(-4.5,-19,9,3);return c.toDataURL('image/png');};
+  const a=mk(1),b=mk(2);return ['url('+a+') 30 42, crosshair','-webkit-image-set(url('+a+') 1x, url('+b+') 2x) 30 42, crosshair'];}
+// 解釈できない書き方は無視されるので、通常の指定のあとに高解像度用で上書きする
+function bnSetCur(el,c){el.style.cursor=c[0];el.style.cursor=c[1];}
+function bnStart(host,onDone){bnStop();const cv=document.createElement('canvas');cv.className='bn';host.appendChild(cv);const ctx=cv.getContext('2d');const CUR=BN.cur||(BN.cur=[bnCursor(-.7),bnCursor(-.1)]);bnSetCur(cv,CUR[0]);let curT=0;const info=document.createElement('div');info.className='bni';host.appendChild(info);
   const dpr=Math.min(2,window.devicePixelRatio||1),W=Math.min(560,window.innerWidth-32),H=Math.round(W*.52);cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.scale(dpr,dpr);
   const hull=bnHull(W,H),r=bnRand(77);const sprites=[];for(let i=0;i<28;i++){const R=10+r()*16;sprites.push({R,c:bnSprite(R,1000+i)});}
   const B=[];const spawn=(n)=>{for(let k=0;k<n;k++){let tries=0;while(tries++<40){const sp=sprites[Math.floor(r()*sprites.length)],x0=20+r()*(W-40),y0=20+r()*(H-40);if(B.some(b=>!b.gone&&Math.hypot(b.x-x0,b.y-y0)<b.sp.R+sp.R+2))continue;B.push({x:x0,y:y0,sp,hp:1+Math.round(sp.R/9),hit:0,cr:[],gone:false});break;}}};
   spawn(22);const scars=[],bits=[];let score=0,combo=0,lastHit=0,mx=W/2,my=H/2,swing=0;
   const pos=e=>{const b=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[(t.clientX-b.left)*W/b.width,(t.clientY-b.top)*H/b.height];};
-  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;const now=performance.now();BN.lastT=now;let hitAny=false;
+  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;bnSetCur(cv,CUR[1]);clearTimeout(curT);curT=setTimeout(()=>{bnSetCur(cv,CUR[0]);},110);const now=performance.now();BN.lastT=now;let hitAny=false;
     for(let i=B.length-1;i>=0;i--){const b=B[i];if(b.gone)continue;if(Math.hypot(b.x-mx,b.y-my)<b.sp.R*1.05){hitAny=true;b.hp--;b.hit=1;const rr=bnRand(i*31+b.hp);b.cr.push([rr()*6.28,.3+rr()*.6]);for(let k=0;k<5;k++)bits.push({x:mx,y:my,vx:(Math.random()-.5)*160,vy:-Math.random()*140,a:Math.random()*6,s:1.5+Math.random()*2.5,t:0,c:'#e8b4b0'});
         if(typeof AU!=='undefined'&&AU.ctx&&typeof burst==='function')burst(AU.sfx,AU.ctx.currentTime,.06,.35,'bandpass',2200+Math.random()*1500,1200,1.2,0,.001);
         if(b.hp<=0){b.gone=true;combo=now-lastHit<900?combo+1:1;lastHit=now;score+=1;scars.push({x:b.x,y:b.y,R:b.sp.R});b.fly={vx:(Math.random()-.5)*220,vy:-120-Math.random()*160,rot:0,vr:(Math.random()-.5)*12,t:0};for(let k=0;k<12;k++)bits.push({x:b.x,y:b.y,vx:(Math.random()-.5)*260,vy:-Math.random()*220,a:Math.random()*6,s:2+Math.random()*3,t:0,c:Math.random()<.5?'#c8505a':'#f0d8d0'});
@@ -72,9 +80,6 @@ function bnStart(host,onDone){bnStop();const cv=document.createElement('canvas')
       const sh=b.hit>0?(Math.random()-.5)*3*b.hit:0;b.hit=Math.max(0,b.hit-dt*6);ctx.drawImage(b.sp.c,b.x-S/2+sh,b.y-S/2);
       for(const[a,l]of b.cr){ctx.strokeStyle='rgba(60,15,20,.85)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(b.x+sh,b.y);let px=b.x,py=b.y;for(let k=1;k<=4;k++){px=b.x+Math.cos(a+(k%2?.25:-.2))*b.sp.R*l*k/4;py=b.y+Math.sin(a+(k%2?.25:-.2))*b.sp.R*l*k/4;ctx.lineTo(px+sh,py);}ctx.stroke();}}
     for(let i=bits.length-1;i>=0;i--){const p=bits[i];p.t+=dt;p.vy+=500*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.t>.8){bits.splice(i,1);continue;}ctx.fillStyle=p.c;ctx.globalAlpha=1-p.t/.8;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.a+p.t*8);ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.7);ctx.restore();ctx.globalAlpha=1;}
-    // スクレーパー（へら）：ポインターの位置、たたくと振り下ろす
-    swing=Math.max(0,swing-dt*7);ctx.save();ctx.translate(mx,my);ctx.rotate(-.7+swing*.6);ctx.fillStyle='#c8ccd0';ctx.beginPath();ctx.moveTo(-10,0);ctx.lineTo(10,0);ctx.lineTo(7,-16);ctx.lineTo(-7,-16);ctx.closePath();ctx.fill();ctx.strokeStyle='#7d858c';ctx.stroke();
-    ctx.fillStyle='#2d5f8a';ctx.fillRect(-4,-40,8,25);ctx.fillStyle='#e0b23a';ctx.fillRect(-4.5,-19,9,3);ctx.restore();
     info.textContent='船体のアカフジツボをたたいてはがそう　はがした数 '+score+(combo>1?'　'+combo+'連続！':'');
     raf=requestAnimationFrame(loop);};
   raf=requestAnimationFrame(loop);BN.on=true;BN.stop=()=>{cancelAnimationFrame(raf);cv.remove();info.remove();BN.on=false;};BN.score=()=>score;BN.list=B;BN.cv=cv;BN.W=W;BN.H=H;}
