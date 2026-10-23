@@ -1920,7 +1920,7 @@ function updateCommon(dt){
     if(best!==null&&inGame){const w=W[best];{const sw=spatial(w,spW[best]);if(G.mode!=='cut')sw.dop=clamp(sw.dop,.9,1.1);setWingVoice(G.mode==='dying'?0:w.state==='stall'?.08:(G.mode==='cut'?(w.power===undefined?.8:w.power):.8),sw);}}else setWingVoice(0,{prox:0,pan:0,dop:1,muf:1});}
   // 地上では排気が床の埃を吹き飛ばす
   if(inGame&&P.mesh.userData.gear.visible&&P.power>.3&&Math.random()<.5){fwdOf(P.yaw,0,tA);for(const s of[-1,1])puff(P.pos.x+tA.z*s*2.55-tA.x*(14+Math.random()*10),P.pos.y-2.8,P.pos.z-tA.x*s*2.55-tA.z*(14+Math.random()*10),-tA.x*(20+P.power*40),2+Math.random()*5,-tA.z*(20+P.power*40),2+Math.random()*2.5,.7+Math.random()*.5,.22);}
-  if(P.elight){const ud=P.mesh.userData;P.elight.intensity=((P.power>=.28?P.power*P.power*1.1:0)+(ud.ign||0)*5)*(.85+.15*Math.sin(G.t*41))*(G.indoor>0?1.6:.6);}
+  if(P.elight){const ud=P.mesh.userData;P.elight.intensity=P.mesh.visible?((P.power>=.28?P.power*P.power*1.1:0)+(ud.ign||0)*5)*(.85+.15*Math.sin(G.t*41))*(G.indoor>0?1.6:.6):0;P.mesh.updateMatrixWorld();P.elight.position.set(0,1.2,14).applyMatrix4(P.mesh.matrixWorld);}
   // 自機のエンジン：追尾カメラは機体と一緒に動くので、プレイ中・墜落中はドップラーをほぼ掛けない（きりもみでカメラが回り込むと、唸りの音程が速く上下してキュルキュル鳴っていた）。墜落中は止まっていく
   const spE=inGame?spatial(P,spP):null;if(spE&&G.mode!=='cut')spE.dop=clamp(spE.dop,.97,1.03);
   const dieK=G.mode==='dying'?(G.crash?0:Math.max(0,1-G.dieT/1.2)):1;
@@ -2185,7 +2185,7 @@ function makePlayer(){
   if(old){gearOn=old.userData.gear.visible;podOn=old.userData.pod.visible;if(P.armor)for(const a of P.armor){if(a.mesh.parent)a.mesh.parent.remove(a.mesh);}
     for(const m of old.userData.wetMats){const i=WETM.indexOf(m);if(i>=0)WETM.splice(i,1);}scene.remove(old);}
   const m=P.mesh=buildAircraft(0,'SR-01',opts.shape||0,SCHEMES[opts.color||0]);scene.add(m);
-  P.elight=new THREE.PointLight(0xff9a52,0,70,1.8);P.elight.position.set(0,1.2,14);m.add(P.elight);
+  if(!P.elight){P.elight=new THREE.PointLight(0xff9a52,0,70,1.8);scene.add(P.elight);}   // 機体には付けない（墜落で機体を隠すと光の数が変わり、全部の材質のシェーダが作り直しになって固まる）。位置は毎コマ機体に合わせる
   P.armor=addArmor(m);m.userData.gear=buildGear(m.userData.shape,m.userData.bodyHex);m.add(m.userData.gear);m.userData.gear.visible=gearOn;m.userData.pod.visible=podOn;
   m.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial){o.castShadow=true;o.receiveShadow=true;}});
   m.userData.onIgn=()=>{if(G.mode==='cut')SFX.ignite();};G.wet=undefined;
@@ -2254,7 +2254,7 @@ function boot(){
     ()=>{U.tDetail.value=makeDetail3D(32);},
     ()=>{buildGroundTex();},
     ()=>{U.tNoise2.value=makeNoise2D(256);GLOWTEX=glowTexture();buildEnv();buildOcean();},
-    ()=>{sunL=new THREE.DirectionalLight(0xffffff,3);scene.add(sunL);scene.add(sunL.target);
+    ()=>{sunL=new THREE.DirectionalLight(0xffffff,3);scene.add(sunL);scene.add(sunL.target);exKrLight();
       renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;sunL.castShadow=true;
       {const sh=sunL.shadow;sh.mapSize.set(2048,2048);sh.camera.left=sh.camera.bottom=-95;sh.camera.right=sh.camera.top=95;sh.camera.near=1;sh.camera.far=700;sh.bias=-0.0006;sh.normalBias=0.12;sh.camera.updateProjectionMatrix();}hemiL=new THREE.HemisphereLight(0xa8c4ee,0x1c2a36,1);scene.add(hemiL);
       const gear=buildGear;

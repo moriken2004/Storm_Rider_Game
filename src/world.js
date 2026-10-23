@@ -1038,7 +1038,7 @@ diffuseColor.rgb=c;`);};
   B.userData.cones=hangarDetail(HG,{hullM,paleM,darkM,glassM,cyM,amM,whM,box});
   const doors=[-1,1].map(s=>{const d=new THREE.Group();d.userData.dyn=true;d.position.set(s*23.75,0,-88.5);HG.add(d);
     box(d,47.5,27.8,1.6,std({color:lin(0x4f6e70),roughness:.6,metalness:.4}),0,13.9,0,true);box(d,47.38,1.2,1.8,darkM,0,9,0);box(d,47.38,1.2,1.8,darkM,0,19,0);box(d,40,.5,.3,amM,0,14,-.9);{const dm=new THREE.Mesh(new THREE.PlaneGeometry(47.3,27.8),B.userData.cones.doorM);dm.position.set(0,14,.82);d.add(dm);for(const y of[4.5,14,23.5])box(d,47.5,.5,.5,darkM,0,y,1.0);}return d;});
-  const hlight=new THREE.PointLight(0xcfe2ff,2.2,300,1.4);hlight.position.set(0,27,0);HG.add(hlight);
+  const hlight=new THREE.PointLight(0xcfe2ff,2.2,300,1.4);hlight.position.set(0,RWY_Y+27,HANGAR_Z);B.add(hlight);   // 格納庫の天井照明。格納庫は遠いと隠すが、光は隠さない（光の数が変わると全部の材質のシェーダが作り直しになり固まる。届くのは 300 m まで）
   B.userData.hangar=HG;B.userData.doors=doors;B.userData.hlight=hlight;B.userData.strip=whM;
   // 滑走路の縁の発光ライン
   const LOD=new THREE.Group();B.add(LOD);B.userData.lod=LOD;
@@ -1308,11 +1308,13 @@ function addArmor(g){
 // 外形は半径 0.42・全長約 7.5m（機体の腹下の懸架環や格納庫の架台に合わせる）。前から：レドームと観測窓、前の小翼 4 枚、
 // 放射部（へこんだ帯に放射素子が 18 個ずつ並ぶ 3 本の帯）、後部胴体（危険表示の帯・機番の刷り込み・点検口）、ガンメタルの絞り胴、切り落とし三角の安定翼 4 枚、ロケットのノズル
 let DFTEX=null;
-function diffuserTex(){if(DFTEX)return DFTEX;const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');
-  x.fillStyle='#1a1f24';x.font='bold 46px Arial';x.textBaseline='middle';x.fillText('WX-7',14,40);x.font='bold 22px Arial';x.fillText('DIFFUSER',150,30);x.font='16px Arial';x.fillText('MIZUHA WEATHER CONTROL',150,56);
-  x.fillStyle='#d69a14';x.fillRect(14,82,330,8);x.fillStyle='#1a1f24';x.font='bold 15px Arial';x.fillText('DANGER  HIGH VOLTAGE  DO NOT TOUCH EMITTERS',14,106);
-  // 稲妻の警告三角
-  x.fillStyle='#d69a14';x.beginPath();x.moveTo(430,14);x.lineTo(490,112);x.lineTo(370,112);x.fill();x.fillStyle='#1a1f24';x.beginPath();x.moveTo(436,44);x.lineTo(416,82);x.lineTo(432,82);x.lineTo(424,104);x.lineTo(448,70);x.lineTo(432,70);x.lineTo(442,44);x.fill();
+// 絵柄は 512×200（横:縦＝2.56）。胴に貼る面も同じ比率（長さ 0.70m × 周方向 0.273m）にする（比率が違うと文字が歪む）
+const DF_W=512,DF_H=200,DF_L=.70;
+function diffuserTex(){if(DFTEX)return DFTEX;const c=document.createElement('canvas');c.width=DF_W;c.height=DF_H;const x=c.getContext('2d');
+  x.fillStyle='#1a1f24';x.textBaseline='middle';x.font='bold 58px Arial';x.fillText('WX-7',14,52);x.font='bold 28px Arial';x.fillText('DIFFUSER',176,36);x.font='18px Arial';x.fillText('MIZUHA WEATHER CONTROL',176,70);
+  x.fillStyle='#d69a14';x.fillRect(14,100,484,8);x.fillStyle='#1a1f24';x.font='bold 18px Arial';x.fillText('DANGER  HIGH VOLTAGE',14,136);x.fillText('DO NOT TOUCH EMITTERS',14,166);
+  // 稲妻の警告三角（文字と重ならない右下）
+  x.fillStyle='#d69a14';x.beginPath();x.moveTo(445,116);x.lineTo(498,194);x.lineTo(392,194);x.fill();x.fillStyle='#1a1f24';x.beginPath();x.moveTo(450,136);x.lineTo(433,166);x.lineTo(446,166);x.lineTo(439,186);x.lineTo(461,158);x.lineTo(447,158);x.lineTo(456,136);x.fill();
   DFTEX=new THREE.CanvasTexture(c);DFTEX.encoding=THREE.sRGBEncoding;DFTEX.anisotropy=8;return DFTEX;}
 function buildDiffuser(){
   const g=new THREE.Group(),R=.42;
@@ -1329,7 +1331,7 @@ function buildDiffuser(){
   const bands=[-1.45,-.55,.35],BL=.62,RC=.392;
   const segs=[[-2.4,bands[0]-BL/2],[bands[0]+BL/2,bands[1]-BL/2],[bands[1]+BL/2,bands[2]-BL/2],[bands[2]+BL/2,2.3]];
   for(const[z0,z1]of segs)cyl(R,R,z0,z1,white,true);
-  for(const z of[-2.4,-1.95,1.0,2.3])M(new THREE.TorusGeometry(R,.007,6,40),dark,z);
+  for(const z of[-2.4,-1.95,1.95,2.3])M(new THREE.TorusGeometry(R,.007,6,40),dark,z);   // 後部の継ぎ目は危険表示の帯より後ろ（機番の刷り込みを横切らない）
   // 放射部：へこんだ帯（段の面も閉じる）、縁の金属環、放射素子の列
   for(const zc of bands){const z0=zc-BL/2,z1=zc+BL/2;cyl(RC,RC,z0,z1,dark,true);
     for(const[z,f]of[[z0,1],[z1,-1]]){const rg=M(new THREE.RingGeometry(RC,R,36),dark,z);rg.rotation.y=f>0?0:Math.PI;}
@@ -1340,7 +1342,7 @@ function buildDiffuser(){
   // 機番の刷り込み：後部胴体の左右に、胴の長さ方向に読めるように（絵柄を 90° 回す）
   for(const s of[1,-1]){const t=diffuserTex().clone();t.needsUpdate=true;t.center.set(.5,.5);t.rotation=s>0?-Math.PI/2:Math.PI/2;
     const dm=std({map:t,transparent:true,alphaTest:.4,metalness:.2,roughness:.5,polygonOffset:true,polygonOffsetFactor:-2});
-    const d=new THREE.Mesh(new THREE.CylinderGeometry(R+.005,R+.005,.74,20,1,true,(s>0?Math.PI/2:Math.PI*1.5)-.5,1.0),dm);d.rotation.x=Math.PI/2;d.position.z=1.06;g.add(d);}
+    const arc=DF_L*DF_H/DF_W/(R+.005);const d=new THREE.Mesh(new THREE.CylinderGeometry(R+.005,R+.005,DF_L,20,1,true,(s>0?Math.PI/2:Math.PI*1.5)-arc/2,arc),dm);d.rotation.x=Math.PI/2;d.position.z=1.07;g.add(d);}   // 放射部の端 0.66 と危険表示の帯 1.48 の間
   // 懸架の金具（上面、懸架環の位置）
   for(const z of[-1.3,1.4]){const lg=M(new THREE.BoxGeometry(.1,.07,.16),gun,z);lg.position.y=R+.025;}
   // 絞り胴（ガンメタル）とノズル：外のベル、奥の喉、燃焼の光

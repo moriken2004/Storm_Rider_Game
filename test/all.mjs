@@ -21,8 +21,11 @@ const T=[
   ['機体と着陸脚の左右対称','gearcheck.mjs',[],o=>/脚と機体は左右対称/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=24;}],   // 岸壁に掛けた防舷材のタイヤは壁から下がっているので候補に入る（係留船を基地から外したため 16→24）
   ['AquaTopia の深海と巨大電気イカ','kraken.mjs',[],o=>/深海の流れよし/.test(o)],
+  ['巨大イカの現れ方（暗い海から浮かび上がる）','krfade.mjs',[],o=>/イカは少しずつ現れる/.test(o)],
   ['AquaTopia の初めての場面（固まらない）','firsthitch.mjs',[],o=>/初めての場面でも固まらない/.test(o)],
   ['AquaTopia の読み込み中のミニゲーム','bngame.mjs',[],o=>/ミニゲームよし/.test(o)],
+  ['AquaTopia の読み込み中に遊べる（画面が止まらない）','bnload.mjs',[],o=>/読み込み中も遊べる/.test(o)],
+  ['光の数が場面で変わらない（シェーダの作り直しで固まらない）','lightcount.mjs',[],o=>/光の数は変わらない/.test(o)],
   ['AquaTopia の段ボール（崩れて元に戻る）','crates.mjs',[],o=>/崩れる/.test(o)],
   ['AquaTopia の当たり判定（岸壁・流木・防波堤）','exphys.mjs',[],o=>/当たり判定よし/.test(o)],
   ['AquaTopia の森のカメラ（揺れない）','camjit.mjs',[],o=>/揺れなし/.test(o)],

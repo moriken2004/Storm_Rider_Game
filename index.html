@@ -1031,6 +1031,7 @@ function resize(force){
 const _pv=new THREE.Matrix4();
 let frameNo=0;
 function renderFrame(){
+  if(window.EXREF&&window.EXREF.hold)return;   // AquaTopia の読み込み中：描画プログラムを裏で組み立て終えるまで画面は描かない（描くと組み立てを待って固まる）
   camera.updateMatrixWorld();
   _pv.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
   cloudMat.uniforms.uInvPV.value.copy(_pv).invert();
@@ -2156,7 +2157,7 @@ diffuseColor.rgb=c;`);};
   B.userData.cones=hangarDetail(HG,{hullM,paleM,darkM,glassM,cyM,amM,whM,box});
   const doors=[-1,1].map(s=>{const d=new THREE.Group();d.userData.dyn=true;d.position.set(s*23.75,0,-88.5);HG.add(d);
     box(d,47.5,27.8,1.6,std({color:lin(0x4f6e70),roughness:.6,metalness:.4}),0,13.9,0,true);box(d,47.38,1.2,1.8,darkM,0,9,0);box(d,47.38,1.2,1.8,darkM,0,19,0);box(d,40,.5,.3,amM,0,14,-.9);{const dm=new THREE.Mesh(new THREE.PlaneGeometry(47.3,27.8),B.userData.cones.doorM);dm.position.set(0,14,.82);d.add(dm);for(const y of[4.5,14,23.5])box(d,47.5,.5,.5,darkM,0,y,1.0);}return d;});
-  const hlight=new THREE.PointLight(0xcfe2ff,2.2,300,1.4);hlight.position.set(0,27,0);HG.add(hlight);
+  const hlight=new THREE.PointLight(0xcfe2ff,2.2,300,1.4);hlight.position.set(0,RWY_Y+27,HANGAR_Z);B.add(hlight);   // 格納庫の天井照明。格納庫は遠いと隠すが、光は隠さない（光の数が変わると全部の材質のシェーダが作り直しになり固まる。届くのは 300 m まで）
   B.userData.hangar=HG;B.userData.doors=doors;B.userData.hlight=hlight;B.userData.strip=whM;
   // 滑走路の縁の発光ライン
   const LOD=new THREE.Group();B.add(LOD);B.userData.lod=LOD;
@@ -2426,11 +2427,13 @@ function addArmor(g){
 // 外形は半径 0.42・全長約 7.5m（機体の腹下の懸架環や格納庫の架台に合わせる）。前から：レドームと観測窓、前の小翼 4 枚、
 // 放射部（へこんだ帯に放射素子が 18 個ずつ並ぶ 3 本の帯）、後部胴体（危険表示の帯・機番の刷り込み・点検口）、ガンメタルの絞り胴、切り落とし三角の安定翼 4 枚、ロケットのノズル
 let DFTEX=null;
-function diffuserTex(){if(DFTEX)return DFTEX;const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');
-  x.fillStyle='#1a1f24';x.font='bold 46px Arial';x.textBaseline='middle';x.fillText('WX-7',14,40);x.font='bold 22px Arial';x.fillText('DIFFUSER',150,30);x.font='16px Arial';x.fillText('MIZUHA WEATHER CONTROL',150,56);
-  x.fillStyle='#d69a14';x.fillRect(14,82,330,8);x.fillStyle='#1a1f24';x.font='bold 15px Arial';x.fillText('DANGER  HIGH VOLTAGE  DO NOT TOUCH EMITTERS',14,106);
-  // 稲妻の警告三角
-  x.fillStyle='#d69a14';x.beginPath();x.moveTo(430,14);x.lineTo(490,112);x.lineTo(370,112);x.fill();x.fillStyle='#1a1f24';x.beginPath();x.moveTo(436,44);x.lineTo(416,82);x.lineTo(432,82);x.lineTo(424,104);x.lineTo(448,70);x.lineTo(432,70);x.lineTo(442,44);x.fill();
+// 絵柄は 512×200（横:縦＝2.56）。胴に貼る面も同じ比率（長さ 0.70m × 周方向 0.273m）にする（比率が違うと文字が歪む）
+const DF_W=512,DF_H=200,DF_L=.70;
+function diffuserTex(){if(DFTEX)return DFTEX;const c=document.createElement('canvas');c.width=DF_W;c.height=DF_H;const x=c.getContext('2d');
+  x.fillStyle='#1a1f24';x.textBaseline='middle';x.font='bold 58px Arial';x.fillText('WX-7',14,52);x.font='bold 28px Arial';x.fillText('DIFFUSER',176,36);x.font='18px Arial';x.fillText('MIZUHA WEATHER CONTROL',176,70);
+  x.fillStyle='#d69a14';x.fillRect(14,100,484,8);x.fillStyle='#1a1f24';x.font='bold 18px Arial';x.fillText('DANGER  HIGH VOLTAGE',14,136);x.fillText('DO NOT TOUCH EMITTERS',14,166);
+  // 稲妻の警告三角（文字と重ならない右下）
+  x.fillStyle='#d69a14';x.beginPath();x.moveTo(445,116);x.lineTo(498,194);x.lineTo(392,194);x.fill();x.fillStyle='#1a1f24';x.beginPath();x.moveTo(450,136);x.lineTo(433,166);x.lineTo(446,166);x.lineTo(439,186);x.lineTo(461,158);x.lineTo(447,158);x.lineTo(456,136);x.fill();
   DFTEX=new THREE.CanvasTexture(c);DFTEX.encoding=THREE.sRGBEncoding;DFTEX.anisotropy=8;return DFTEX;}
 function buildDiffuser(){
   const g=new THREE.Group(),R=.42;
@@ -2447,7 +2450,7 @@ function buildDiffuser(){
   const bands=[-1.45,-.55,.35],BL=.62,RC=.392;
   const segs=[[-2.4,bands[0]-BL/2],[bands[0]+BL/2,bands[1]-BL/2],[bands[1]+BL/2,bands[2]-BL/2],[bands[2]+BL/2,2.3]];
   for(const[z0,z1]of segs)cyl(R,R,z0,z1,white,true);
-  for(const z of[-2.4,-1.95,1.0,2.3])M(new THREE.TorusGeometry(R,.007,6,40),dark,z);
+  for(const z of[-2.4,-1.95,1.95,2.3])M(new THREE.TorusGeometry(R,.007,6,40),dark,z);   // 後部の継ぎ目は危険表示の帯より後ろ（機番の刷り込みを横切らない）
   // 放射部：へこんだ帯（段の面も閉じる）、縁の金属環、放射素子の列
   for(const zc of bands){const z0=zc-BL/2,z1=zc+BL/2;cyl(RC,RC,z0,z1,dark,true);
     for(const[z,f]of[[z0,1],[z1,-1]]){const rg=M(new THREE.RingGeometry(RC,R,36),dark,z);rg.rotation.y=f>0?0:Math.PI;}
@@ -2458,7 +2461,7 @@ function buildDiffuser(){
   // 機番の刷り込み：後部胴体の左右に、胴の長さ方向に読めるように（絵柄を 90° 回す）
   for(const s of[1,-1]){const t=diffuserTex().clone();t.needsUpdate=true;t.center.set(.5,.5);t.rotation=s>0?-Math.PI/2:Math.PI/2;
     const dm=std({map:t,transparent:true,alphaTest:.4,metalness:.2,roughness:.5,polygonOffset:true,polygonOffsetFactor:-2});
-    const d=new THREE.Mesh(new THREE.CylinderGeometry(R+.005,R+.005,.74,20,1,true,(s>0?Math.PI/2:Math.PI*1.5)-.5,1.0),dm);d.rotation.x=Math.PI/2;d.position.z=1.06;g.add(d);}
+    const arc=DF_L*DF_H/DF_W/(R+.005);const d=new THREE.Mesh(new THREE.CylinderGeometry(R+.005,R+.005,DF_L,20,1,true,(s>0?Math.PI/2:Math.PI*1.5)-arc/2,arc),dm);d.rotation.x=Math.PI/2;d.position.z=1.07;g.add(d);}   // 放射部の端 0.66 と危険表示の帯 1.48 の間
   // 懸架の金具（上面、懸架環の位置）
   for(const z of[-1.3,1.4]){const lg=M(new THREE.BoxGeometry(.1,.07,.16),gun,z);lg.position.y=R+.025;}
   // 絞り胴（ガンメタル）とノズル：外のベル、奥の喉、燃焼の光
@@ -4163,8 +4166,11 @@ function renderBoom(sr,big,seed){
   for(const o of out){const f=Math.floor(sr*.3);for(let i=0;i<f;i++)o[n-1-i]*=i/f;}
   return out;}
 const BOOMS={big:[],small:[]};
+// 音の事前合成は 1 音 0.1〜0.25 秒画面を止めるので、AquaTopia の読み込み中は待たせる。ただし読み込み後に「出発する」を待つ間は、
+// ミニゲームを 1.5 秒触っていなければ進める（出発後のボート操作中に引っかからないよう、ここで片付ける）
+function audBusy(){if(typeof exLoading==='undefined'||!exLoading)return false;if(typeof EXREF!=='undefined'&&EXREF.hold)return true;return typeof BN!=='undefined'&&performance.now()-(BN.lastT||0)<1500;}
 function buildBoomPool(){if(!AU.ctx||BOOMS.big.length)return;const sr=AU.ctx.sampleRate,jobs=[[1,11],[0,23],[1,37],[0,41],[1,53],[0,67]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
 // 距離のある爆発：音速ぶん遅れて届き、遠いほど高音が削られ（空気の吸収）、残響が増える
 function boomAt(d,pan,k,type){if(!AU.ctx)return;const big=k>=.55||type==='tank'||type==='ship'||type==='bldg',pool=big?BOOMS.big:BOOMS.small;
   if(!pool.length){SFX.boom();return;}
@@ -4236,7 +4242,7 @@ function normOut(out,fade){let pk=0;for(const o of out)for(let i=0;i<o.length;i+
   for(const o of out){for(let i=0;i<o.length;i++)o[i]*=.95/pk;const f=Math.floor(o.length*fade*.3);for(let i=0;i<f;i++)o[o.length-1-i]*=i/f;}return out;}
 const SBUF={launch:[],splashBig:[],splashSmall:[]};
 function buildSfxPool(){if(!AU.ctx||SBUF.launch.length)return;const sr=AU.ctx.sampleRate,jobs=[['launch',()=>renderLaunch(sr,5)],['launch',()=>renderLaunch(sr,9)],['splashBig',()=>renderSplash(sr,true,3)],['splashBig',()=>renderSplash(sr,true,8)],['splashSmall',()=>renderSplash(sr,false,4)],['splashSmall',()=>renderSplash(sr,false,6)]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[k,fn]=jobs[i++],d=fn(),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);SBUF[k].push(b);setTimeout(next,40);};next();}
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[k,fn]=jobs[i++],d=fn(),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);SBUF[k].push(b);setTimeout(next,40);};next();}
 // 事前合成の音を距離・左右付きで鳴らす
 function playBuf(pool,o){if(!AU.ctx||!pool.length)return false;o=o||{};const ctx=AU.ctx,d=o.d||0,t=ctx.currentTime+Math.min(4,d/343)+(o.delay||0),s=ctx.createBufferSource();s.buffer=pool[Math.floor(Math.random()*pool.length)];s.playbackRate.value=(o.rate||1)*(.96+Math.random()*.08);
   const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=16000*Math.exp(-d/900)+300;const g=ctx.createGain();g.gain.value=(o.vol||1)/(1+d/160);
@@ -4279,7 +4285,7 @@ function renderThunder(sr,D,ic,seed){
 }
 function buildThunderPool(){
   const sr=22050,jobs=[[150,0,11],[150,0,12],[380,0,13],[800,0,14],[800,0,15],[1700,0,16],[3400,0,17],[6500,0,18],[1500,1,21],[3500,1,22],[7000,1,23],[7000,1,24]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[D,ic,seed]=jobs[i++];const d=renderThunder(sr,D,!!ic,seed),b=AU.ctx.createBuffer(1,d.length,sr);b.getChannelData(0).set(d);THUNDER.push({buf:b,D,ic:!!ic});setTimeout(next,60);};
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[D,ic,seed]=jobs[i++];const d=renderThunder(sr,D,!!ic,seed),b=AU.ctx.createBuffer(1,d.length,sr);b.getChannelData(0).set(d);THUNDER.push({buf:b,D,ic:!!ic});setTimeout(next,60);};
   next();
 }
 // 雨粒・突風・機体のきしみ（環境音）
@@ -6462,7 +6468,7 @@ function updateCommon(dt){
     if(best!==null&&inGame){const w=W[best];{const sw=spatial(w,spW[best]);if(G.mode!=='cut')sw.dop=clamp(sw.dop,.9,1.1);setWingVoice(G.mode==='dying'?0:w.state==='stall'?.08:(G.mode==='cut'?(w.power===undefined?.8:w.power):.8),sw);}}else setWingVoice(0,{prox:0,pan:0,dop:1,muf:1});}
   // 地上では排気が床の埃を吹き飛ばす
   if(inGame&&P.mesh.userData.gear.visible&&P.power>.3&&Math.random()<.5){fwdOf(P.yaw,0,tA);for(const s of[-1,1])puff(P.pos.x+tA.z*s*2.55-tA.x*(14+Math.random()*10),P.pos.y-2.8,P.pos.z-tA.x*s*2.55-tA.z*(14+Math.random()*10),-tA.x*(20+P.power*40),2+Math.random()*5,-tA.z*(20+P.power*40),2+Math.random()*2.5,.7+Math.random()*.5,.22);}
-  if(P.elight){const ud=P.mesh.userData;P.elight.intensity=((P.power>=.28?P.power*P.power*1.1:0)+(ud.ign||0)*5)*(.85+.15*Math.sin(G.t*41))*(G.indoor>0?1.6:.6);}
+  if(P.elight){const ud=P.mesh.userData;P.elight.intensity=P.mesh.visible?((P.power>=.28?P.power*P.power*1.1:0)+(ud.ign||0)*5)*(.85+.15*Math.sin(G.t*41))*(G.indoor>0?1.6:.6):0;P.mesh.updateMatrixWorld();P.elight.position.set(0,1.2,14).applyMatrix4(P.mesh.matrixWorld);}
   // 自機のエンジン：追尾カメラは機体と一緒に動くので、プレイ中・墜落中はドップラーをほぼ掛けない（きりもみでカメラが回り込むと、唸りの音程が速く上下してキュルキュル鳴っていた）。墜落中は止まっていく
   const spE=inGame?spatial(P,spP):null;if(spE&&G.mode!=='cut')spE.dop=clamp(spE.dop,.97,1.03);
   const dieK=G.mode==='dying'?(G.crash?0:Math.max(0,1-G.dieT/1.2)):1;
@@ -6727,7 +6733,7 @@ function makePlayer(){
   if(old){gearOn=old.userData.gear.visible;podOn=old.userData.pod.visible;if(P.armor)for(const a of P.armor){if(a.mesh.parent)a.mesh.parent.remove(a.mesh);}
     for(const m of old.userData.wetMats){const i=WETM.indexOf(m);if(i>=0)WETM.splice(i,1);}scene.remove(old);}
   const m=P.mesh=buildAircraft(0,'SR-01',opts.shape||0,SCHEMES[opts.color||0]);scene.add(m);
-  P.elight=new THREE.PointLight(0xff9a52,0,70,1.8);P.elight.position.set(0,1.2,14);m.add(P.elight);
+  if(!P.elight){P.elight=new THREE.PointLight(0xff9a52,0,70,1.8);scene.add(P.elight);}   // 機体には付けない（墜落で機体を隠すと光の数が変わり、全部の材質のシェーダが作り直しになって固まる）。位置は毎コマ機体に合わせる
   P.armor=addArmor(m);m.userData.gear=buildGear(m.userData.shape,m.userData.bodyHex);m.add(m.userData.gear);m.userData.gear.visible=gearOn;m.userData.pod.visible=podOn;
   m.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial){o.castShadow=true;o.receiveShadow=true;}});
   m.userData.onIgn=()=>{if(G.mode==='cut')SFX.ignite();};G.wet=undefined;
@@ -6796,7 +6802,7 @@ function boot(){
     ()=>{U.tDetail.value=makeDetail3D(32);},
     ()=>{buildGroundTex();},
     ()=>{U.tNoise2.value=makeNoise2D(256);GLOWTEX=glowTexture();buildEnv();buildOcean();},
-    ()=>{sunL=new THREE.DirectionalLight(0xffffff,3);scene.add(sunL);scene.add(sunL.target);
+    ()=>{sunL=new THREE.DirectionalLight(0xffffff,3);scene.add(sunL);scene.add(sunL.target);exKrLight();
       renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;sunL.castShadow=true;
       {const sh=sunL.shadow;sh.mapSize.set(2048,2048);sh.camera.left=sh.camera.bottom=-95;sh.camera.right=sh.camera.top=95;sh.camera.near=1;sh.camera.far=700;sh.bias=-0.0006;sh.normalBias=0.12;sh.camera.updateProjectionMatrix();}hemiL=new THREE.HemisphereLight(0xa8c4ee,0x1c2a36,1);scene.add(hemiL);
       const gear=buildGear;
@@ -7179,7 +7185,7 @@ function exVehWorld(c){const o=c.o;o.getWorldPosition(_pw);const a=o.rotation.y+
   return hit;}
 function exMoveW(c,dx,dz){_pl.set(dx,0,dz).applyQuaternion(c.piq);c.o.position.x+=_pl.x;c.o.position.z+=_pl.z;}
 // ── 深海の巨大電気イカ：45m より深い所に続けて 30 秒いると現れる。20 秒で暗がりに光る目と青い筋（予兆と警告）、30 秒で襲いかかり、腕を船体に巻き付けて電気を流す → ゲームオーバー
-const KR={T_WARN:20,T_ATK:30,glow:{value:0}};
+const KR={T_WARN:20,T_ATK:30,glow:{value:0},fade:{value:0}};   // fade：現れるときに暗い海から浮かび上がる（0＝見えない）
 function exKrakenBuild(){if(EX.kr)return EX.kr;const g=new THREE.Group();g.visible=false;scene.add(g);
   // 肌：濃い赤紫に色素の斑点、角度で青緑に光る艶、発光器の点、電気が流れると青白い筋が走る
   const skinCode=(uvExpr)=>`{vec3 q=vKp;float n=texture2D(tN2,${uvExpr}*1.7).b,f=texture2D(tN2,${uvExpr}*6.3+0.3).b,sp=smoothstep(0.66,0.74,texture2D(tN2,${uvExpr}*11.0+0.7).b);
@@ -7187,9 +7193,9 @@ function exKrakenBuild(){if(EX.kr)return EX.kr;const g=new THREE.Group();g.visib
   const glowCode=(along)=>`{vec3 vd=normalize(vViewPosition);float fr=pow(1.0-abs(dot(normalize(vNormal),vd)),3.0);totalEmissiveRadiance+=vec3(0.05,0.25,0.35)*fr*0.6;
     float ph=smoothstep(0.82,0.9,texture2D(tN2,vKp.xz*0.9+vKp.y*0.7).b);totalEmissiveRadiance+=vec3(0.3,0.75,1.6)*ph*(0.25+uGlow);
     float pl=pow(max(0.0,sin(${along}*9.0-uT*7.0)),10.0);totalEmissiveRadiance+=vec3(0.6,1.4,3.2)*pl*uGlow;}`;
-  const mk=(uvExpr,along,key)=>{const m=std({color:0xffffff,roughness:.32,metalness:.05});m.onBeforeCompile=sh=>{sh.uniforms.uT=U.uTime;sh.uniforms.uGlow=KR.glow;sh.uniforms.tN2=U.tNoise2;
+  const mk=(uvExpr,along,key)=>{const m=std({color:0xffffff,roughness:.32,metalness:.05});m.onBeforeCompile=sh=>{sh.uniforms.uT=U.uTime;sh.uniforms.uGlow=KR.glow;sh.uniforms.uKF=KR.fade;sh.uniforms.tN2=U.tNoise2;
       sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vKp;attribute vec2 aUV;varying vec2 vKu;').replace('#include <begin_vertex>','#include <begin_vertex>\nvKp=position;\n#ifdef KR_ARM\nvKu=aUV;\n#else\nvKu=vec2(0.0);\n#endif\n');
-      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uT,uGlow;uniform sampler2D tN2;varying vec3 vKp;varying vec2 vKu;').replace('#include <color_fragment>','#include <color_fragment>\n'+skinCode(uvExpr)+(key==='arm'?
+      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uT,uGlow,uKF;uniform sampler2D tN2;varying vec3 vKp;varying vec2 vKu;').replace('#include <dithering_fragment>','#include <dithering_fragment>\n{float h=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);if(h>uKF*1.8)discard;gl_FragColor.rgb=mix(vec3(0.01,0.04,0.055),gl_FragColor.rgb,uKF*uKF);}').replace('#include <color_fragment>','#include <color_fragment>\n'+skinCode(uvExpr)+(key==='arm'?
         '{float inner=1.0-smoothstep(0.12,0.2,abs(vKu.y-0.5));vec2 sc=vec2(fract(vKu.x*90.0)-0.5,(vKu.y-0.5)*9.0);float sk=smoothstep(0.42,0.3,length(sc))*step(0.2,length(sc));diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.85,0.7,0.62),sk*inner);diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.6+0.05,inner*0.35);}':''))
         .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+glowCode(along));if(key==='arm')sh.vertexShader='#define KR_ARM\n'+sh.vertexShader;};
     m.customProgramCacheKey=()=>'kr_'+key;return m;};
@@ -7202,8 +7208,8 @@ function exKrakenBuild(){if(EX.kr)return EX.kr;const g=new THREE.Group();g.visib
   // 外套の口のふちと頭（外套より細い）、大きな目、漏斗
   const coll=new THREE.Mesh(new THREE.TorusGeometry(1.0,.08,8,32),body);coll.rotation.x=Math.PI/2;g.add(coll);
   const hp=[[0,-1.6],[.55,-1.5],[.82,-1.1],[.9,-.6],[.92,-.1],[.95,.1]].map(q=>new THREE.Vector2(q[0],q[1]));const hd=new THREE.Mesh(new THREE.LatheGeometry(hp,32),body);g.add(hd);
-  const eyeBall=std({color:lin(0x050608),roughness:.05,metalness:.3});for(const s2 of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.42,24,18),eyeBall);e.position.set(s2*.78,-.75,-.12);e.scale.set(.6,1,1);g.add(e);
-    const ir=new THREE.Mesh(new THREE.TorusGeometry(.26,.05,8,28),new THREE.MeshBasicMaterial({color:new THREE.Color(1.2,3.2,6)}));ir.position.set(s2*1.02,-.75,-.12);ir.rotation.y=Math.PI/2;g.add(ir);
+  const eyeBall=std({color:lin(0x050608),roughness:.05,metalness:.3});for(const s2 of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.42,24,18),eyeBall);e.position.set(s2*.78,-.75,-.12);e.scale.set(.6,1,1);(g.userData.eyes=g.userData.eyes||[]).push(e);g.add(e);
+    const ir=new THREE.Mesh(new THREE.TorusGeometry(.26,.05,8,28),new THREE.MeshBasicMaterial({color:new THREE.Color(1.2,3.2,6)}));ir.position.set(s2*1.02,-.75,-.12);ir.rotation.y=Math.PI/2;g.add(ir);ir.userData.c0=ir.material.color.clone();g.userData.eyes.push(ir);
     const lid=new THREE.Mesh(new THREE.TorusGeometry(.44,.07,8,28),body);lid.position.set(s2*.98,-.75,-.12);lid.rotation.y=Math.PI/2;g.add(lid);}
   {const fn=new THREE.Mesh(new THREE.CylinderGeometry(.16,.28,.9,14,1,true),body);fn.position.set(0,-.6,.82);fn.rotation.x=-.9;g.add(fn);}
   // 腕 8 本と長い触腕 2 本（毎コマ曲線に沿って作り直す管。u＝根元→先、v＝周り。内側に吸盤）
@@ -7212,7 +7218,7 @@ function exKrakenBuild(){if(EX.kr)return EX.kr;const g=new THREE.Group();g.visib
     const idx=[];for(let i=0;i<SEG;i++)for(let j=0;j<RS;j++){const a=i*RS+j,b=i*RS+(j+1)%RS,c=a+RS,d=b+RS;idx.push(a,c,b,b,c,d);}geo.setIndex(idx);
     const m=new THREE.Mesh(geo,armM);m.frustumCulled=false;m.castShadow=false;scene.add(m);m.visible=false;arms.push({m,geo,SEG,RS,ph:k*.7,long:k>=8});}
   const arcG=new THREE.BufferGeometry();arcG.setAttribute('position',new THREE.BufferAttribute(new Float32Array(1200*3),3));const arcs=new THREE.LineSegments(arcG,new THREE.LineBasicMaterial({color:new THREE.Color(1.6,2.4,4),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));arcs.frustumCulled=false;arcs.visible=false;scene.add(arcs);
-  const lt=new THREE.PointLight(0x88bbff,0,40,1.6);scene.add(lt);
+  const lt=exKrLight();
   const spG=new THREE.BufferGeometry();spG.setAttribute('position',new THREE.BufferAttribute(new Float32Array(400*3),3));const spk=new THREE.Points(spG,new THREE.PointsMaterial({map:GLOWTEX,color:new THREE.Color(2.5,3.5,6),size:.9,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));spk.frustumCulled=false;spk.visible=false;scene.add(spk);
   return EX.kr={g,arms,arcs,lt,spk,mantle:mm,phase:0,t:0,dir:new V3(1,0,0),pos:new V3()};}
 const _kv=new V3(),_kt=new V3(),_kn=new V3(),_kb=new V3(),_ku=new V3(0,1,0);
@@ -7226,12 +7232,16 @@ function exKraken(dt,p){const deep=EX.depth>45;if(!EX.krT)EX.krT=0;const K=EX.kr
   const w=$('exwarn');
   if(EX.krT>KR.T_WARN||(K&&K.phase>=2)){const k=exKrakenBuild();k.t+=dt;
     if(k.phase===0){k.phase=1;k.t=0;const a=Math.random()*6.283;k.dir.set(Math.cos(a),0,Math.sin(a));}
-    // 予兆：暗がりの 30m 先をゆっくり回る、目と青い筋が光る。低い唸り
-    if(k.phase===1){k.g.visible=true;{const cd=camera.getWorldDirection(_kt);const a0=Math.atan2(cd.z,cd.x),a=a0+Math.sin(k.t*.25)*.9;k.dir.set(Math.cos(a),0,Math.sin(a));}   /* カメラの前方の扇形を行き来する（見えるところで予兆を見せる） */{const R=18+3*Math.sin(k.t*.4),x=p.x+k.dir.x*R,z=p.z+k.dir.z*R,fl=Math.max(exGround(x,z),exGround(x+3,z),exGround(x,z+3),exGround(x-3,z),exGround(x,z-3));k.pos.set(x,Math.min(-9.5,Math.max(fl+12,p.y-3+Math.sin(k.t*.6)*2)),z);}   /* 海底に刺さらない（腕の長さぶん上）・水面から外套が出ない */KR.glow.value=1.2+.8*Math.sin(k.t*2.0);
-      if(w){w.hidden=false;w.textContent='深度45m超過　何かが近づいている……　残り '+Math.max(0,Math.ceil(KR.T_ATK-EX.krT))+' 秒';}
+    // 予兆：正体は見せない。ボートより下の暗がりを、輪郭の定まらない大きな影がときどき横切る（目も青い筋も出さない）。
+    // 闇の奥でかすかに瞬く光、低い唸り、ときどき船体に伝わる鈍い衝撃。正体は襲いかかる瞬間に暗がりから現れて初めて分かる
+    if(k.phase===1){k.g.visible=true;{const cd=camera.getWorldDirection(_kt);const a0=Math.atan2(cd.z,cd.x),a=a0+Math.sin(k.t*.22)*1.3;k.dir.set(Math.cos(a),0,Math.sin(a));}
+      {const R=30+4*Math.sin(k.t*.35),x=p.x+k.dir.x*R,z=p.z+k.dir.z*R,fl=Math.max(exGround(x,z),exGround(x+3,z),exGround(x,z+3),exGround(x-3,z),exGround(x,z-3));k.pos.set(x,Math.min(-12,Math.max(fl+12,p.y-9+Math.sin(k.t*.5)*2)),z);}   /* 海底に刺さらない（腕の長さぶん上）・水面から外套が出ない */
+      {const fl=k.fl=(k.fl||0)-dt;if(fl<=0&&Math.random()<dt*.6)k.fl=.12+Math.random()*.15;KR.glow.value=k.fl>0?.35:0;}   /* 闇の奥で一瞬だけ瞬く */
+      EX.shake=Math.max(0,(EX.shake||0)-dt*.8);if((k.thump=(k.thump===undefined?2.5:k.thump)-dt)<=0){k.thump=3+Math.random()*2.5;EX.shake=.22;if(AU.ctx)tone(AU.sfx,'sine',52,24,AU.ctx.currentTime,.9,.5,.01);}   /* 船体に伝わる鈍い衝撃 */
+      if(w){w.hidden=false;const left=Math.max(0,Math.ceil(KR.T_ATK-EX.krT));w.textContent='深度45m超過　'+(left>6?'暗闇で何かが動いた……':left>3?'……下に、大きな何かがいる':'浮上しろ　残り '+left+' 秒');}
       if(AU.ctx&&(EX.krHum=(EX.krHum||0)-dt)<=0){EX.krHum=1.6;tone(AU.sfx,'sine',38,30,AU.ctx.currentTime,1.6,.35,.4);}
-      if(EX.krT>=KR.T_ATK){k.phase=2;k.t=0;EX.krLock=true;k.from=k.pos.clone();}
-      if(!deep&&EX.krT<KR.T_WARN){k.phase=0;k.g.visible=false;if(w)w.hidden=true;}}
+      if(EX.krT>=KR.T_ATK){k.phase=2;k.t=0;EX.krLock=true;k.from=k.pos.clone();k.f0=KR.fade.value;}
+      if(!deep&&EX.krT<KR.T_WARN){k.phase=0;k.g.visible=false;EX.shake=0;k.thump=undefined;if(w)w.hidden=true;}}
     // 襲いかかる（1.6 秒）→ 巻き付く（1.8 秒）→ 電撃（3.2 秒）→ ゲームオーバー
     if(k.phase===2){const u=Math.min(1,k.t/1.6),e=u*u*(3-2*u);{const ax=p.x-camera.position.x,az=p.z-camera.position.z,al=Math.hypot(ax,az)||1;k.away=[ax/al,az/al];}k.pos.copy(k.from).lerp(_kv.set(p.x+k.away[0]*2.2,p.y+5.2,p.z+k.away[1]*2.2),e);k.pos.y=Math.max(k.pos.y,exGround(k.pos.x,k.pos.z)+10);KR.glow.value=.8+.2*Math.sin(k.t*9);if(w)w.textContent='巨大電気イカだ！';if(u>=1){k.phase=3;k.t=0;}}
     if(k.phase>=3){const aw=k.away||[0,1];k.pos.set(p.x+aw[0]*2.2+Math.sin(k.t*7)*.15,p.y+5.2,p.z+aw[1]*2.2+Math.cos(k.t*6)*.15);}
@@ -7239,6 +7249,9 @@ function exKraken(dt,p){const deep=EX.depth>45;if(!EX.krT)EX.krT=0;const K=EX.kr
     if(k.phase===4){KR.glow.value=1.4+Math.random();k.arcs.visible=true;k.lt.intensity=6+Math.random()*14;k.lt.position.set(p.x,p.y+1.5,p.z);const fl=$('exflash');if(fl)fl.style.opacity=(Math.random()<.35?.55+Math.random()*.4:Math.random()*.15).toFixed(2);
       if(Math.random()<.5)exZap(.5+Math.random()*.5);G.lensWet=Math.max(G.lensWet||0,.2);
       if(k.t>3.2){k.phase=5;exGameOver();}}
+    // 現れ方：予兆の間は影がかすかに見えるだけ（0.05〜0.18）。襲いかかる 0.7 秒で暗がりから浮かび上がる。目は影の間は出さない
+    {const f=k.phase===1?.05+.13*Math.max(0,Math.sin(k.t*.6))*Math.min(1,k.t/2):k.phase===2?Math.min(1,(k.f0||0)+k.t/.7):1,fe=k.phase===1?f:f*f*(3-2*f);KR.fade.value=fe;
+      for(const e of k.g.userData.eyes||[]){e.visible=fe>.3;if(e.userData.c0)e.material.color.copy(e.userData.c0).multiplyScalar(fe);}}
     // 体の向き：外套を上（外套の先が上、腕が下でボートへ）。頭が少しボートを向く
     {const pu=1+.06*Math.sin(k.t*(k.phase>=2?5:1.8));k.mantle.scale.set(pu,1,pu);for(const f of k.g.userData.fins||[])f.rotation.y=Math.sin(k.t*2.2)*.25*Math.sign(f.scale.x);}   /* 外套の脈動とひれの波打ち */
     k.g.position.copy(k.pos);k.g.rotation.set(k.phase>=2?0:.3,Math.atan2(k.dir.x,k.dir.z),0);
@@ -7264,7 +7277,7 @@ function exWarmAll(on){if(on){_warm.length=0;exKrakenWarm(true);const fwd=camera
   else{exKrakenWarm(false);for(const[o,k,v,vis]of _warm){if(k==='count')o.count=v;o.visible=vis;}_warm.length=0;}}
 // 読み込み中だけ、イカの全部の部品を見える状態にしてシェーダを用意させる
 function exKrakenWarm(on){const k=EX.kr;if(!k)return;k.g.visible=on;k.arcs.visible=on;k.spk.visible=on;for(const a of k.arms)a.m.visible=on;if(on){k.g.position.copy(camera.position).add(camera.getWorldDirection(new V3()).multiplyScalar(20));}}
-function exKrakenReset(){const K=EX.kr;EX.krT=0;EX.krLock=false;EX.shake=0;const w=$('exwarn');if(w)w.hidden=true;const fl=$('exflash');if(fl)fl.style.opacity=0;if(!K)return;K.phase=0;K.t=0;K.g.visible=false;K.arcs.visible=false;if(K.spk)K.spk.visible=false;K.lt.intensity=0;for(const a of K.arms)a.m.visible=false;}
+function exKrakenReset(){const K=EX.kr;EX.krT=0;EX.krLock=false;EX.shake=0;KR.fade.value=0;if(K){K.thump=undefined;K.fl=0;}const w=$('exwarn');if(w)w.hidden=true;const fl=$('exflash');if(fl)fl.style.opacity=0;if(!K)return;K.phase=0;K.t=0;K.g.visible=false;K.arcs.visible=false;if(K.spk)K.spk.visible=false;K.lt.intensity=0;for(const a of K.arms)a.m.visible=false;}
 function exGameOver(){const o=$('exover');if(o)o.hidden=false;const fl=$('exflash');if(fl)fl.style.opacity=0;EX.over=true;if(!EX.ovBound){EX.ovBound=true;$('bExRetry').onclick=()=>{SFX.ui&&SFX.ui();exRetry();};$('bExTitle').onclick=()=>{SFX.ui&&SFX.ui();$('exover').hidden=true;exKrakenReset();EX.over=false;showTitle();};}}
 function exRetry(){$('exover').hidden=true;exKrakenReset();EX.over=false;EX.pos.set(BASE.x+1420,0,BASE.z+150);EX.yaw=Math.PI*.5;EX.spd=0;EX.depth=0;EX.prevD=0;EX.camReset=true;EX.cam.set(EX.pos.x+14,5,EX.pos.z);}
 // 段ボール箱：1 箱ずつの簡単な剛体。ボートに当たると押されて転がり、支えを失った上の箱は落ちて崩れる。止まると眠る（計算しない）。終了時に元へ
@@ -7335,18 +7348,44 @@ function exWave(x,z){const t=U.uTime.value;let y=0;for(const W of EXWAV)y+=W[3]*
 const EXREF=window.EXREF={on:false,rt:null};
 // 読み込み画面を出してから、重い準備（形・草・木・シェーダの用意）をコマを分けて進める。終わったら画面を切り替える
 let exLoading=false;
+// 描画プログラム（シェーダ）を、画面を止めずに用意する。three r128 はプログラムを作るとすぐ中身を問い合わせ、組み立ての完了を待つ
+// （初めての環境では 1 本 0.15 秒ほど、全部で 20 秒以上画面が止まっていた）。そこで 3 段に分ける：
+//  1) 問い合わせの直前で抜けて、組み立ての指示だけを全部出す（GPU 側で並行して進む）
+//  2) 終わったかを軽く確かめながら待つ。この間は読み込み中のミニゲームが動ける
+//  3) もう一度通して仕上げる（組み立て済みなので待たない）
+// 通常の描画と水面の映り込み（切り取り面つき）の 2 通り。切り取り面の有無は render() のときに決まるので、空の場面を一度描いて切り替える
+async function exPrecompile(prog){const gl=renderer.getContext(),ext=gl.getExtension('KHR_parallel_shader_compile');
+  const objs=[];scene.traverse(o=>{if(o.material)objs.push(o);});const empty=new THREE.Scene(),rt0=renderer.getRenderTarget(),au=renderer.shadowMap.autoUpdate,dbg=renderer.debug.checkShaderErrors;
+  const SKIP={},AU_=gl.ACTIVE_UNIFORMS;let skip=false;const gpp=gl.getProgramParameter;
+  const pass=async(k0,k1)=>{for(const clip of[false,true]){
+      renderer.shadowMap.autoUpdate=false;renderer.clippingPlanes=clip?(EXREF.clip||(EXREF.clip=[new THREE.Plane(new V3(0,1,0),.05)])):[];renderer.setRenderTarget(rtScene);renderer.render(empty,camera);
+      let i=0;const px={isScene:true,fog:scene.fog,environment:scene.environment,traverseVisible:f=>scene.traverseVisible(f),
+        traverse:f=>{const t=performance.now();while(i<objs.length&&performance.now()-t<10){try{f(objs[i++]);}catch(e){if(e!==SKIP)throw e;}}}};
+      while(i<objs.length){renderer.setRenderTarget(rtScene);renderer.compile(px,camera);prog(k0+(k1-k0)*((clip?objs.length:0)+i)/(objs.length*2));await new Promise(r=>setTimeout(r,0));}}};
+  try{exWarmAll(true);renderer.debug.checkShaderErrors=false;   /* エラー確認は組み立ての完了を待つので切る（失敗しても描画で分かる） */
+    if(ext){gl.getProgramParameter=function(q,n){if(skip&&n===AU_)throw SKIP;return gpp.call(gl,q,n);};
+      skip=true;await pass(0,.2);skip=false;
+      const ps=renderer.info.programs.map(q=>q.program),t0=performance.now();
+      let n=0;for(;;){while(n<ps.length&&gpp.call(gl,ps[n],ext.COMPLETION_STATUS_KHR))n++;prog(.2+.7*n/ps.length);if(n>=ps.length||performance.now()-t0>60000)break;await new Promise(r=>setTimeout(r,60));}   /* 作った順に確かめ、まだのものに当たったら次の回へ（問い合わせは GPU が混むと 1 回でも待たされる） */
+      await pass(.9,1);}
+    else await pass(0,1);}   /* 並行して組み立てられない環境：少しずつ組み立てる */
+  finally{skip=false;if(Object.prototype.hasOwnProperty.call(gl,'getProgramParameter'))delete gl.getProgramParameter;renderer.debug.checkShaderErrors=dbg;
+    renderer.clippingPlanes=[];renderer.setRenderTarget(rtScene);renderer.render(empty,camera);renderer.setRenderTarget(rt0);renderer.shadowMap.autoUpdate=au;exWarmAll(false);}}
+// 巨大イカの光はゲームの起動時から置いておく（探検に入って初めて足すと、本編に戻ったときに全部の材質のシェーダが作り直しになる）
+function exKrLight(){if(!EX.krLt){EX.krLt=new THREE.PointLight(0x88bbff,0,40,1.6);scene.add(EX.krLt);}return EX.krLt;}
 async function exStartAsync(){if(exLoading||EX.on)return;exLoading=true;const L=$('exload'),bar=L.querySelector('.bar i'),msg=L.querySelector('.m');L.classList.remove('out');L.hidden=false;
   /* 読み込み中のミニゲーム（船体のアカフジツボはがし） */try{bnStart(L.querySelector('.bnh'));}catch(e){console.error(e);}EX.loadLock=true;const go=$('bExGo');go.hidden=true;
   const y=()=>new Promise(r=>setTimeout(r,30)),st=(k,t)=>{bar.style.width=k+'%';msg.textContent=t;};
-  try{st(8,'ボートを用意しています');await y();await y();exInit();
-    st(40,'島と海を細かく描いています');await y();startExplore();
-    st(70,'光と影を準備しています');await y();try{exWarmAll(true);renderer.compile(scene,camera);__SR.step(1/60);exWarmAll(false);}catch(e){exWarmAll(false);}
+  try{st(8,'ボートを用意しています');await y();await y();EXREF.hold=true;exInit();
+    st(30,'島と海を細かく描いています');await y();startExplore();
+    st(45,'光と影を準備しています');await y();await exPrecompile(k=>st(45+Math.round(k*40),'光と影を準備しています'));EXREF.hold=false;
+    st(88,'光と影を準備しています');await y();try{exWarmAll(true);__SR.step(1/60);exWarmAll(false);}catch(e){exWarmAll(false);}
     st(90,'まもなく出発');await y();if(typeof window.__SR!=='undefined'&&EX.on)__SR.step(1/60);
     st(100,'準備完了');await y();
     // 読み込みが終わったら「出発する」を出す（自動テストのときはそのまま進む）
     if(!navigator.webdriver){go.textContent='出発する'+(BN.score&&BN.score()?'（はがした数 '+BN.score()+'）':'');go.hidden=false;await new Promise(res=>{const iv=setInterval(()=>{if(BN.score)go.textContent='出発する'+(BN.score()?'（はがした数 '+BN.score()+'）':'');},300);const f=()=>{clearInterval(iv);go.removeEventListener('click',f);res();};go.addEventListener('click',f);});}}
   catch(e){console.error('AquaTopia の準備に失敗',e);try{stopExplore();}catch(_){}showTitle();}
-  finally{exLoading=false;EX.loadLock=false;bnStop();$('bExGo').hidden=true;L.classList.add('out');setTimeout(()=>{if(L.classList.contains('out'))L.hidden=true;},500);}}
+  finally{exLoading=false;EX.loadLock=false;EXREF.hold=false;bnStop();$('bExGo').hidden=true;L.classList.add('out');setTimeout(()=>{if(L.classList.contains('out'))L.hidden=true;},500);}}
 function startExplore(){exInit();EX.on=true;G.mode='explore';document.body.classList.add('explore');$('tbA').textContent='浮く';$('tbB').textContent='潜る';
   ['title','hud','over','res','pause','help','opts','skip'].forEach(i=>$(i).hidden=true);$('exhud').hidden=false;
   EX.pos.set(BASE.x+1420,0,BASE.z+150);EX.yaw=Math.PI*.5;/* 港の中の水面から（東へ向いて） */EX.spd=0;EX.vel.set(0,0,0);EX.depth=0;EX.mode='water';EX.t=0;EX.b.visible=true;EX.patch.visible=true;EX.surf.visible=false;
@@ -7860,7 +7899,7 @@ function bnStart(host,onDone){bnStop();const cv=document.createElement('canvas')
   const B=[];const spawn=(n)=>{for(let k=0;k<n;k++){let tries=0;while(tries++<40){const sp=sprites[Math.floor(r()*sprites.length)],x0=20+r()*(W-40),y0=20+r()*(H-40);if(B.some(b=>!b.gone&&Math.hypot(b.x-x0,b.y-y0)<b.sp.R+sp.R+2))continue;B.push({x:x0,y:y0,sp,hp:1+Math.round(sp.R/9),hit:0,cr:[],gone:false});break;}}};
   spawn(22);const scars=[],bits=[];let score=0,combo=0,lastHit=0,mx=W/2,my=H/2,swing=0;
   const pos=e=>{const b=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[(t.clientX-b.left)*W/b.width,(t.clientY-b.top)*H/b.height];};
-  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;const now=performance.now();let hitAny=false;
+  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;const now=performance.now();BN.lastT=now;let hitAny=false;
     for(let i=B.length-1;i>=0;i--){const b=B[i];if(b.gone)continue;if(Math.hypot(b.x-mx,b.y-my)<b.sp.R*1.05){hitAny=true;b.hp--;b.hit=1;const rr=bnRand(i*31+b.hp);b.cr.push([rr()*6.28,.3+rr()*.6]);for(let k=0;k<5;k++)bits.push({x:mx,y:my,vx:(Math.random()-.5)*160,vy:-Math.random()*140,a:Math.random()*6,s:1.5+Math.random()*2.5,t:0,c:'#e8b4b0'});
         if(typeof AU!=='undefined'&&AU.ctx&&typeof burst==='function')burst(AU.sfx,AU.ctx.currentTime,.06,.35,'bandpass',2200+Math.random()*1500,1200,1.2,0,.001);
         if(b.hp<=0){b.gone=true;combo=now-lastHit<900?combo+1:1;lastHit=now;score+=1;scars.push({x:b.x,y:b.y,R:b.sp.R});b.fly={vx:(Math.random()-.5)*220,vy:-120-Math.random()*160,rot:0,vr:(Math.random()-.5)*12,t:0};for(let k=0;k<12;k++)bits.push({x:b.x,y:b.y,vx:(Math.random()-.5)*260,vy:-Math.random()*220,a:Math.random()*6,s:2+Math.random()*3,t:0,c:Math.random()<.5?'#c8505a':'#f0d8d0'});

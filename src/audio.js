@@ -144,8 +144,11 @@ function renderBoom(sr,big,seed){
   for(const o of out){const f=Math.floor(sr*.3);for(let i=0;i<f;i++)o[n-1-i]*=i/f;}
   return out;}
 const BOOMS={big:[],small:[]};
+// 音の事前合成は 1 音 0.1〜0.25 秒画面を止めるので、AquaTopia の読み込み中は待たせる。ただし読み込み後に「出発する」を待つ間は、
+// ミニゲームを 1.5 秒触っていなければ進める（出発後のボート操作中に引っかからないよう、ここで片付ける）
+function audBusy(){if(typeof exLoading==='undefined'||!exLoading)return false;if(typeof EXREF!=='undefined'&&EXREF.hold)return true;return typeof BN!=='undefined'&&performance.now()-(BN.lastT||0)<1500;}
 function buildBoomPool(){if(!AU.ctx||BOOMS.big.length)return;const sr=AU.ctx.sampleRate,jobs=[[1,11],[0,23],[1,37],[0,41],[1,53],[0,67]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
 // 距離のある爆発：音速ぶん遅れて届き、遠いほど高音が削られ（空気の吸収）、残響が増える
 function boomAt(d,pan,k,type){if(!AU.ctx)return;const big=k>=.55||type==='tank'||type==='ship'||type==='bldg',pool=big?BOOMS.big:BOOMS.small;
   if(!pool.length){SFX.boom();return;}
@@ -217,7 +220,7 @@ function normOut(out,fade){let pk=0;for(const o of out)for(let i=0;i<o.length;i+
   for(const o of out){for(let i=0;i<o.length;i++)o[i]*=.95/pk;const f=Math.floor(o.length*fade*.3);for(let i=0;i<f;i++)o[o.length-1-i]*=i/f;}return out;}
 const SBUF={launch:[],splashBig:[],splashSmall:[]};
 function buildSfxPool(){if(!AU.ctx||SBUF.launch.length)return;const sr=AU.ctx.sampleRate,jobs=[['launch',()=>renderLaunch(sr,5)],['launch',()=>renderLaunch(sr,9)],['splashBig',()=>renderSplash(sr,true,3)],['splashBig',()=>renderSplash(sr,true,8)],['splashSmall',()=>renderSplash(sr,false,4)],['splashSmall',()=>renderSplash(sr,false,6)]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[k,fn]=jobs[i++],d=fn(),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);SBUF[k].push(b);setTimeout(next,40);};next();}
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[k,fn]=jobs[i++],d=fn(),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);SBUF[k].push(b);setTimeout(next,40);};next();}
 // 事前合成の音を距離・左右付きで鳴らす
 function playBuf(pool,o){if(!AU.ctx||!pool.length)return false;o=o||{};const ctx=AU.ctx,d=o.d||0,t=ctx.currentTime+Math.min(4,d/343)+(o.delay||0),s=ctx.createBufferSource();s.buffer=pool[Math.floor(Math.random()*pool.length)];s.playbackRate.value=(o.rate||1)*(.96+Math.random()*.08);
   const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=16000*Math.exp(-d/900)+300;const g=ctx.createGain();g.gain.value=(o.vol||1)/(1+d/160);
@@ -260,7 +263,7 @@ function renderThunder(sr,D,ic,seed){
 }
 function buildThunderPool(){
   const sr=22050,jobs=[[150,0,11],[150,0,12],[380,0,13],[800,0,14],[800,0,15],[1700,0,16],[3400,0,17],[6500,0,18],[1500,1,21],[3500,1,22],[7000,1,23],[7000,1,24]];let i=0;
-  const next=()=>{if(i>=jobs.length||!AU.ctx)return;const[D,ic,seed]=jobs[i++];const d=renderThunder(sr,D,!!ic,seed),b=AU.ctx.createBuffer(1,d.length,sr);b.getChannelData(0).set(d);THUNDER.push({buf:b,D,ic:!!ic});setTimeout(next,60);};
+  const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[D,ic,seed]=jobs[i++];const d=renderThunder(sr,D,!!ic,seed),b=AU.ctx.createBuffer(1,d.length,sr);b.getChannelData(0).set(d);THUNDER.push({buf:b,D,ic:!!ic});setTimeout(next,60);};
   next();
 }
 // 雨粒・突風・機体のきしみ（環境音）

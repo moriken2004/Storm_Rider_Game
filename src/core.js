@@ -604,6 +604,7 @@ function resize(force){
 const _pv=new THREE.Matrix4();
 let frameNo=0;
 function renderFrame(){
+  if(window.EXREF&&window.EXREF.hold)return;   // AquaTopia の読み込み中：描画プログラムを裏で組み立て終えるまで画面は描かない（描くと組み立てを待って固まる）
   camera.updateMatrixWorld();
   _pv.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
   cloudMat.uniforms.uInvPV.value.copy(_pv).invert();

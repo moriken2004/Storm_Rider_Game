@@ -1,0 +1,11 @@
+import puppeteer from 'puppeteer';
+const b=await puppeteer.launch({headless:'new',protocolTimeout:600000,args:['--use-angle=metal','--enable-gpu','--ignore-gpu-blocklist']});const p=await b.newPage();await p.setViewport({width:960,height:640,deviceScaleFactor:2});
+await p.goto('http://127.0.0.1:8795/index.html');await p.waitForFunction('window.__SR&&document.getElementById("load").hidden',{timeout:200000,polling:100});
+const r=await p.evaluate(async()=>{const T=[],t0=performance.now(),tm=()=>Math.round(performance.now()-t0);
+  new PerformanceObserver(l=>{for(const e of l.getEntries())if(e.duration>=100)T.push('  停止 '+Math.round(e.startTime-t0)+' +'+Math.round(e.duration));}).observe({type:'longtask'});
+  const wrap=(o,n,lab)=>{const f=o[n];o[n]=function(...a){const t=performance.now();const v=f.apply(this,a);const d=Math.round(performance.now()-t);if(d>=8)T.push(tm()+' '+lab+' '+d);return v;};};
+  for(const n of['bnStart','exInit','startExplore','exWarmAll','renderFrame','exploreUpdate','seaUpdate','updateCommon','bnSprite','bnHull'])wrap(window,n,n);wrap(renderer,'compile','compile');wrap(__SR,'step','step');wrap(renderer,'render','render');
+  const gl=renderer.getContext();for(const n of['getProgramParameter','linkProgram','compileShader','getUniformLocation','getActiveUniform','texImage2D','bufferData'])wrap(gl,n,'gl.'+n);
+  const ms=document.querySelector('#exload .m');new MutationObserver(()=>T.push(tm()+' 表示「'+ms.textContent+'」')).observe(ms,{childList:true,characterData:true,subtree:true});
+  await exStartAsync();await new Promise(r=>setTimeout(r,300));return T;});
+console.log(r.slice(0,90).join('\n'));await b.close();

@@ -57,7 +57,7 @@ function bnStart(host,onDone){bnStop();const cv=document.createElement('canvas')
   const B=[];const spawn=(n)=>{for(let k=0;k<n;k++){let tries=0;while(tries++<40){const sp=sprites[Math.floor(r()*sprites.length)],x0=20+r()*(W-40),y0=20+r()*(H-40);if(B.some(b=>!b.gone&&Math.hypot(b.x-x0,b.y-y0)<b.sp.R+sp.R+2))continue;B.push({x:x0,y:y0,sp,hp:1+Math.round(sp.R/9),hit:0,cr:[],gone:false});break;}}};
   spawn(22);const scars=[],bits=[];let score=0,combo=0,lastHit=0,mx=W/2,my=H/2,swing=0;
   const pos=e=>{const b=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[(t.clientX-b.left)*W/b.width,(t.clientY-b.top)*H/b.height];};
-  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;const now=performance.now();let hitAny=false;
+  const down=e=>{e.preventDefault();[mx,my]=pos(e);swing=1;const now=performance.now();BN.lastT=now;let hitAny=false;
     for(let i=B.length-1;i>=0;i--){const b=B[i];if(b.gone)continue;if(Math.hypot(b.x-mx,b.y-my)<b.sp.R*1.05){hitAny=true;b.hp--;b.hit=1;const rr=bnRand(i*31+b.hp);b.cr.push([rr()*6.28,.3+rr()*.6]);for(let k=0;k<5;k++)bits.push({x:mx,y:my,vx:(Math.random()-.5)*160,vy:-Math.random()*140,a:Math.random()*6,s:1.5+Math.random()*2.5,t:0,c:'#e8b4b0'});
         if(typeof AU!=='undefined'&&AU.ctx&&typeof burst==='function')burst(AU.sfx,AU.ctx.currentTime,.06,.35,'bandpass',2200+Math.random()*1500,1200,1.2,0,.001);
         if(b.hp<=0){b.gone=true;combo=now-lastHit<900?combo+1:1;lastHit=now;score+=1;scars.push({x:b.x,y:b.y,R:b.sp.R});b.fly={vx:(Math.random()-.5)*220,vy:-120-Math.random()*160,rot:0,vr:(Math.random()-.5)*12,t:0};for(let k=0;k<12;k++)bits.push({x:b.x,y:b.y,vx:(Math.random()-.5)*260,vy:-Math.random()*220,a:Math.random()*6,s:2+Math.random()*3,t:0,c:Math.random()<.5?'#c8505a':'#f0d8d0'});
