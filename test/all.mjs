@@ -18,6 +18,7 @@ const T=[
   ['武装モード','armed.mjs',[],o=>/読み込み直し後 false/.test(o)&&!/PAGEERR/.test(o)],
   ['バレルロール','roll.mjs',[],o=>/2度押し \{/.test(o)&&!/PAGEERR/.test(o)],
   ['機体の作り（浮き・面の重なり）','acheck.mjs',[],o=>(o.match(/浮き 0  重なり 0/g)||[]).length===8&&/エラーなし/.test(o)],
+  ['機体と着陸脚の左右対称','gearcheck.mjs',[],o=>/脚と機体は左右対称/.test(o)],
   ['浮いている部品','float.mjs',[],o=>{const m=o.match(/浮いている候補 (\d+)/);return m&&+m[1]<=24;}],   // 岸壁に掛けた防舷材のタイヤは壁から下がっているので候補に入る（係留船を基地から外したため 16→24）
   ['AquaTopia の段ボール（崩れて元に戻る）','crates.mjs',[],o=>/崩れる/.test(o)],
   ['AquaTopia の当たり判定（岸壁・流木・防波堤）','exphys.mjs',[],o=>/当たり判定よし/.test(o)],
