@@ -531,12 +531,16 @@ async function exPrecompile(prog){const gl=renderer.getContext(),ext=gl.getExten
 function exKrLight(){if(!EX.krLt){EX.krLt=new THREE.PointLight(0x88bbff,0,40,1.6);scene.add(EX.krLt);}return EX.krLt;}
 async function exStartAsync(){if(exLoading||EX.on)return;exLoading=true;const L=$('exload'),bar=L.querySelector('.bar i'),msg=L.querySelector('.m');L.classList.remove('out');L.hidden=false;
   /* 読み込み中のミニゲーム（船体のアカフジツボはがし） */try{bnStart(L.querySelector('.bnh'));}catch(e){console.error(e);}EX.loadLock=true;const go=$('bExGo');go.hidden=true;
-  const y=()=>new Promise(r=>setTimeout(r,30)),st=(k,t)=>{bar.style.width=k+'%';msg.textContent=t;};
+  EX.ldT0=performance.now();const y=()=>new Promise(r=>setTimeout(r,30));let kMax=0;const st=(k,t)=>{kMax=Math.max(kMax,k);bar.style.width=kMax+'%';msg.textContent=t;};   /* バーは戻さない */
   try{st(8,'ボートを用意しています');await y();await y();EXREF.hold=true;exInit();
     st(30,'島と海を細かく描いています');await y();startExplore();
-    st(45,'光と影を準備しています');await y();await exPrecompile(k=>st(45+Math.round(k*40),'光と影を準備しています'));EXREF.hold=false;
-    st(88,'光と影を準備しています');await y();try{exWarmAll(true);__SR.step(1/60);exWarmAll(false);}catch(e){exWarmAll(false);}
-    st(90,'まもなく出発');await y();if(typeof window.__SR!=='undefined'&&EX.on)__SR.step(1/60);
+    st(45,'光と影を準備しています');await y();EX.pcRun=true;try{await exPrecompile(k=>st(45+Math.round(k*40),'光と影を準備しています'));}finally{EX.pcRun=false;}
+    // 読み込みは最低 15 秒（準備が早く終わってもミニゲームで遊ぶ間を残す）。自動テストのときは待たない
+    if(!navigator.webdriver){const T0=EX.ldT0,MIN=15000;for(;;){const e=performance.now()-T0;if(e>=MIN)break;st(85+Math.round(10*Math.min(1,e/MIN)),'まもなく出発');await new Promise(r=>setTimeout(r,200));}}
+    // 最後に本物の描画を始める。Safari（Metal）は最初に描く瞬間に描画パイプラインを作るので、初めての環境では数秒止まる。
+    // ミニゲームの途中で止まらないよう、遊ぶ時間が終わってからここで一度だけ止まる（表示を先に出してから）
+    st(96,'仕上げています');await new Promise(r=>setTimeout(r,80));EXREF.hold=false;
+    try{exWarmAll(true);__SR.step(1/60);exWarmAll(false);}catch(e){exWarmAll(false);}if(EX.on)__SR.step(1/60);
     st(100,'準備完了');await y();
     // 読み込みが終わったら「出発する」を出す（自動テストのときはそのまま進む）
     if(!navigator.webdriver){go.textContent='出発する'+(BN.score&&BN.score()?'（はがした数 '+BN.score()+'）':'');go.hidden=false;await new Promise(res=>{const iv=setInterval(()=>{if(BN.score)go.textContent='出発する'+(BN.score()?'（はがした数 '+BN.score()+'）':'');},300);const f=()=>{clearInterval(iv);go.removeEventListener('click',f);res();};go.addEventListener('click',f);});}}

@@ -146,7 +146,7 @@ function renderBoom(sr,big,seed){
 const BOOMS={big:[],small:[]};
 // 音の事前合成は 1 音 0.1〜0.25 秒画面を止めるので、AquaTopia の読み込み中は待たせる。ただし読み込み後に「出発する」を待つ間は、
 // ミニゲームを 1.5 秒触っていなければ進める（出発後のボート操作中に引っかからないよう、ここで片付ける）
-function audBusy(){if(typeof exLoading==='undefined'||!exLoading)return false;if(typeof EXREF!=='undefined'&&EXREF.hold)return true;return typeof BN!=='undefined'&&performance.now()-(BN.lastT||0)<1500;}
+function audBusy(){if(typeof exLoading==='undefined'||!exLoading)return false;if(typeof EX!=='undefined'&&EX.pcRun)return true;return typeof BN!=='undefined'&&performance.now()-(BN.lastT||0)<1500;}
 function buildBoomPool(){if(!AU.ctx||BOOMS.big.length)return;const sr=AU.ctx.sampleRate,jobs=[[1,11],[0,23],[1,37],[0,41],[1,53],[0,67]];let i=0;
   const next=()=>{if(i>=jobs.length||!AU.ctx)return;if(audBusy()){setTimeout(next,250);return;}const[bg,sd]=jobs[i++],d=renderBoom(sr,!!bg,sd),b=AU.ctx.createBuffer(2,d[0].length,sr);b.getChannelData(0).set(d[0]);b.getChannelData(1).set(d[1]);(bg?BOOMS.big:BOOMS.small).push(b);setTimeout(next,40);};next();}
 // 距離のある爆発：音速ぶん遅れて届き、遠いほど高音が削られ（空気の吸収）、残響が増える
