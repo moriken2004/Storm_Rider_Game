@@ -2242,18 +2242,29 @@ function buildVehicle(kind,hex){
   g.userData.dyn=1;g.userData.push=kind;   /* 探検のボートで押せるよう、まとめずに 1 台ずつ残す（台の中はまとめる） */
   const B=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);g.add(o);return o;};
   const C=(r0,r1,h,m,x,y,z,ax)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,16),m);o.position.set(x,y,z);if(ax==='x')o.rotation.z=Math.PI/2;if(ax==='z')o.rotation.x=Math.PI/2;g.add(o);return o;};
+  // 横から見た輪郭（z,y）を幅 w で押し出す（角を少し丸める）
+  const VX=(pts,w,m,x,bev)=>{bev=bev===undefined?.03:bev;const sh=new THREE.Shape(pts.map(q=>new THREE.Vector2(q[0],q[1])));const ge=new THREE.ExtrudeGeometry(sh,{depth:Math.max(.01,w-bev*2),bevelEnabled:bev>0,bevelThickness:bev,bevelSize:bev,bevelSegments:2,curveSegments:6});ge.translate(0,0,-(w-bev*2)/2);ge.rotateY(-Math.PI/2);ge.computeVertexNormals();const o=new THREE.Mesh(ge,m);o.position.x=x||0;g.add(o);return o;};
+  // 文字や模様の板（片面、絵柄はキャンバスで描いて車種ごとに使い回す）
+  const TEX=(key,W2,H2,draw)=>{VEH.tex=VEH.tex||{};if(!VEH.tex[key]){const c=document.createElement('canvas');c.width=W2;c.height=H2;draw(c.getContext('2d'),W2,H2);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;VEH.tex[key]=std({map:t,roughness:.55,metalness:.15,polygonOffset:true,polygonOffsetFactor:-2});}return VEH.tex[key];};
+  const decal=(m,w,h,x,y,z,ry)=>{const o=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);o.position.set(x,y,z);o.rotation.y=ry||0;g.add(o);return o;};
   // 車輪：タイヤ・ホイール・泥よけ
-  const wheel=(x,z,r,w,fender)=>{C(r,r,w,M.tire,x,r,z,'x');C(r*.55,r*.55,w+.04,M.hub,x,r,z,'x');C(r*.2,r*.2,w+.08,M.dark,x,r,z,'x');
+  const wheel=(x,z,r,w,fender)=>{C(r,r,w,M.tire,x,r,z,'x');C(r*.92,r*.92,w+.01,M.dark,x,r,z,'x');C(r*.55,r*.55,w+.04,M.hub,x,r,z,'x');C(r*.2,r*.2,w+.08,M.dark,x,r,z,'x');const sx2=Math.sign(x)||1;
+    for(let k=0;k<6;k++){const a=k/6*Math.PI*2;C(r*.05,r*.05,w+.1,M.steel,x,r+Math.sin(a)*r*.36,z+Math.cos(a)*r*.36,'x');}B(.04,r*.18,.03,M.steel,x+sx2*(w/2+.04),r+r*.62,z);   /* ボルトと空気バルブ */
     if(fender){const f=new THREE.Mesh(new THREE.CylinderGeometry(r*1.22,r*1.22,w*1.25,14,1,true,-Math.PI/2,Math.PI),paint);f.rotation.z=Math.PI/2;f.rotation.order='ZYX';f.position.set(x,r,z);g.add(f);}};
   const axle=(z,hw,r,w,f)=>{wheel(-hw,z,r,w,f);wheel(hw,z,r,w,f);C(.07,.07,hw*2,M.dark,0,r,z,'x');};
   // 前照灯・尾灯・バンパー・ミラー
-  const face=(w,y,zf,zr)=>{for(const sx of[-1,1]){B(.34,.2,.06,M.head,sx*(w/2-.3),y,zf-.03);B(.3,.18,.06,M.tail,sx*(w/2-.28),y,zr+.03);B(.12,.1,.06,M.amber,sx*(w/2-.08),y+.18,zf-.03);}
+  const face=(w,y,zf,zr)=>{for(const sx of[-1,1]){B(.42,.28,.05,M.dark,sx*(w/2-.3),y,zf-.01);B(.38,.24,.05,M.dark,sx*(w/2-.28),y,zr+.01);B(.34,.2,.06,M.head,sx*(w/2-.3),y,zf-.03);B(.3,.18,.06,M.tail,sx*(w/2-.28),y,zr+.03);B(.12,.1,.06,M.amber,sx*(w/2-.08),y+.18,zf-.03);}
     B(w+.12,.22,.18,M.dark,0,y-.32,zf-.06);B(w+.12,.22,.18,M.dark,0,y-.32,zr+.06);};
-  const mirrors=(w,y,z)=>{for(const sx of[-1,1]){B(.28,.04,.04,M.dark,sx*(w/2+.14),y,z);B(.06,.3,.2,M.dark,sx*(w/2+.3),y,z);}};
+  const mirrors=(w,y,z)=>{for(const sx of[-1,1]){beam(g,new V3(sx*w/2,y+.05,z),new V3(sx*(w/2+.3),y,z-.12),.035,M.dark);beam(g,new V3(sx*w/2,y-.25,z),new V3(sx*(w/2+.3),y-.15,z-.12),.03,M.dark);B(.07,.36,.2,M.dark,sx*(w/2+.32),y-.08,z-.14);B(.015,.31,.16,M.glass,sx*(w/2+.36),y-.08,z-.14);}};
   const beacon=(x,y,z)=>{C(.1,.12,.16,M.amber,x,y,z);const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWTEX,color:new THREE.Color(2.2,1.0,.15),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.position.set(x,y+.1,z);sp.scale.set(1.3,1.3,1);g.add(sp);};
   // 運転台：下半分は車体色、上半分は窓（前・左右・後ろ）と屋根
-  const cab=(w,d,x,y0,z,hh)=>{hh=hh||1.0;B(w,.9,d,paint,x,y0+.45,z);B(w-.1,hh*.72,d-.16,M.glass,x,y0+.9+hh*.36,z);B(w,.1,d,paint,x,y0+.9+hh*.74,z);
-    for(const sx of[-1,1])for(const sz of[-1,1])B(.09,hh*.74,.09,paint,x+sx*(w/2-.045),y0+.9+hh*.37,z+sz*(d/2-.045));
+  const cab=(w,d,x,y0,z,hh)=>{hh=hh||1.0;const f=z-d/2,bk=z+d/2,yb=y0+.9,yt=yb+hh*.74,sl=Math.min(.45,hh*.32);
+    VX([[f,y0],[f-.02,y0+.62],[f+.05,yb],[bk,yb],[bk,y0]],w,paint,x);   /* 下半分（前の角が丸い） */
+    VX([[f+.1,yb-.01],[f+.1+sl,yt],[bk-.05,yt],[bk-.05,yb-.01]],w-.08,M.glass,x,0);   /* 窓（前は傾いたガラス） */
+    VX([[f+.06+sl,yt-.02],[f+.1+sl,yt+.09],[bk+.01,yt+.09],[bk+.01,yt-.02]],w+.02,paint,x,.02);   /* 屋根 */
+    for(const sx of[-1,1]){const X=x+sx*(w/2-.03);beam(g,new V3(X,yb,f+.1),new V3(X,yt,f+.1+sl),.08,paint);B(.08,yt-yb,.1,paint,X,(yb+yt)/2,(f+bk)/2+.12);B(.08,yt-yb,.1,paint,X,(yb+yt)/2,bk-.07);
+      B(.015,.8,.015,M.dark,x+sx*(w/2+.005),y0+.42,(f+bk)/2+.12);B(.015,.015,d*.5,M.dark,x+sx*(w/2+.005),y0+.05,(f+bk)/2-d*.12);B(.025,.04,.2,M.steel,x+sx*(w/2+.02),y0+.72,(f+bk)/2);}   /* 扉の継ぎ目と取っ手 */
+    for(const xx of[-w*.22,w*.22]){const wp=B(.025,sl*1.4,.02,M.dark,x+xx,yb+.2,f+.1+sl*.25-.03);wp.rotation.x=Math.atan2(sl,yt-yb);wp.rotation.z=xx>0?.45:-.45;}   /* ワイパー */
     B(w-.3,.06,.5,M.dark,x,y0+.93,z-d/2+.3);};
   if(kind==='tug'){ // 低い車体に大きな車輪、中央の運転席、前後の連結器
     B(2.5,.75,4.6,paint,0,.85,0);B(2.3,.5,1.5,paint,0,1.42,-1.45);B(2.3,.5,1.3,paint,0,1.42,1.55);B(2.6,.14,4.7,M.haz,0,.5,0);
@@ -2261,6 +2272,11 @@ function buildVehicle(kind,hex){
     axle(-1.5,1.15,.6,.5,true);axle(1.5,1.15,.6,.5,true);face(2.5,.95,-2.3,2.3);
     B(.3,.2,.5,M.steel,0,.55,-2.6);B(.3,.2,.5,M.steel,0,.55,2.6);C(.07,.07,.3,M.steel,0,.7,2.8);
     for(let k=0;k<5;k++)B(1.6,.03,.05,M.dark,0,1.62,-2.0+k*.14);beacon(0,2.95,.05);C(.05,.05,.7,M.steel,.7,2.15,1.9);
+    // ゴムの緩衝材（前後）、牽引ピンと鎖、重り板、手すりと乗り口の段、運転台の後ろの作業灯
+    for(const z of[-2.42,2.42]){B(2.62,.36,.18,M.black,0,.78,z);for(const sx of[-1,1])B(.32,.42,.24,M.black,sx*1.05,.78,z*1.02);}
+    C(.06,.06,.42,M.steel,0,.84,-2.8);C(.04,.04,.35,M.steel,.12,.98,-2.75);for(let k=0;k<3;k++)B(1.7,.08,.9,M.dark,0,1.72+k*.09,1.65);
+    for(const sx of[-1,1]){B(.04,.04,.9,M.steel,sx*1.0,2.0,.05);for(const z of[-.35,.45])B(.04,.45,.04,M.steel,sx*1.0,1.78,z);B(.45,.05,.3,M.dark,sx*1.3,.55,.1);B(.45,.05,.3,M.dark,sx*1.3,.88,.1);}
+    for(const sx of[-1,1])B(.2,.14,.08,M.head,sx*.5,2.72,.85);B(1.3,.05,.06,M.dark,0,2.66,.86);
   }else if(kind==='fuel'){ // 運転台＋楕円の油槽、上面の歩み板、後部のホース巻き取り、はしご
     B(2.4,.3,9.2,M.dark,0,.95,0);cab(2.45,2.1,0,1.0,-3.4,1.15);B(2.45,.9,.5,paint,0,1.45,-4.55);mirrors(2.45,2.2,-4.2);
     for(let k=0;k<6;k++)B(1.5,.04,.05,M.dark,0,1.25+k*.09,-4.82);
@@ -2271,6 +2287,17 @@ function buildVehicle(kind,hex){
     B(.06,2.3,.06,M.steel,.35,2.25,4.62);B(.06,2.3,.06,M.steel,-.35,2.25,4.62);for(let k=0;k<6;k++)B(.7,.05,.05,M.steel,0,1.3+k*.38,4.62);
     const reel=new THREE.Mesh(new THREE.TorusGeometry(.42,.16,8,18),M.black);reel.rotation.y=Math.PI/2;reel.position.set(1.28,1.45,3.7);g.add(reel);
     B(2.2,.5,.04,M.haz,0,1.25,4.58);axle(-3.5,1.1,.52,.42,false);axle(2.3,1.1,.52,.6,false);axle(3.5,1.1,.52,.6,false);face(2.5,1.25,-4.8,4.6);beacon(0,3.25,-3.4);
+    // 油槽の文字と危険物の標識板（架空の数字）、歩み板の手すり、給油ホースとノズル、後部の計器盤と非常停止、収納庫、フェンダー、泥よけ、グリル
+    {const lab=TEX('fuelLab',512,96,(x,W2,H2)=>{x.fillStyle='rgba(0,0,0,0)';x.clearRect(0,0,W2,H2);x.fillStyle='#b3261c';x.fillRect(0,0,W2,10);x.fillRect(0,H2-10,W2,10);x.fillStyle='#1a1c1e';x.font='bold 46px Arial';x.textBaseline='middle';x.fillText('JET A-1',18,50);x.font='bold 40px "Hiragino Sans",sans-serif';x.fillText('火気厳禁',300,50);});
+      lab.transparent=true;for(const sx of[-1,1])decal(lab,3.4,.64,sx*1.265,2.45,1.2,sx*Math.PI/2);
+      const pl=TEX('fuelPlac',128,128,(x)=>{x.translate(64,64);x.rotate(Math.PI/4);x.fillStyle='#e8641b';x.fillRect(-42,-42,84,84);x.strokeStyle='#1a1c1e';x.lineWidth=4;x.strokeRect(-38,-38,76,76);x.rotate(-Math.PI/4);x.fillStyle='#1a1c1e';x.font='bold 26px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText('30',0,-8);x.fillText('1863',0,18);});
+      pl.transparent=true;decal(pl,.7,.7,0,2.4,4.61);for(const sx of[-1,1])decal(pl,.6,.6,sx*1.28,1.55,3.0,sx*Math.PI/2);}
+    for(const sx of[-1,1]){for(let z=-1.6;z<=4.0;z+=1.4)B(.04,.5,.04,M.steel,sx*.45,3.67,z);B(.04,.04,5.6,M.steel,sx*.45,3.9,1.2);}
+    {const nz=B(.12,.12,.4,M.dark,1.3,1.75,4.05);C(.04,.04,.4,M.steel,1.3,1.75,4.3,'z');const hs=new THREE.Mesh(new THREE.TorusGeometry(.3,.04,6,14,Math.PI),M.black);hs.position.set(1.32,1.45,3.95);hs.rotation.set(0,Math.PI/2,Math.PI);g.add(hs);}
+    {B(.7,.75,.5,M.steel,-.85,1.45,4.35);for(let k=0;k<3;k++){C(.09,.09,.03,M.white,-.65-k*.2,1.62,4.61,'z');C(.07,.07,.035,M.dark,-.65-k*.2,1.62,4.62,'z');}C(.08,.08,.08,new THREE.MeshBasicMaterial({color:new THREE.Color(1.6,.1,.08)}),-.85,1.3,4.64,'z');}
+    for(const sx of[-1,1]){B(.5,.55,1.3,paint,sx*1.0,1.3,.3);B(.02,.04,.3,M.steel,sx*1.26,1.3,.3);B(.02,.5,.02,M.dark,sx*1.26,1.3,-.35);
+      for(const z of[2.3,3.5]){const fd=new THREE.Mesh(new THREE.CylinderGeometry(.66,.66,.66,14,1,true,-Math.PI/2,Math.PI),M.dark);fd.rotation.z=Math.PI/2;fd.position.set(sx*1.1,.52,z);g.add(fd);}B(.55,.5,.02,M.black,sx*1.1,.5,4.15);}
+    B(1.6,.5,.04,M.dark,0,1.5,-4.82);for(let k=0;k<5;k++)B(1.5,.03,.05,M.steel,0,1.3+k*.1,-4.85);
   }else if(kind==='fire'){ // 空港用化学消防車：背の高い箱形、前に張り出した運転台、屋根の放水銃、3 軸
     B(2.9,2.1,8.4,paint,0,2.0,.9);B(2.8,.3,8.3,M.dark,0,.86,.9);cab(2.9,2.4,0,1.0,-4.3,1.5);B(2.92,.5,.3,M.white,0,1.3,-5.42);mirrors(2.9,2.5,-5.0);
     for(const sx of[-1,1]){for(let k=0;k<3;k++)B(.04,1.3,1.9,M.steel,sx*1.47,2.1,-1.4+k*2.3);B(.05,.16,8.2,M.white,sx*1.47,1.25,.9);}
@@ -2279,16 +2306,37 @@ function buildVehicle(kind,hex){
     B(1.0,.5,.3,M.dark,0,.75,-5.55);C(.09,.11,.5,M.steel,0,.8,-5.8,'z');
     axle(-3.9,1.25,.72,.55,false);axle(1.6,1.25,.72,.55,false);axle(3.4,1.25,.72,.55,false);face(2.9,1.35,-5.5,5.1);
     B(1.6,.14,.3,M.dark,0,3.55,-4.6);for(const sx of[-1,1])beacon(sx*.6,3.62,-4.6);
+    // 側面の巻き上げシャッター（横の桟と取っ手）、「化学消防」の文字、屋根の赤色灯の列、後ろのはしごと放水口、前の放水銃の台、グリル
+    for(const sx of[-1,1])for(let k=0;k<3;k++){const z0=-1.4+k*2.3;for(let j=0;j<12;j++)B(.05,.015,1.86,M.dark,sx*1.48,1.5+j*.1,z0);B(.06,.05,.5,M.steel,sx*1.5,1.5,z0);}
+    {const t=TEX('fireLab',512,64,(x,W2,H2)=>{x.clearRect(0,0,W2,H2);x.fillStyle='#f4f2ea';x.font='bold 44px "Hiragino Sans",sans-serif';x.textBaseline='middle';x.fillText('化学消防',20,34);x.font='bold 30px Arial';x.fillText('ARFF 1',340,36);});t.transparent=true;
+      for(const sx of[-1,1])decal(t,3.6,.45,sx*1.465,2.82,1.4,sx*Math.PI/2);}
+    {const red=new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,.15,.1)}),blu=M.white;B(2.2,.16,.36,M.dark,0,3.05,-4.95);for(let k=0;k<6;k++)B(.3,.12,.3,k%2?blu:red,-.85+k*.34,3.17,-4.95);}
+    for(const sx of[-.45,.45])B(.06,2.0,.06,M.steel,sx,2.0,5.15);for(let k=0;k<7;k++)B(.9,.04,.05,M.steel,0,1.15+k*.28,5.15);
+    for(const sx of[-1,1])C(.12,.12,.15,M.steel,sx*1.1,1.0,5.13,'z');
+    B(2.0,.6,.04,M.dark,0,1.55,-5.58);for(let k=0;k<6;k++)B(1.9,.03,.05,M.steel,0,1.32+k*.09,-5.6);
   }else if(kind==='gpu'){ // 電源車：箱形の台車、放熱の鎧戸、操作盤、巻いたケーブル、牽引棒
     B(2.0,1.5,3.6,paint,0,1.35,0);B(2.05,.12,3.65,M.dark,0,.58,0);B(2.02,.1,3.62,M.dark,0,2.12,0);
     for(const sx of[-1,1])for(let k=0;k<8;k++)B(.04,.08,1.3,M.dark,sx*1.01,.9+k*.13,-.8);
     B(.05,.8,1.0,M.black,1.01,1.5,.9);for(let k=0;k<3;k++){B(.06,.1,.1,[M.head,M.amber,M.tail][k],1.04,1.75,.6+k*.3);C(.07,.07,.05,M.steel,1.04,1.45,.6+k*.3,'x');}
     const cb=new THREE.Mesh(new THREE.TorusGeometry(.38,.09,8,18),M.black);cb.rotation.y=Math.PI/2;cb.position.set(-1.08,1.3,.9);g.add(cb);C(.1,.1,.5,M.steel,.5,2.4,-1.2);
     axle(-1.1,.95,.36,.26,false);axle(1.1,.95,.36,.26,false);const tb=B(.1,.1,2.0,M.steel,0,.5,-2.7);tb.rotation.x=.12;C(.12,.12,.06,M.steel,0,.4,-3.7);B(2.0,.3,.04,M.haz,0,.85,1.82);
+    // 吊り環（四隅）、銘板、屋根の吸気口、出力ケーブルの束とプラグ、角の当て物、尾灯
+    for(const sx of[-1,1])for(const sz of[-1,1]){const e=new THREE.Mesh(new THREE.TorusGeometry(.08,.025,6,12),M.steel);e.position.set(sx*.85,2.24,sz*1.65);g.add(e);B(.12,.12,.12,M.black,sx*1.0,.66,sz*1.8);}
+    {const t=TEX('gpuLab',256,128,(x,W2,H2)=>{x.fillStyle='#e6e4dc';x.fillRect(0,0,W2,H2);x.strokeStyle='#1a1c1e';x.lineWidth=4;x.strokeRect(4,4,W2-8,H2-8);x.fillStyle='#1a1c1e';x.font='bold 40px Arial';x.textBaseline='middle';x.fillText('400Hz',20,40);x.font='bold 28px Arial';x.fillText('90kVA  115V',20,90);});
+      decal(t,.7,.35,1.016,1.85,-.3,Math.PI/2);}
+    for(let k=0;k<6;k++)B(1.2,.03,.06,M.dark,0,2.18,-1.2+k*.14);
+    {const pg=B(.16,.2,.16,M.dark,-1.15,.95,1.25);beam(g,new V3(-1.12,1.05,.9),new V3(-1.15,.95,1.2),.06,M.black);}
+    for(const sx of[-1,1])B(.22,.12,.04,M.tail,sx*.7,.95,1.84);
   }else if(kind==='follow'){ // 誘導車：小型トラック、荷台、屋根の表示灯、市松模様
     B(1.95,.7,5.0,paint,0,.95,0);B(1.95,.35,1.5,paint,0,1.45,-1.75);cab(1.9,1.7,0,1.25,-.3,.85);B(1.9,.5,.08,paint,0,1.55,2.46);for(const sx of[-1,1])B(.08,.5,1.9,paint,sx*.93,1.55,1.5);
     B(2.05,.25,5.1,M.haz,0,.74,0);axle(-1.6,.92,.4,.3,true);axle(1.6,.92,.4,.3,true);face(1.95,1.0,-2.5,2.5);mirrors(1.9,1.95,-1.0);
     B(1.3,.16,.3,M.dark,0,3.05,-.3);for(const sx of[-1,1])beacon(sx*.45,3.12,-.3);B(1.2,.6,.06,M.black,0,3.0,.5);
+    // 屋根の「FOLLOW ME」表示板（後ろ向き、光る文字）と支柱、車体の市松模様の帯、荷台の内張りとあおりの取っ手、グリル
+    {const t=new THREE.MeshBasicMaterial({map:(()=>{const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');x.fillStyle='#0b0c0d';x.fillRect(0,0,256,128);x.fillStyle='#ffd23a';x.font='bold 44px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText('FOLLOW',128,42);x.fillText('ME',128,92);
+        x.fillStyle='rgba(0,0,0,.35)';for(let i=0;i<256;i+=4)x.fillRect(i,0,1,128);for(let j=0;j<128;j+=4)x.fillRect(0,j,256,1);const tt=new THREE.CanvasTexture(c);tt.encoding=THREE.sRGBEncoding;return tt;})(),color:new THREE.Color(1.6,1.6,1.6)});
+      decal(t,1.12,.52,0,3.0,.535,0);for(const sx of[-.5,.5])B(.05,.4,.05,M.dark,sx,2.62,.45);}
+    {const ck=TEX('chk',512,32,(x,W2,H2)=>{for(let i=0;i<W2/16;i++)for(let j=0;j<2;j++){x.fillStyle=(i+j)%2?'#101214':'#f2f0ea';x.fillRect(i*16,j*16,16,16);}});for(const sx of[-1,1])decal(ck,4.9,.3,sx*.982,1.05,0,sx*Math.PI/2);}
+    B(1.75,.04,1.85,M.dark,0,1.32,1.5);B(.4,.05,.03,M.steel,0,1.6,2.51);B(1.4,.45,.04,M.dark,0,1.05,-2.52);for(let k=0;k<4;k++)B(1.3,.03,.05,M.steel,0,.88+k*.1,-2.54);
   }else if(kind==='car'){ // 乗用車：横から見た輪郭を押し出した丸みのある車体、窓の箱と柱・屋根、輪のくぼみ、5 本スポークの車輪、灯火、扉の継ぎ目
     paint.roughness=.26;paint.metalness=.55;paint.envMapIntensity=1.4;
     const ext=(pts,w,bev,m,holes)=>{const sh=new THREE.Shape(pts.map(q=>new THREE.Vector2(q[0],q[1])));if(holes)for(const h of holes)sh.holes.push(h);
@@ -2321,6 +2369,9 @@ function buildVehicle(kind,hex){
     for(const sz of[-1,1]){B(.05,.5,.05,M.steel,-.45,2.1,sz*1.15);}B(.05,.05,2.35,M.steel,-.45,2.35,0);
     for(const sx of[-.42,.42])for(const sz of[-1,1]){C(.13,.13,.1,M.tire,sx,.13,sz*.95,'x');B(.08,.16,.08,M.steel,sx,.25,sz*.95);}
     B(.5,.2,.4,M.amber,0,1.98,-.6);B(.3,.14,.7,M.dark,.1,1.95,.5);
+    // 引き出しの取っ手と名札、角の当て物、向きの変わる車輪（フォーク）とブレーキ
+    for(let k=0;k<5;k++)for(const z of[-.6,.6])B(.03,.04,.3,M.steel,.6,.6+k*.27,z);for(const sx of[-1,1])for(const sz of[-1,1])B(1.18,.08,.08,M.black,0,.33,sz*1.24);
+    for(const sx of[-.42,.42])for(const sz of[-1,1]){B(.03,.18,.12,M.steel,sx-.07,.2,sz*.95);B(.03,.18,.12,M.steel,sx+.07,.2,sz*.95);B(.1,.05,.06,new THREE.MeshBasicMaterial({color:new THREE.Color(1.4,.12,.08)}),sx,.33,sz*.95-.1);}
   }
   g.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial){o.castShadow=true;o.receiveShadow=true;}});
   return g;
@@ -2456,9 +2507,9 @@ function buildPort(B,M){
     for(const[ax,az,bx,bz]of segs){const L=Math.hypot(bx-ax,bz-az),ang=Math.atan2(bz-az,bx-ax),m=box(B,L+8,3.4-BOT,9,quayM,(ax+bx)/2,(3.4+BOT)/2,(az+bz)/2,true);m.rotation.y=-ang;
       const w=box(B,L+8,1.2,2.2,quayM,(ax+bx)/2,3.9,(az+bz)/2);w.rotation.y=-ang;
       // 捨て石の土台（マウンド）：消波ブロックの斜面の下を海底まで埋める台形の盛り土
-      {const yT=-.6,wT=6.5,P=[],I=[],cs=Math.cos(-ang),sn=Math.sin(-ang),cx=(ax+bx)/2,cz=(az+bz)/2,hl=(L+8)/2;const sec=[];for(const sd of[-1,1]){sec.push([sd*wT,yT]);}
+      {const yT=-4,wT=10.5,   /* 天端は嵐の波の谷（2m 余り）より深く（−0.6m だと谷で広い灰色の面が一瞬現れていた）。幅は消波ブロックの斜面の内側 */P=[],I=[],cs=Math.cos(ang),sn=Math.sin(ang),cx=(ax+bx)/2,cz=(az+bz)/2,hl=(L+8)/2;const sec=[];for(const sd of[-1,1]){sec.push([sd*wT,yT]);}
         const prof=[[-wT,yT],[wT,yT]];const bot=BOT,wb=wT+(yT-bot)*2.7/2.1;const pts=[[-wb,bot],[-wT,yT],[wT,yT],[wb,bot]];
-        for(const lx of[-hl,hl])for(const[pw,py]of pts){const X=lx,Zl=pw;P.push(cx+X*cs-Zl*sn,py,cz+X*sn+Zl*cs);}   /* 線分の向きに回す（x＝長さ方向、z＝幅方向） */
+        for(const lx of[-hl,hl])for(const[pw,py]of pts){const X=lx,Zl=pw;P.push(cx+X*cs-Zl*sn,py,cz+X*sn+Zl*cs);}   /* 線分の向き（cos,sin）に沿わせる。符号を逆にすると防波堤の中心で鏡写しになり、何もない海を斜めに横切っていた */
         for(let k=0;k<3;k++){const a0=k,b0=k+1,c0=k+4,d0=k+5;I.push(a0,b0,c0,b0,d0,c0);}I.push(0,1,2,0,2,3,4,6,5,4,7,6);   /* 両端の切り口を閉じる */
         (B.userData.moundCols=B.userData.moundCols||[]).push({cx,cz,hl,cs,sn,wT,yT,bot});
         const mg=new THREE.BufferGeometry();mg.setAttribute('position',new THREE.Float32BufferAttribute(P,3));mg.setIndex(I);mg.computeVertexNormals();
@@ -2499,7 +2550,7 @@ function buildPort(B,M){
     const LX=[-9,9],LZ=[-11,11],HT=34,GY=37;
     // 脚・台車・敷居梁・門形梁・X 字の筋交い（各側面）
     for(const x of LX)for(const z of LZ){bm(P(x,1.2,z),P(x,HT,z),1.5);A(2.6,1.2,3.6,darkM,x,.6,z);for(const dz of[-1.1,1.1])A(.9,.9,.9,darkM,x,.45,z+dz);}
-    for(const z of LZ){bm(P(-9,2.2,z),P(9,2.2,z),1.2);bm(P(-9,13,z),P(9,13,z),1.3);bm(P(-9,HT,z),P(9,HT,z),1.6);bm(P(-9,13,z),P(9,HT,z),.9);bm(P(9,13,z),P(-9,HT,z),.9);}
+    for(const z of LZ){bm(P(-9,6.5,z),P(9,6.5,z),1.2);   /* 脚の間の横梁はトレーラー（高さ 3.9m）より上に（2.2m だと通路をふさいでいた） */bm(P(-9,13,z),P(9,13,z),1.3);bm(P(-9,HT,z),P(9,HT,z),1.6);bm(P(-9,13,z),P(9,HT,z),.9);bm(P(9,13,z),P(-9,HT,z),.9);}
     for(const x of LX){bm(P(x,HT,-11),P(x,HT,11),1.6);bm(P(x,13,-11),P(x,13,11),1.1);}
     // 桁（陸側の後ろ張り出し〜海側のブーム）。左右 2 本と横つなぎ、脚の頂部から桁への束
     const X0=-30,X2=62,GZ=[-4.5,4.5];for(const z of GZ){bm(P(X0,GY,z),P(X2,GY,z),2.2,pm,2.4);for(const x of LX)bm(P(x,HT,z),P(x,GY-1,z),1.1);}
