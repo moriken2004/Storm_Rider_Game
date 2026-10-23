@@ -17,7 +17,7 @@ const W=[{who:'G',pos:new V3(),yaw:0,pitch:0,roll:0,state:'form',mesh:null,ph:1.
          {who:'H',pos:new V3(),yaw:0,pitch:0,roll:0,state:'form',mesh:null,ph:4.1,side:46,fw:12,up:1,ang:0}];
 const WHO={C:['ミズハ管制','#8fd4ff'],G:['2番機 ゴウ','#ffc57a'],H:['3番機 ハル','#a6f0b4'],S:['機体システム','#ff8a7a'],F:['ノルド連邦 防空軍','#ff7466']};
 const CORE=new V3(0,3400,0);
-const input={x:0,y:0,boost:false,act:false,actHit:false,keys:{},tx:0,ty:0,tBoost:false,tAct:false};
+const input={x:0,y:0,boost:false,act:false,actHit:false,keys:{},tx:0,ty:0,tBoost:false,tAct:false,xb:false,tXb:false};
 let sunL,hemiL,trails=[],bolts=[],columns=[],rings=[],gateRings=[],spouts=[],coreShell,coreGlow,shock,boomFx,proj,carrierRing;
 const strikes=[];
 const tA=new V3(),tB=new V3(),tC=new V3(),tD=new V3();
@@ -74,7 +74,7 @@ function boltFromTo(a,b,w){let bo=bolts.find(q=>q.life<=0)||bolts[0];shapeBolt(b
 // 落雷が海面に当たったところ：白い蒸気としぶきが噴き上がる（近いときだけ）
 function seaHit(x,z){if(Math.hypot(camera.position.x-x,camera.position.z-z)>3000)return;for(let k=0;k<14;k++){const a=Math.random()*6.283,v=6+Math.random()*16;puff(x+Math.cos(a)*3,3.6,z+Math.sin(a)*3,Math.cos(a)*v,14+Math.random()*26,Math.sin(a)*v,5+Math.random()*7,1.2+Math.random()*1.2,1,sprays);}}
 function strikeAt(x,z,danger){
-  const top=Math.max(rr(900,1700),danger?P.pos.y+rr(350,700):0);tA.set(x+rr(-260,260),top,z+rr(-260,260));   // 高い所を飛ぶときは自機より上から落ちる（見た目と当たり判定を合わせる）tB.set(x,0,z);boltFromTo(tA,tB,danger?9:7);
+  const top=Math.max(rr(900,1700),danger?P.pos.y+rr(350,700):0);tA.set(x+rr(-260,260),top,z+rr(-260,260));tB.set(x,0,z);boltFromTo(tA,tB,danger?9:7);   /* 高い所を飛ぶときは自機より上から落ちる（見た目と当たり判定を合わせる） */
   flashAt(x,top*.6,z,danger?1.3:1);seaHit(x,z);
   if(strikeGlow){strikeGlow.visible=true;strikeGlow.position.set(x,14,z);strikeGlow.userData.t=0;}
   const d=Math.hypot(camera.position.x-x,camera.position.z-z);SFX.thunder(d);
@@ -1102,7 +1102,7 @@ function drawRadar(){
 // ───────────────────────── 入力 ─────────────────────────
 function readInput(){
   const k=input.keys;let x=(k.KeyD||k.ArrowRight?1:0)-(k.KeyA||k.ArrowLeft?1:0),y=(k.KeyW||k.ArrowUp?1:0)-(k.KeyS||k.ArrowDown?1:0);
-  let b=!!(k.ShiftLeft||k.ShiftRight),a=!!k.Space;
+  let b=!!(k.ShiftLeft||k.ShiftRight),a=!!k.Space;input.xb=!!(k.KeyE||input.tXb);   /* 探検のボートのブースト（E／加速ボタン） */
   x+=input.tx;y+=input.ty;
   // 指やスティックを左右へ 2 度すばやく倒すとバレルロール（キーの 2 度押しと同じ）
   {const sx=input.tx+(navigator.getGamepads&&navigator.getGamepads()[0]?.axes[0]||0),d=sx>.75?1:sx<-.75?-1:0;
@@ -1179,7 +1179,7 @@ function bindInput(){
     zone.addEventListener('touchend',end);zone.addEventListener('touchcancel',end);
     const hold=(id,key)=>{const b=$(id),on=e=>{initAudio();input[key]=true;b.classList.add('on');if(navigator.vibrate)navigator.vibrate(8);e.preventDefault();},off=()=>{input[key]=false;b.classList.remove('on');};
       b.addEventListener('touchstart',on,{passive:false});b.addEventListener('touchend',off);b.addEventListener('touchcancel',off);};
-    hold('tbA','tAct');hold('tbB','tBoost');hold('tbG','tGun');hold('tbM','tMsl');
+    hold('tbA','tAct');hold('tbB','tBoost');hold('tbX','tXb');hold('tbG','tGun');hold('tbM','tMsl');
     $('tbP').addEventListener('touchstart',e=>{e.preventDefault();togglePause();},{passive:false});$('tbP').addEventListener('click',()=>togglePause());
     $('skip').textContent='スキップ ▸';
     // 画面を消灯させない（対応する端末だけ）

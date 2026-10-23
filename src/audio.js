@@ -84,7 +84,7 @@ function setLoops(engine,boost,wind,rain,sp){
   // 燃焼の轟音：強さで音量と明るさ、ブーストでさらに太く。ドップラーは再生速度で
   e.rg.gain.setTargetAtTime(engine*(.85+boost*.6),t,.12);e.src.playbackRate.setTargetAtTime((.82+engine*.22+boost*.14)*sp.dop,t,.15);
   e.lp.frequency.setTargetAtTime((1000+engine*2200+boost*3000)*sp.muf,t,.15);e.pk.frequency.setTargetAtTime(320+engine*260+boost*200,t,.2);
-  e.cg.gain.setTargetAtTime((engine*.012+boost*.15)*sp.muf,t,.1);   // バリバリは控えめに（強いとパキパキと乾いて聞こえた）e.cs.playbackRate.setTargetAtTime(sp.dop,t,.1);
+  e.cg.gain.setTargetAtTime((engine*.012+boost*.15)*sp.muf,t,.1);e.cs.playbackRate.setTargetAtTime(sp.dop,t,.1);   /* バリバリは控えめに（強いとパキパキと乾いて聞こえた） */
   // タービン：回転数に比例して高く大きく（地上・低出力では唸りが目立ち、全開では轟音に埋もれる）
   {const f0=(950+engine*1500+boost*350)*sp.dop;[1,1.0062,2.013,1.48].forEach((m,i)=>e.w[i].frequency.setTargetAtTime(f0*m,t,.25));e.wbp.frequency.setTargetAtTime(f0*1.4*sp.muf,t,.2);
     e.whg.gain.setTargetAtTime(engine*(.022-.008*boost)*Math.min(1,sp.muf*1.2),t,.2);e.bnf.frequency.setTargetAtTime(f0*.5,t,.2);e.bng.gain.setTargetAtTime(engine*.07*sp.muf,t,.2);}
