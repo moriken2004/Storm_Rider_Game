@@ -1606,8 +1606,12 @@ function hullGeo(o){
     pts.sort((a,b)=>a[1]-b[1]);pts[0][0]=0;
     return{u,pts,dk,dW,keel,wW};});
   const zOf=(u,y,s)=>{const h=(y-s.keel)/(s.dk-s.keel+1e-6);let z=-L/2+u*L;if(u<.14)z-=rake*h*Math.pow(1-u/.14,1.5);if(u>.88)z+=(o.sRake||0)*h*Math.pow((u-.88)/.12,1.5);return z;};
+  // 絵柄の横方向：断面の番号ではなく、外板に沿って船体中央から測った長さ（船首の傾きや幅の絞りで文字が斜めに引きずられたり縮んだりしない）
+  const n0=S[0].pts.length,im=S.findIndex(s=>s.u>=.5),AU=S.map(()=>new Float32Array(n0));
+  for(let j=0;j<n0;j++){const pz=(i)=>zOf(S[i].u,S[i].pts[j][1],S[i]),d=(a,b)=>Math.hypot(S[a].pts[j][0]-S[b].pts[j][0],pz(a)-pz(b))*Math.sign(pz(a)-pz(b)||1);
+    AU[im][j]=.5+(pz(im))/L;for(let i=im+1;i<S.length;i++)AU[i][j]=AU[i-1][j]+Math.abs(d(i,i-1))/L;for(let i=im-1;i>=0;i--)AU[i][j]=AU[i+1][j]-Math.abs(d(i+1,i))/L;}
   const mk=(sd)=>{const P=[],UV=[],I=[],n=S[0].pts.length;
-    S.forEach(s=>s.pts.forEach(([x,y])=>{P.push(sd*x,y,zOf(s.u,y,s));UV.push(sd>0?1-s.u:s.u,(y+T)/(Dm+T));}));
+    S.forEach((s,i)=>s.pts.forEach(([x,y],j)=>{P.push(sd*x,y,zOf(s.u,y,s));const u=AU[i][j];UV.push(sd>0?1-u:u,(y+T)/(Dm+T));}));
     for(let i=0;i<S.length-1;i++)for(let j=0;j<n-1;j++){const a=i*n+j,b=a+1,c=a+n,d=c+1;if(sd>0)I.push(a,b,c,b,d,c);else I.push(a,c,b,b,c,d);}
     // 船尾の鏡板（トランサム）：甲板の中心を頂点に、断面の輪郭（竜骨の中心→舷縁）へ扇形に張って中心線まで閉じる。
     // 頂点は外板と分けて、絵柄の文字や喫水標が載らない列の uv を使う
@@ -1751,12 +1755,27 @@ function shipKit(g,kind){const h=g.userData._h,o=g.userData._o;delete g.userData
   const bg=new THREE.CylinderGeometry(.24*k,.28*k,.6*k+.1,12);for(const u of[.08,.14,.86,.92]){const s2=h.deckAt(u),z=h.zOf(s2.u,s2.dk,s2);for(const sd of[-1,1])for(const dz of[-.45,.45].map(v=>v*k*1.6)){const b=add(bg,Mt.bol,sd*(s2.dW-.9*k-.2),s2.dk+(.6*k+.1)/2,z+dz);}}
   const tg=new THREE.TorusGeometry(.33,.085,8,20);for(const u of[.35,.62])for(const sd of[-1,1]){const s2=h.deckAt(u),z=h.zOf(s2.u,s2.dk,s2);const t=add(tg,Mt.buoy,sd*(s2.dW+.02),s2.dk+.75,z);t.rotation.y=Math.PI/2;
     for(let q=0;q<4;q++){const bd=add(new THREE.TorusGeometry(.335,.09,6,4,.35),Mt.band,sd*(s2.dW+.02),s2.dk+.75,z);bd.rotation.set(q*Math.PI/2,Math.PI/2,0);}}
-  // 水面下：舵、推進器（羽根 4〜5 枚とハブ）、軸、ビルジキール
-  const zs=o.L/2-o.L*.025,T=o.T,twin=kind==='patrol';
-  const rud=add(new THREE.BoxGeometry(.35*k+.1,T*.78,o.L*.04),Mt.rud,0,-T*.5,zs);
-  const pr=T*.36,pz=zs-o.L*.04-.3*k;for(const px of twin?[-o.B*.2,o.B*.2]:[0]){const hub=add(new THREE.SphereGeometry(pr*.22,12,8),Mt.prop,px,-T*.55,pz);hub.scale.set(1,1,1.5);
-    const nb=kind==='cargo'?5:4;for(let b=0;b<nb;b++){const bl=new THREE.Mesh(new THREE.SphereGeometry(1,10,6),Mt.prop);bl.scale.set(pr*.46,pr*.56,pr*.07);const a=b/nb*Math.PI*2,pv=new THREE.Group();pv.position.set(px,-T*.55,pz);pv.rotation.z=a;g.add(pv);bl.position.set(0,pr*.5,0);bl.rotation.y=.62;pv.add(bl);}
-    const sh=add(new THREE.CylinderGeometry(pr*.1,pr*.1,o.L*.06,8),Mt.keel,px,-T*.55,pz-o.L*.03);sh.rotation.x=Math.PI/2;}
+  // 水面下：推進器（羽根 4〜5 枚とハブ）、軸、舵、ビルジキール。船体の断面から、推進器の円盤が船体に入らない位置（船尾の切り上がりの後ろ）を求めて置き、
+  // 舵はその後ろで上端を船底に付ける。収まらなければ推進器を小さくする。羽根はハブごと 1 つの組にまとめて回す（g.userData.props）
+  const T=o.T,twin=kind==='patrol',Sst=S.filter(q=>q.u>.5);
+  const halfW=(q,y)=>{if(y<q.keel||y>q.dk)return -1;const P2=q.pts;for(let i=0;i<P2.length-1;i++){const[a0,b0]=P2[i],[a1,b1]=P2[i+1];if(y>=b0&&y<=b1)return b1-b0<1e-6?Math.max(a0,a1):a0+(a1-a0)*(y-b0)/(b1-b0);}return -1;};
+  const cover=(x,y)=>{let z=-1e9;for(const q of Sst)if(Math.abs(x)<=halfW(q,y))z=Math.max(z,h.zOf(q.u,y,q));return z;};   // その点を覆う船体の、いちばん後ろの z
+  const zEnd=h.zOf(1,S[S.length-1].keel,S[S.length-1]);
+  const fit=(px,pr)=>{const py=-T+pr*1.05+T*.04;let zc=cover(px,py);for(let i=0;i<16;i++){const a=i/16*Math.PI*2;zc=Math.max(zc,cover(px+Math.cos(a)*pr*1.05,py+Math.sin(a)*pr*1.05));}
+    const hubZ=zc+pr*.38,ch=pr*1.1,rudZ=hubZ+pr*.36+ch/2;return{py,hubZ,ch,rudZ,ok:rudZ+ch*.3<=zEnd};};
+  const pxs=twin?[-o.B*.2,o.B*.2]:[0];let pr=T*.36,F=null;for(let it=0;it<8;it++){F=pxs.map(px=>fit(px,pr));if(F.every(f=>f.ok))break;pr*=.88;}
+  const props=g.userData.props=[];
+  pxs.forEach((px,j)=>{const{py,hubZ,ch,rudZ}=F[j];const rot=new THREE.Group();rot.userData.dyn=1;rot.position.set(px,py,hubZ);g.add(rot);   // dyn：材質ごとにまとめる処理から外す（回すため）
+    const hub=new THREE.Mesh(new THREE.SphereGeometry(pr*.22,12,8),Mt.prop);hub.scale.set(1,1,1.5);rot.add(hub);
+    const nb=kind==='cargo'?5:4;for(let b2=0;b2<nb;b2++){const bl=new THREE.Mesh(new THREE.SphereGeometry(1,10,6),Mt.prop);bl.scale.set(pr*.46,pr*.56,pr*.07);const pv=new THREE.Group();pv.rotation.z=b2/nb*Math.PI*2;rot.add(pv);bl.position.set(0,pr*.5,0);bl.rotation.y=.62;pv.add(bl);}
+    props.push(rot);
+    // 軸：ハブから船体の中まで
+    const botAt=z=>{let best=Sst[0];for(const q of Sst)if(Math.abs(h.zOf(q.u,q.keel,q)-z)<Math.abs(h.zOf(best.u,best.keel,best)-z))best=q;return best.keel;};
+    {const zf=hubZ-pr*1.7,yf=Math.max(py,botAt(zf)+.15*k);beam(g,new V3(px,py,hubZ-pr*.15),new V3(px*.85,yf+pr*.12,zf),pr*.1,Mt.keel);}   // 軸：ハブから斜め前上へ、すぐ船底に入る
+    if(twin){const zb=hubZ-pr*.55;beam(g,new V3(px,py,zb),new V3(px*.55,botAt(zb)+.2*k,zb),pr*.07,Mt.keel);}   // 2 軸の船は軸を支える支柱
+    // 舵：推進器の後ろ。上端は舵の位置の船底（少し船体に入れる）、下端は推進器の下端あたり
+    const yTop=(()=>{let y=-T;for(const q of Sst){const zq=h.zOf(q.u,q.keel,q);if(zq<=rudZ+ch*.5)y=Math.max(y,q.keel);}return y+.3*k;})(),yBot=py-pr*.95;
+    add(new THREE.BoxGeometry(.3*k+.1,yTop-yBot,ch),Mt.rud,px,(yTop+yBot)/2,rudZ);});
   for(const sd of[-1,1]){const bk=add(new THREE.BoxGeometry(.08,.5*k+.1,o.L*.3),Mt.keel,sd*o.B*.45,-T*.82,0);bk.rotation.z=sd*.6;}}
 // 小さな船の外壁の絵柄（1 枚＝実寸 8m×3m、ExtrudeGeometry の世界座標の uv に合わせて repeat）
 //  pt：巡視船の甲板室（丸窓の列、扉、継ぎ目、雨だれ）／fs：漁船の操舵室（側面の窓 2 枚と扉）
@@ -1988,9 +2007,10 @@ function buildShip(kind){
     {const bxG=new THREE.BoxGeometry(.62,.28,.42),bc=[C(0x2f6fb0,.55,0),C(0xe07a1c,.55,0)];for(let k=0;k<12;k++){const c2=k%4,r2=Math.floor(k/4);M(bxG,bc[(k+r2)%2],1.6+(c2%2)*.66,o.D+.15+r2*.29,10.2+Math.floor(c2/2)*.46);}}
     for(const[x,z]of[[-2.2,6.2],[2.3,-4.5]]){for(let k=0;k<4;k++){const t2=M(new THREE.TorusGeometry(.42-k*.02,.045,6,20),C(0xd8ccb0,.9,0),x,o.D+.05+k*.06,z);t2.rotation.x=Math.PI/2;}}
     // 舷側に吊るしたタイヤの防舷材（綱つき）と、船べりのこすれ帯
-    for(const s of[-1,1]){for(let k=0;k<6;k++){const z=-7+k*3.2,s2=h.deckAt(.5+z/o.L),xw=s2.dW+.15;const ty=M(new THREE.TorusGeometry(.32,.12,8,16),blkF,s*(xw+.05),o.D-.9,z);ty.rotation.y=Math.PI/2;M(new THREE.CylinderGeometry(.015,.015,1,4),C(0xd8ccb0,.9,0),s*xw,o.D-.3,z);}}
+    for(const s of[-1,1]){for(let k=0;k<6;k++){const z=-4.5+k*2.7,   /* 前の船名にかからない位置から */s2=h.deckAt(.5+z/o.L),xw=s2.dW+.15;const ty=M(new THREE.TorusGeometry(.32,.12,8,16),blkF,s*(xw+.05),o.D-.9,z);ty.rotation.y=Math.PI/2;M(new THREE.CylinderGeometry(.015,.015,1,4),C(0xd8ccb0,.9,0),s*xw,o.D-.3,z);}}
     for(let k=0;k<4;k++)M(new THREE.SphereGeometry(.38,10,8),C(0xe0651c,.6,.1),-3.1,o.D+.5,4+k*1.4);
-    for(const s of[-1,1]){M(new THREE.BoxGeometry(.1,.7,20),wht,s*3.3,o.D+.35,-1);const o2=M(new THREE.CylinderGeometry(.05,.07,8,6),blue,s*3.6,o.D+4.2,4);o2.rotation.z=-s*.9;}
+    for(const s of[-1,1]){{const pts=[];for(let z=-11;z<=9.01;z+=1){const s2=h.deckAt(.5+z/o.L);pts.push(new V3(s*(s2.dW-.06),s2.dk+.35,h.zOf(s2.u,s2.dk,s2)));}   /* 舷側の板：船体の縁に沿って 1m ずつ（まっすぐな箱だと船首側で船体からはみ出して船名にかぶっていた） */
+      for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],len=Math.hypot(b.x-a.x,b.z-a.z);const L3=Math.hypot(len,b.y-a.y);const bx=M(new THREE.BoxGeometry(.1,.7,L3+.03),wht,(a.x+b.x)/2,(a.y+b.y)/2,(a.z+b.z)/2);bx.rotation.set(-Math.atan2(b.y-a.y,len),Math.atan2(b.x-a.x,b.z-a.z),0,'YXZ');}}const o2=M(new THREE.CylinderGeometry(.05,.07,8,6),blue,s*3.6,o.D+4.2,4);o2.rotation.z=-s*.9;}
     light(0,o.D+10.4,-1.4,new THREE.Color(2.4,2.1,1.5),2.4);light(-2.4,o.D+3,-.5,new THREE.Color(2.6,.2,.15),1.4);light(2.4,o.D+3,-.5,new THREE.Color(.2,2.4,.5),1.4);
     g.userData._h=h;g.userData._o=o;
     g.userData.len=28;g.userData.beam=7;

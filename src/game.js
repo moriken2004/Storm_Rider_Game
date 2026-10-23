@@ -2131,7 +2131,10 @@ function animGulls(dt){if(!GULLS.length)initGulls();const t=G.t;for(const q of G
 function updateSeaLife(dt){
   animPort(dt);animGulls(dt);
   // 船
-  for(const s of ships){if(s.dead){s.sinkT+=dt;s.sp=Math.max(0,s.sp-dt*1.5);const L=s.m.userData.len,dp=Math.min(s.sinkT*(L>100?.35:.7),L*.45);
+  for(const s of ships){
+    // スクリュー：航行中は速さに応じて回す（係留中は止める）。撃沈されてもそのときの回転のまま回り続ける。2 軸は左右で逆回り
+    {const pp=s.m.userData.props;if(pp){if(!s.dead)s.propW=s.moored?0:2.5+s.sp*.9;const w=(s.propW||0)*dt;for(let i=0;i<pp.length;i++)pp[i].rotation.z+=i%2?-w:w;}}
+    if(s.dead){s.sinkT+=dt;s.sp=Math.max(0,s.sp-dt*1.5);const L=s.m.userData.len,dp=Math.min(s.sinkT*(L>100?.35:.7),L*.45);
       s.x-=Math.sin(s.h)*s.sp*dt;s.z-=Math.cos(s.h)*s.sp*dt;s.m.position.set(s.x,-dp,s.z);{const kd=s.m.userData.kind,t=s.sinkT;   // 貨物船は船首を上げて船尾から、漁船は転覆、巡視船は大きく傾いて沈む
         if(kd==='fish')s.m.rotation.set(Math.min(t*.05,.2),s.h,Math.min(t*.75,2.7),'YXZ');else if(kd==='patrol')s.m.rotation.set(-Math.min(t*.035,.42),s.h,Math.min(t*.09,.75),'YXZ');else s.m.rotation.set(-Math.min(t*.016,.34),s.h,Math.min(t*.01,.14),'YXZ');}
       const w=s.m.userData.wake;w.material.uniforms.uAlpha.value=.8*sat(s.sp/4);s.m.userData.bow.visible=false;{const fo=s.m.userData.foam;if(fo){fo.rb.uniforms.uAlpha.value=.3*sat(s.sp/4);fo.sw.uniforms.uAlpha.value=0;}}if(dp>=L*.45)s.m.visible=false;continue;}
