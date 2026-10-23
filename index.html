@@ -2766,6 +2766,9 @@ function hullTex(o){
   const rust=o.rust||0;for(let i=0;i<120*rust;i++){const u=r(),py=Y(o.deckY?o.deckY(u):Dm*.9)+r()*6;streak(X(u),py,20+r()*90,.08+r()*.3*rust,1.5+r()*3.5);}
   // 錨鎖孔（ホースパイプ）と錆
   if(o.hawse)for(const u of[B(o.hawse)]){const px=X(u),py=Y(o.hawseY);x.fillStyle='#16110e';x.beginPath();x.ellipse(px,py,o.hawseR*ppmX,o.hawseR*ppmY*.8,0,0,7);x.fill();streak(px,py,90,.55*rust+.15,o.hawseR*ppmX*1.6);}
+  // 船体の丸窓の列（縁の明るい輪と、暗いガラスに空の映り込み）
+  if(o.ports)for(const[u0,u1,y,stp,rr]of o.ports){for(let z=u0*L;z<=u1*L;z+=stp){const px=X(B(z/L)),py=Y(y),rx=rr*ppmX,ry=rr*ppmY;x.fillStyle='rgba(205,208,206,.95)';x.beginPath();x.ellipse(px,py,rx*1.35,ry*1.35,0,0,7);x.fill();
+    x.fillStyle='#1b2630';x.beginPath();x.ellipse(px,py,rx,ry,0,0,7);x.fill();x.fillStyle='rgba(180,200,215,.35)';x.beginPath();x.ellipse(px-rx*.3,py-ry*.3,rx*.4,ry*.35,0,0,7);x.fill();}}
   // 喫水線の帯と船底塗装
   x.fillStyle=o.boot||'#151617';x.fillRect(0,Y(o.bootTop||.8),W,Y(-.4)-Y(o.bootTop||.8));
   x.fillStyle=o.bottom||'#6b2a1f';x.fillRect(0,Y(-.4),W,H-Y(-.4));
@@ -2859,6 +2862,20 @@ function lifeboat(){const g=new THREE.Group(),L=8.6,B=3.1,orange=std({color:lin(
   M2(new THREE.BoxGeometry(1.2,.1,1.4),wh,0,1.38,1.2);M2(new THREE.BoxGeometry(.12,.12,7.4),wh,0,1.35,-.4);       // ハッチと手すり
   M2(new THREE.BoxGeometry(.06,.5,.5),gl,0,.2,-L/2-.1);                                                            // 船尾の舵
   return g;}
+// 舷墻（ブルワーク）：船体の縁に沿って外板と面をそろえて立ち上げる。u0〜u1 の範囲、高さ H（船首ほど hBow 倍まで高く）、端は低くなって消える
+// （船首・船尾の端まで続くときは閉じる）。上端に笠木、下端に排水口、chocks の位置に係留索の穴（楕円の黒）。across：船尾で左右をつなぐ
+function shipBulwark(g,h,o,c){const S2=h.S.filter(q=>q.u>=Math.max(.004,c.u0)&&q.u<=Math.min(.985,c.u1));if(S2.length<2)return;const TH=c.th||.09,wM=c.mat,capM=c.cap,slot=c.slot;
+  const ht=q=>{let k=1+(c.hBow||0)*Math.pow(Math.max(0,1-q.u/.2),2);const e0=c.u0>.01?(q.u-c.u0)/(c.fade||.04):1,e1=c.u1<.98?(c.u1-q.u)/(c.fade||.04):1;return c.H*k*Math.min(1,Math.max(0,Math.min(e0,e1)));};
+  const tops=[];for(const sd of[-1,1]){const P=[],I=[];const row=q=>{const z=h.zOf(q.u,q.dk,q),hh=Math.max(.02,ht(q)),xo=sd*(q.dW+.005),xi=sd*Math.max(0,q.dW-TH);return[[xo,q.dk-.06,z],[xo,q.dk+hh,z],[xi,q.dk+hh,z],[xi,q.dk-.02,z]];};
+    S2.forEach(q=>row(q).forEach(v=>P.push(...v)));for(let i=0;i<S2.length-1;i++)for(let k=0;k<3;k++){const a0=i*4+k,b0=a0+1,c0=a0+4,d0=c0+1;if(sd>0)I.push(a0,c0,b0,b0,c0,d0);else I.push(a0,b0,c0,b0,d0,c0);}
+    const ge=new THREE.BufferGeometry();ge.setAttribute('position',new THREE.Float32BufferAttribute(P,3));ge.setIndex(I);ge.computeVertexNormals();g.add(new THREE.Mesh(ge,wM));
+    const top=S2.map(q=>{const r=row(q);return new V3((r[1][0]+r[2][0])/2,r[1][1]+(c.capR||.07)*.4,r[1][2]);});tops.push(top);
+    if(capM)g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(top),S2.length*2,c.capR||.07,6,false),capM));
+    if(slot&&c.ports)for(let u=c.u0+.06;u<c.u1-.04;u+=c.ports){const q=h.deckAt(u);if(ht(q)<.3)continue;const m=new THREE.Mesh(new THREE.BoxGeometry(.02,Math.min(.14,ht(q)*.25),c.portW||.4),slot);m.position.set(sd*(q.dW+.012),q.dk+.07,h.zOf(q.u,q.dk,q));m.rotation.y=sd*(q.dW>.5?0:0);g.add(m);}
+    if(slot&&c.chocks)for(const u of c.chocks){const q=h.deckAt(u),hh=ht(q);if(hh<.4)continue;const w=Math.min(1.4,hh*.9),m=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.04,16),slot);m.scale.set(w,1,hh*.42);m.rotation.z=Math.PI/2;m.position.set(sd*(q.dW+.015),q.dk+hh*.55,h.zOf(q.u,q.dk,q));g.add(m);}}
+  if(c.across&&c.u1>=.98){const q=S2[S2.length-1],z=h.zOf(q.u,q.dk,q),hh=ht(q),w=q.dW*2;const m=new THREE.Mesh(new THREE.BoxGeometry(w,hh+.06,TH),wM);m.position.set(0,q.dk+hh/2-.03,z-TH/2);g.add(m);
+    if(capM){const t=new THREE.Mesh(new THREE.CylinderGeometry(c.capR||.07,c.capR||.07,w,6),capM);t.rotation.z=Math.PI/2;t.position.set(0,q.dk+hh+(c.capR||.07)*.4,z-TH/2);g.add(t);}
+    if(slot&&c.sternChocks)for(const x of c.sternChocks){const m2=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.04,16),slot);m2.scale.set(Math.min(1.4,hh*.9),1,hh*.42);m2.rotation.x=Math.PI/2;m2.position.set(x*q.dW,q.dk+hh*.55,z+.01);g.add(m2);}}}
 // 船の細部：甲板の縁に沿った手すり（柱と 2 本の手すり棒）、係船柱、救命浮輪、水面下の舵・推進器・ビルジキール、船底の汚れ（喫水線の下の藻と付着物）
 const SHIPKIT={};
 function shipKit(g,kind){const h=g.userData._h,o=g.userData._o;delete g.userData._h;delete g.userData._o;if(!h)return;const S=h.S,k=Math.max(.35,o.B/30);
@@ -3033,12 +3050,16 @@ function buildShip(kind){
       for(let k=0;k<8;k++){const sd=k%2?1:-1,z=-55+k*13.2;M(new THREE.CylinderGeometry(.3,.35,1.1,10),C(0xd9dad5,.6,.2),sd*13.3,o.D+.55,z);M(new THREE.CylinderGeometry(.55,.45,.35,12),C(0xd9dad5,.6,.2),sd*13.3,o.D+1.25,z);}
       // 水先人の縄梯子（右舷の中央から水面近くまで）
       {const s2=h.deckAt(.5),x=s2.dW+.06,z=h.zOf(s2.u,s2.dk,s2);for(const dz of[-.35,.35])M(new THREE.CylinderGeometry(.025,.025,o.D-.4,4),rope,x,(o.D+.4)/2,z+dz);for(let k=0;k<Math.floor((o.D-.6)/.35);k++)M(new THREE.BoxGeometry(.06,.05,.75),C(0x8a5a2a,.8,0),x+.02,.6+k*.35,z);}}
+    // 船首楼と船尾の高い舷墻（船体と同じ紺、係留索の楕円の穴＝パナマチョック、排水口）。船尾は横にも閉じる
+    {const bw=C(0x1f2b38,.6,.35,{side:THREE.DoubleSide}),cap=C(0x2c3a49,.5,.4),hole=C(0x07090b,.9,0);
+      shipBulwark(g,h,o,{u0:0,u1:.135,H:1.5,hBow:.12,fade:.03,mat:bw,cap,capR:.12,th:.16,slot:hole,ports:.025,portW:.6,chocks:[.025,.06,.11]});
+      shipBulwark(g,h,o,{u0:.885,u1:1,H:1.3,fade:.03,mat:bw,cap,capR:.12,th:.16,slot:hole,ports:.03,portW:.6,chocks:[.92,.96],across:true,sternChocks:[-.55,.55]});}
     g.userData._h=h;g.userData._o=o;
     g.userData.len=196;g.userData.beam=30;
   }else if(kind==='patrol'){
     const o={L:72,B:12,D:5,T:3.4,rake:6,sheerF:2.6,sheerA:.3,trans:.86,entry:.34,run:.2,flat:.45,sRake:.6};
     const h=hullOf(o,{hull:'#e6e8e6',hullTop:'#eef0ee',bottom:'#6a2b20',boot:'#141516',bootTop:.7,rust:.25,deckY:u=>o.D+(u<.28?o.sheerF*Math.pow(1-u/.28,2):0)-.2,hawse:.06,hawseY:o.D+1.5,hawseR:.45,draft:1,
-      stripes:[[2.4,'#1f4f8f',.16],[.8,'#b3261c',.205]],num:'MZ 31',numU:.085,numY:o.D-.9,numH:2.2,stern:'みずは',sternY:o.D-1.2,sternH:1.1,nameCol:'#1a1c1e',face:'"Hiragino Sans","Yu Gothic",sans-serif',seed:23});
+      stripes:[[2.4,'#1f4f8f',.16],[.8,'#b3261c',.205]],ports:[[.3,.6,3.3,2.4,.22]],num:'MZ 31',numU:.085,numY:o.D-.9,numH:2.2,stern:'みずは',sternY:o.D-1.2,sternH:1.1,nameCol:'#1a1c1e',face:'"Hiragino Sans","Yu Gothic",sans-serif',seed:23});
     const grey=C(0xe2e4e2,.55,.2),dk=C(0x5e666c,.7,.3),dkD=C(0x3b4249,.7,.3),gl=C(0x101820,.08,.9),blk=C(0x1a1d20,.6,.3);
     M(h.deck,C(0xffffff,.88,.15,{map:deckTex({key:'patrol',B:12,base:'#5a6066',walk:'#4a5056',line:'#e8e4d6',rust:.25,anti:1,plate:[1.5,4]})}));
     // ── 上部構造（実寸に近い作り）：1 層目の甲板室（丸窓・扉・継ぎ目）、2 層目、船橋（傾いた窓 7 枚と窓枠、両舷のウイング）、屋上の機器
@@ -3091,6 +3112,15 @@ function buildShip(kind){
     const pad=M(new THREE.CylinderGeometry(5.4,5.4,.2,32),C(0xffffff,.8,.1,{map:(()=>{const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');x.fillStyle='#3a4046';x.fillRect(0,0,256,256);x.strokeStyle='#e8e4d6';x.lineWidth=7;x.beginPath();x.arc(128,128,96,0,7);x.stroke();x.fillStyle='#e8e4d6';x.font='bold 120px Arial';x.textAlign='center';x.textBaseline='middle';x.fillText('H',128,134);x.strokeStyle='#d9a21b';x.lineWidth=6;x.strokeRect(12,12,232,232);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;})()}),0,o.D+.15,24);
 
     navLights(o.D+15.8,-4.4,o.D+5.4,-7,4.2);
+    // 船首楼の舷墻（灰色の笠木、係留索の穴、排水口）。後ろへなだらかに低くなって消える
+    shipBulwark(g,h,o,{u0:0,u1:.3,H:.95,hBow:.25,fade:.07,mat:C(0xeef0ee,.5,.2,{side:THREE.DoubleSide}),cap:C(0x8a9196,.45,.55),capR:.08,slot:C(0x2a2e31,.8,.2),ports:.035,portW:.45,chocks:[.07,.2]});
+    // 舷側のゴムの防舷材（甲板の少し下を船首から船尾まで）
+    {const pr2=q=>{const y=q.dk-.55,t=Math.max(0,Math.min(1,y/q.dk));return[q.wW+(q.dW-q.wW)*Math.pow(t,1.4)+.06,y];};for(const sd of[-1,1]){const pts=h.S.filter(q=>q.u>.08&&q.u<.97).map(q=>{const[xx,y]=pr2(q);return new V3(sd*xx,y,h.zOf(q.u,y,q));});
+      M(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),pts.length*2,.13,8,false),C(0x2b2f33,.85,.05));}}
+    // 船尾：救助艇の揚収口（灰色の扉と枠）と曳航用の柱
+    {const q=h.S[h.S.length-1],y0=q.dk-2.6,z=h.zOf(1,q.dk-1.5,q)+.06;M(new THREE.BoxGeometry(3.6,2.2,.1),C(0xc8cccd,.5,.4),0,y0+1.1,z);M(new THREE.BoxGeometry(3.9,.14,.14),C(0x5d6266,.6,.5),0,y0+2.27,z+.02);M(new THREE.BoxGeometry(3.9,.14,.14),C(0x5d6266,.6,.5),0,y0-.07,z+.02);
+      for(const x of[-1.9,1.9])M(new THREE.BoxGeometry(.14,2.4,.14),C(0x5d6266,.6,.5),x,y0+1.1,z+.02);for(const yy of[.5,1.1,1.7])M(new THREE.BoxGeometry(3.4,.04,.04),C(0x9aa0a4,.5,.5),0,y0+yy,z+.06);
+      const sq=h.deckAt(.95),zb=h.zOf(sq.u,sq.dk,sq)-1.5;for(const x of[-1,1]){M(new THREE.CylinderGeometry(.28,.32,.8,14),C(0x2b2e31,.55,.6),x,sq.dk+.4,zb);M(new THREE.CylinderGeometry(.42,.42,.08,14),C(0x2b2e31,.55,.6),x,sq.dk+.82,zb);}}
     g.userData._h=h;g.userData._o=o;
     g.userData.len=72;g.userData.beam=12;
   }else{
@@ -3128,13 +3158,8 @@ function buildShip(kind){
     // 舷側に吊るしたタイヤの防舷材（綱つき）と、船べりのこすれ帯
     for(const s of[-1,1]){for(let k=0;k<6;k++){const z=-4.5+k*2.7,   /* 前の船名にかからない位置から */s2=h.deckAt(.5+z/o.L),xw=s2.dW+.15;const ty=M(new THREE.TorusGeometry(.32,.12,8,16),blkF,s*(xw+.05),o.D-.9,z);ty.rotation.y=Math.PI/2;M(new THREE.CylinderGeometry(.015,.015,1,4),C(0xd8ccb0,.9,0),s*xw,o.D-.3,z);}}
     for(let k=0;k<4;k++)M(new THREE.SphereGeometry(.38,10,8),C(0xe0651c,.6,.1),-3.1,o.D+.5,4+k*1.4);
-    // 舷墻（ブルワーク）：船首から船尾まで外板と面をそろえて一続きに立ち上げ、上端に青い笠木、下端に排水口。船首では左右が合わさる
-    {const BH=.75,TH=.09,secs=h.S.filter(q=>q.u>=.004&&q.u<=.985),wM=C(0xf2f0ea,.55,.1,{side:THREE.DoubleSide}),capM=C(0x1f4f8a,.5,.25),slotM=C(0x4a5056,.8,.1);
-      for(const sd of[-1,1]){const P=[],I=[];const row=q=>{const z=h.zOf(q.u,q.dk,q),hh=BH*(1+.35*Math.pow(Math.max(0,1-q.u/.2),2)),xo=sd*(q.dW+.005),xi=sd*Math.max(0,q.dW-TH);return[[xo,q.dk-.06,z],[xo,q.dk+hh,z],[xi,q.dk+hh,z],[xi,q.dk-.02,z]];};
-        secs.forEach(q=>row(q).forEach(v=>P.push(...v)));for(let i=0;i<secs.length-1;i++)for(let k=0;k<3;k++){const a0=i*4+k,b0=a0+1,c0=a0+4,d0=c0+1;if(sd>0)I.push(a0,c0,b0,b0,c0,d0);else I.push(a0,b0,c0,b0,d0,c0);}
-        const ge=new THREE.BufferGeometry();ge.setAttribute('position',new THREE.Float32BufferAttribute(P,3));ge.setIndex(I);ge.computeVertexNormals();M(ge,wM);
-        const top=secs.map(q=>{const r=row(q);return new V3((r[1][0]+r[2][0])/2,r[1][1]+.03,r[1][2]);});M(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(top),secs.length*2,.07,6,false),capM);
-        for(let z=-5;z<=10;z+=2.5){const q=h.deckAt(.5+z/o.L);if(q.u<.3||q.u>.93)continue;const sl=M(new THREE.BoxGeometry(.02,.11,.36),slotM,sd*(q.dW+.012),q.dk+.06,h.zOf(q.u,q.dk,q));}}}   /* 排水口 */
+    // 舷墻：船首から船尾まで（青い笠木・控えめな排水口）。船首では左右が合わさる
+    shipBulwark(g,h,o,{u0:0,u1:.985,H:.75,hBow:.35,mat:C(0xf2f0ea,.55,.1,{side:THREE.DoubleSide}),cap:C(0x1f4f8a,.5,.25),slot:C(0x4a5056,.8,.1),ports:.09,portW:.36});
     for(const s of[-1,1]){const o2=M(new THREE.CylinderGeometry(.05,.07,8,6),blue,s*3.6,o.D+4.2,4);o2.rotation.z=-s*.9;}
     light(0,o.D+10.4,-1.4,new THREE.Color(2.4,2.1,1.5),2.4);light(-2.4,o.D+3,-.5,new THREE.Color(2.6,.2,.15),1.4);light(2.4,o.D+3,-.5,new THREE.Color(.2,2.4,.5),1.4);
     g.userData._h=h;g.userData._o=o;
