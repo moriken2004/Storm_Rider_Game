@@ -23,6 +23,7 @@ const T=[
   ['海中で浮いている構造物（防波堤・突堤・岩礁が海底まで届く）','underfloat.mjs',[],o=>/浮いている候補 0\b/.test(o)],
   ['船のスクリュー（航行中・係留中・撃沈後）','propspin.mjs',[],o=>/スクリューは回る/.test(o)],
   ['AquaTopia の深海と巨大電気イカ','kraken.mjs',[],o=>/深海の流れよし/.test(o)],
+  ['アオリイカの出現の頻度（2 分のうち見える時間が 6 割未満）','squidfreq.mjs',[],o=>{const m=o.match(/"secWith":(\d+)/);return m&&+m[1]<72&&+m[1]>0;}],
   ['巨大イカの現れ方（暗い海から浮かび上がる）','krfade.mjs',[],o=>/イカは少しずつ現れる/.test(o)],
   ['AquaTopia の初めての場面（固まらない）','firsthitch.mjs',[],o=>/初めての場面でも固まらない/.test(o)],
   ['AquaTopia の読み込み中のミニゲーム','bngame.mjs',[],o=>/ミニゲームよし/.test(o)],
