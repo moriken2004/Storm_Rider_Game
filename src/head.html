@@ -275,10 +275,11 @@ body.small .panel p,body.small .panel li{line-height:1.6}
 body.optair #hud,body.optair #fhud,body.optair #radio,body.optair #mark,body.optair #warn,body.optair #prompt,body.optair #hint,body.optair #banner,body.optair #radar,body.optair #inst{visibility:hidden}
 /* AquaTopia の計器 */
 #exhud{position:fixed;left:16px;bottom:16px;z-index:5;color:#e8f6f4;font:600 15px/1.5 -apple-system,'Hiragino Sans',sans-serif;background:rgba(6,30,34,.55);border:1px solid rgba(120,220,210,.35);border-radius:10px;padding:10px 14px;pointer-events:none}
+body.touch #exhud{left:calc(12px + var(--sl));top:calc(10px + var(--st));bottom:auto;font-size:13px;padding:7px 11px}   /* スマートフォン：左下だとスティックに重なるので左上へ */
 #exhud .t{font-size:12px;letter-spacing:.2em;color:#7fe3d6}#exhud .k{font-size:12px;opacity:.75;margin-top:4px;font-weight:400}
 body.explore #hud,body.explore #fhud,body.explore #radio,body.explore #banner,body.explore #tbG,body.explore #tbM{visibility:hidden}
 #exhud .b{width:150px;height:5px;margin-top:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}#exhud .b i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#5fd0c8,#f2d36b);transform-origin:left;transition:background .2s}#exhud .b.low i{background:#d9573b}
-#tbX{display:none;right:calc(30px + var(--sr));bottom:calc(122px + var(--sb));width:72px;height:72px}body.explore #tbX{display:block}
+#tbX{display:none;right:calc(26px + var(--sr));bottom:calc(26px + var(--sb));width:74px;height:74px}body.explore #tbX{display:block}   /* 加速は右下の角（浮くボタンの真下、潜るボタンの右）。以前は浮くボタンとほぼ同じ場所に重なっていた */
 @media (pointer:coarse){#exhud .k{display:none}}
 </style>
 </head>
