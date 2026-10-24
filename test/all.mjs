@@ -25,6 +25,7 @@ const T=[
   ['AquaTopia の深海と巨大電気イカ','kraken.mjs',[],o=>/深海の流れよし/.test(o)],
   ['アオリイカの出現の頻度（2 分のうち見える時間が 6 割未満）','squidfreq.mjs',[],o=>{const m=o.match(/"secWith":(\d+)/);return m&&+m[1]<72&&+m[1]>0;}],
   ['海の生き物が構造物を透過しない（岸壁・防波堤・突堤）','seastruct.mjs',[],o=>/構造物の中に生き物はいない/.test(o)],
+  ['ボートと海の生き物の当たり判定（船体の中に入らない）','boatsea.mjs',[],o=>/ボートの中に生き物はいない/.test(o)],
   ['巨大イカの現れ方（暗い海から浮かび上がる）','krfade.mjs',[],o=>/イカは少しずつ現れる/.test(o)],
   ['AquaTopia の初めての場面（固まらない）','firsthitch.mjs',[],o=>/初めての場面でも固まらない/.test(o)],
   ['AquaTopia の読み込み中のミニゲーム','bngame.mjs',[],o=>/ミニゲームよし/.test(o)],

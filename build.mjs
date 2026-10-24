@@ -5,6 +5,8 @@ try{execFileSync(process.execPath,[new URL('./lintcomments.mjs',import.meta.url)
 const d=new URL('./src/',import.meta.url);
 const r=f=>fs.readFileSync(new URL(f,d),'utf8');
 const js=['core.js','world.js','audio.js','game.js','explore.js','sea.js','barnacle.js'].map(r).join('\n');
+// 文法の点検：かっこの数違いなどがあると、全体が読み込めず起動しなくなる（気付きにくい）ので組み立てを止める
+{const tmp=new URL('./.buildcheck.js',import.meta.url);fs.writeFileSync(tmp,js);try{execFileSync(process.execPath,['--check',tmp.pathname],{stdio:'pipe'});}catch(e){console.error(String(e.stderr||e).split('\n').slice(0,6).join('\n'));console.error('組み立てを中止しました（文法の誤り）');fs.unlinkSync(tmp);process.exit(1);}fs.unlinkSync(tmp);}
 const html=r('head.html')+
   '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script>\n'+js+'\n</script>\n</body>\n</html>\n';
 // アーティファクト用（公開時に骨組みが付くので doctype/head/body を外す）。版の確認は io 版だけ（アーティファクトには付けない）

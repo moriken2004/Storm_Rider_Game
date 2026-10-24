@@ -303,7 +303,10 @@ function seaFindHome(f,cx,cz,want){for(let k=0;k<24;k++){const a=Math.random()*6
     if(h<want.hmax&&h>want.hmin&&(!want.reef||hash2(Math.floor(x/40),Math.floor(z/40),91)>.58)&&!seaNearStruct(x,z,want.clear||6)){f.home.set(x,h,z);return true;}}return false;}   /* 回遊の半径ぶん構造物から離す */
 // 構造物（向き付きの箱：岸壁・防波堤・船・トレーラーなど）と岩の凸凹から、生き物を押し出す。めり込みの浅い向きへ、横か上に（下へは押さない）。
 // 海底より下・水面より上には出さない
-function seaPush(p,rad,boxOnly){for(const c of exColsNear(p.x,p.z,rad+1)){if(p.y<c[1]-rad||p.y>c[4]+rad)continue;const dx=p.x-c[6],dz=p.z-c[7],u=dx*c[10]+dz*c[11],v=dx*c[12]+dz*c[13],pu=c[8]+rad-Math.abs(u),pv=c[9]+rad-Math.abs(v);if(pu<=0||pv<=0)continue;
+// ボートの船体（半径 2.6m・上下はボートの高さの前後）から横へ押し出す
+function seaBoatPush(p,rad){if(!EX.on||!EX.b)return false;const B=EX.pos,dy=p.y-B.y;if(dy<-1.2-rad||dy>1.7+rad)return false;const dx=p.x-B.x,dz=p.z-B.z,d=Math.hypot(dx,dz),R=2.6+rad;if(d>=R)return false;
+  const k=d>1e-3?1/d:0,ux=d>1e-3?dx*k:1,uz=d>1e-3?dz*k:0;p.x=B.x+ux*R;p.z=B.z+uz*R;return true;}
+function seaPush(p,rad,boxOnly){seaBoatPush(p,rad);for(const c of exColsNear(p.x,p.z,rad+1)){if(p.y<c[1]-rad||p.y>c[4]+rad)continue;const dx=p.x-c[6],dz=p.z-c[7],u=dx*c[10]+dz*c[11],v=dx*c[12]+dz*c[13],pu=c[8]+rad-Math.abs(u),pv=c[9]+rad-Math.abs(v);if(pu<=0||pv<=0)continue;
     const pyu=c[4]+rad<-.4?c[4]+rad-p.y:1e9;   /* 上へ出せるのは上面が水面より下のときだけ */
     if(pyu<pu&&pyu<pv)p.y+=pyu;else if(pu<pv){const sg=Math.sign(u)||1;p.x+=c[10]*sg*pu;p.z+=c[11]*sg*pu;}else{const sg=Math.sign(v)||1;p.x+=c[12]*sg*pv;p.z+=c[13]*sg*pv;}}
   if(boxOnly)return p;   /* 群れの 1 匹ずつは箱からの押し出しだけ（海底や岩の凸凹で高さが小刻みに跳ねないように。そちらは群れの中心で） */
@@ -321,7 +324,7 @@ function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12|
   SEA.schools.forEach((sc,k)=>{if(!sc.home)sc.home=new V3();const far=sc.ok&&Math.hypot(sc.home.x-p.x,sc.home.z-p.z)>60;
     if(!sc.ok||far){for(let tr=0;tr<16;tr++){const a=Math.random()*6.283,r=sc.placed?30+Math.random()*15:8+Math.random()*25,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r,gy=exGround(x,z);if(gy<-4&&!seaNearStruct(x,z,12)){sc.home.set(x,gy,z);sc.ok=true;break;}}
       if(sc.ok&&(!sc.placed||far)){const gy=sc.home.y;sc.p.set(sc.home.x,Math.max(gy+1.8,Math.min(-1.8,gy*.5)),sc.home.z);sc.ty=sc.p.y;sc.v.set(0,0,0);sc.jump=true;sc.jn=(sc.jn||0)+1;}sc.placed=true;}
-    if(!sc.ok)return;sc.t=(sc.t||0)+dt;const tx=sc.home.x+Math.sin(sc.t*.07+sc.seed)*9,tz=sc.home.z+Math.cos(sc.t*.05+sc.seed*1.3)*9;
+    if(!sc.ok)return;sc.t=(sc.t||0)+dt;if(EX.on){const dx=sc.p.x-EX.pos.x,dz=sc.p.z-EX.pos.z,d=Math.hypot(dx,dz)||1;if(d<9&&Math.abs(sc.p.y-EX.pos.y)<6){const k=(9-d)/9*dt*7;sc.home.x+=dx/d*k;sc.home.z+=dz/d*k;sc.p.x+=dx/d*k*.6;sc.p.z+=dz/d*k*.6;}}   /* ボートが近づくと群れごと逃げる */const tx=sc.home.x+Math.sin(sc.t*.07+sc.seed)*9,tz=sc.home.z+Math.cos(sc.t*.05+sc.seed*1.3)*9;
     const dx=tx-sc.p.x,dz=tz-sc.p.z,dl=Math.hypot(dx,dz)||1;sc.v.x=damp(sc.v.x,dx/dl*1.3,.8,dt);sc.v.z=damp(sc.v.z,dz/dl*1.3,.8,dt);sc.p.x+=sc.v.x*dt;sc.p.z+=sc.v.z*dt;
     const gy=Math.min(exGround(sc.p.x,sc.p.z),exGround(sc.p.x+3,sc.p.z),exGround(sc.p.x,sc.p.z+3)),want=Math.max(gy+1.8,Math.min(-1.8,gy*.5+Math.sin(sc.t*.11+k)*1.2));sc.ty=damp(sc.ty,want,.5,dt);sc.p.y=damp(sc.p.y,sc.ty,1.2,dt);seaPush(sc.p,2.2,true);});   /* 群れの中心も構造物の外へ */
   const o=_so;for(let i=0;i<SEA.fishD.length;i++){const f=SEA.fishD[i],sc=SEA.schools[f.sc];
@@ -333,13 +336,14 @@ function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12|
   const cnt={shark:0,ray:0,squid:0,flat:0,reef:0,jelly:0};const M={shark:SEA.shark,ray:SEA.ray,squid:SEA.squid,flat:SEA.flat,reef:SEA.reef,jelly:SEA.jelly};
   for(const f of SEA.mov){f.t+=dt;const m=M[f.kind],idx=cnt[f.kind]++;
     // アオリイカは群れ（4 匹）で動く。群れの先頭が置き場所を探し、3 割の確率でしか現れない（外れたら 10 秒は探さない）。ほかは先頭の場所に付く
-    if(f.kind==='squid'&&f.i%4){const ld=SEA.mov.find(q=>q.kind==='squid'&&q.i===f.i-f.i%4);f.ok=!!(ld&&ld.ok);if(f.ok){if(!f.home)f.home=new V3();if(!f.home.equals(ld.home)){f.home.copy(ld.home);f.p.copy(ld.p);f.prev.copy(f.p);f.reN=(f.reN||0)+1;}}}
+    if(f.kind==='squid'&&f.i%4){const ld=SEA.mov.find(q=>q.kind==='squid'&&q.i===f.i-f.i%4);f.ok=!!(ld&&ld.ok);if(f.ok){if(!f.home)f.home=new V3();if(f.home.distanceTo(ld.home)>5){f.home.copy(ld.home);f.p.copy(ld.p);f.prev.copy(f.p);f.reN=(f.reN||0)+1;}else f.home.copy(ld.home);}}   /* 置き直し（5m 以上）のときだけ先頭の位置へ。逃げて少しずれるのは追いかける */
     else if(!f.ok&&f.kind==='squid'){f.wait=(f.wait||0)-dt;if(f.wait<=0){f.wait=10;if(Math.random()<.3){f.wait=0;f.tryNow=true;}}}
     if(!f.ok&&(f.kind!=='squid'||(f.i%4===0&&f.tryNow))){f.tryNow=false;let w={shark:{r0:22,r1:40,hmin:-80,hmax:-9,clear:18},ray:{r0:8,r1:35,hmin:-30,hmax:-3,clear:10},squid:{r0:6,r1:30,hmin:-60,hmax:-4,clear:12},flat:{r0:3,r1:28,hmin:-25,hmax:-1.5,clear:3},reef:{r0:3,r1:40,hmin:-15,hmax:-3,reef:true,clear:3},jelly:{r0:5,r1:35,hmin:-90,hmax:-14,clear:6}}[f.kind];
       if(f.placed)w=Object.assign({},w,{r0:Math.max(w.r0,28),r1:Math.max(w.r1,45)});   /* 2 回目からは見通しの外に置き直す（目の前に急に現れない） */
       f.ok=seaFindHome(f,p.x,p.z,w);if(f.ok){f.placed=true;f.reN=(f.reN||0)+1;f.p.copy(f.home);f.p.y=f.home.y+1;f.prev.copy(f.p);f.yaw=Math.random()*6.28;}}
     if(f.ok&&f.home.distanceTo(_gv.set(p.x,f.home.y,p.z))>75)f.ok=false;
     if(!f.ok){o.position.set(0,-1e4,0);o.scale.setScalar(0);o.updateMatrix();m.setMatrixAt(idx,o.matrix);continue;}
+    if(EX.on&&f.kind!=='shark'&&f.kind!=='jelly'&&f.kind!=='flat'){const dx=f.p.x-EX.pos.x,dz=f.p.z-EX.pos.z,d=Math.hypot(dx,dz)||1,R=f.kind==='reef'?5:8;if(d<R&&Math.abs(f.p.y-EX.pos.y)<5){const k=(R-d)/R*dt*(f.kind==='reef'?5:3);f.home.x+=dx/d*k;f.home.z+=dz/d*k;}}   /* 近づくと離れる（サメは寄ってくる） */
     f.prev.copy(f.p);const H=f.home,sd=f.seed;let sc=1;
     if(f.kind==='shark'){const a=f.t*.06+sd,r=12+4*Math.sin(f.t*.05+sd);f.p.set(H.x+Math.cos(a)*r,0,H.z+Math.sin(a)*r);const gy=exGround(f.p.x,f.p.z);f.p.y=Math.min(-3,Math.max(gy+2.5,H.y*.5));sc=2.6+.4*((f.i*7)%3);}
     else if(f.kind==='ray'){const a=f.t*.09*(f.i%2?1:-1)+sd,r=6+3*Math.sin(f.t*.07+sd);f.p.set(H.x+Math.cos(a)*r,0,H.z+Math.sin(a)*r*.8);f.p.y=exGround(f.p.x,f.p.z)+.6+.4*Math.sin(f.t*.3+sd);sc=1.4+.6*((f.i*5)%3)/2;}

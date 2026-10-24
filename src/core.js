@@ -36,7 +36,7 @@ const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),null);quad.frustumCulled=
 
 // 全シェーダ共有の uniform
 const U={
-  uTime:{value:0},uSpin:{value:0},uStorm:{value:1},uEye:{value:1},uCalm:{value:0},uExD:{value:0},
+  uTime:{value:0},uSpin:{value:0},uStorm:{value:1},uEye:{value:1},uCalm:{value:0},uBreeze:{value:0},uExD:{value:0},
   uSunDir:{value:new V3(-0.45,0.55,0.70).normalize()},uSunCol:{value:new V3(6.2,5.6,4.7)},
   uSkyZen:{value:new V3(0.085,0.21,0.52)},uSkyHor:{value:new V3(0.46,0.60,0.78)},
   uFlashPos:{value:new V3(0,1500,0)},uFlashI:{value:0},
@@ -127,7 +127,7 @@ function makeNoise2D(N){
 
 // ───────────────────────── GLSL 共通 ─────────────────────────
 const GLSL_COMMON=`
-uniform float uTime,uSpin,uStorm,uEye,uCalm;
+uniform float uTime,uSpin,uStorm,uEye,uCalm,uBreeze;
 uniform vec3 uSunDir,uSunCol,uSkyZen,uSkyHor,uFlashPos;
 uniform float uFlashI;
 const float EYE_R=2400.0;const float WALL_OUT=4600.0;const float RO=15000.0;

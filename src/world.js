@@ -82,7 +82,7 @@ float planeShadow(vec2 xz){return max(planeShadow1(xz,uPSh[0],uPSh2[0]),max(plan
 void main(){
   vec2 xz=vP;float dist=length(vW-cameraPosition);
   vec4 sc=stormCover(vec3(xz.x,0.0,xz.y));
-  float wp=seaState(xz,sc.x),sea=0.3+2.2*wp;
+  float wp=seaState(xz,sc.x),sea=0.3+2.2*wp;wp=max(wp,uBreeze*(1.0-harb(xz)*0.7));   /* うねりの高さ（sea）はそのまま、さざ波・白波・泡だけ弱い風の分を足す（探検） */
   vec2 sl=vec2(0.0);float crest=0.0;float lod=1.0/(1.0+dist*0.00016);
   for(int i=0;i<6;i++){vec4 W=WAV[i];float ph=W.z*dot(W.xy,xz)-sqrt(9.8*W.z)*uTime;float a=W.w*W.z*sea;
     float lam=6.2832/W.z;float f=1.0/(1.0+pow(dist/(lam*13.0),2.0));sl+=W.xy*a*cos(ph)*f;crest+=a*sin(ph)*f;}
@@ -121,11 +121,12 @@ void main(){
   // 波頭の透過色。うねり 3 本の重なりは規則的な格子になるので、遠目（上空）では消し、近くでもむらを掛ける
   body+=vec3(0.0,0.050,0.046)*sat(crest/(0.317*sea))*sv*(1.0-smoothstep(220.0,950.0,dist))*(0.3+1.1*smN(rot(xz,1.3)/370.0+wd*0.001));
   body*=0.78+0.26*wPat;
+  {float bk=pow(sat(dot(-V,uSunDir)*0.6+0.45),3.0),cr2=sat(crest/(0.317*sea)*0.8+0.2);body+=vec3(0.01,0.13,0.11)*uSunCol*sv*bk*cr2*cr2*(1.0-smoothstep(150.0,900.0,dist))*0.55;}   /* 太陽の光が波頭を通って透ける青緑 */
   // 島のまわりの浅瀬
   vec2 il=(xz-vec2(0.0,21000.0))/vec2(1500.0,1750.0);float idv=length(il)+(texture2D(tNoise2,xz/2600.0).b-0.5)*0.22;
   float hbm=harb(xz);
   float sh=shoreH(xz),dep=max(-sh,0.0);
-  float shal=(1.0-smoothstep(1.0,38.0,dep));shal=shal*shal*(1.0-hbm*0.55);
+  float shal=(1.0-smoothstep(1.0,14.0,dep));shal=shal*shal*(1.0-hbm*0.55);   /* 明るい浅瀬の色は 14m まで（38m まで混ぜると深い所でも底が見える気がした） */
   body=mix(body,vec3(0.02,0.16,0.20)*(E+0.04),(1.0-smoothstep(10.0,45.0,dep))*0.6);
   body=mix(body,vec3(0.035,0.30,0.29)*(E+0.04),shal*0.85);
   body=mix(body,vec3(0.36,0.33,0.25)*(E+0.06),(1.0-smoothstep(0.0,2.2,dep))*(1.0-hbm)*0.55);
@@ -136,7 +137,7 @@ void main(){
   if(uRefOn>0.5&&dist<130.0){vec2 suv=gl_FragCoord.xy/uRefRes;float nn=uRefNF.x,ff=uRefNF.y;
     float zs=nn*ff/(ff-gl_FragCoord.z*(ff-nn));vec2 off=vec2(N.x,N.z)*0.09/(1.0+dist*0.04);vec2 uv2=clamp(suv+off,0.001,0.999);float d0=texture2D(tRefD,uv2).x;float zb=nn*ff/(ff-d0*(ff-nn));
     if(zb<zs){uv2=suv;d0=texture2D(tRefD,suv).x;zb=nn*ff/(ff-d0*(ff-nn));}
-    if(d0<0.99999){float path=max(0.0,zb-zs)*dist/max(zs,0.01);vec3 ext=exp(-path*vec3(0.42,0.095,0.07));vec3 und=texture2D(tRefC,uv2).rgb;
+    if(d0<0.99999){float path=max(0.0,zb-zs)*dist/max(zs,0.01),vd=path*sat(V.y);vec3 ext=exp(-path*vec3(0.45,0.12,0.1)-vd*vec3(0.3,0.1,0.085));   /* 視線の道のりに加え、光が海底まで潜る分（水深 vd）も弱める：10m で薄く、20m 以上はほぼ見えない */vec3 und=texture2D(tRefC,uv2).rgb;
       vec3 sca=vec3(0.02,0.14,0.15)*(E+0.04)*(1.0-ext.g)*(1.0+0.6*shal);vec3 tr=und*ext+sca;float k=(1.0-smoothstep(70.0,125.0,dist));
       body=mix(body,tr,k*(1.0-hbm*0.35));}}
   // 近くの物の映り込み（探検）：鏡のカメラで描いた絵を、さざ波の向きでゆがめて重ねる。遠いほど薄く
@@ -176,6 +177,13 @@ void main(){
   // 嵐：風に吹き流された泡の長い筋（風下へ伸びる）と、波の背の泡の膜
   {float sk=texture2D(tNoise2,rot(xz,0.64)/vec2(140.0,9.0)+wd*0.003).b*0.6+texture2D(tNoise2,rot(xz,0.64)/vec2(47.0,3.2)-wd*0.007).b*0.4;foam=max(foam,smoothstep(0.48,0.66,sk)*sat(wp*1.6-0.3)*0.85*(1.0-sat(dist/6000.0)));
    foam=max(foam,smoothstep(0.3,0.62,cn*0.6+n1*0.5)*smoothstep(0.4,0.66,n3)*sat(wp*1.5-0.4)*0.7);}
+  // 凪でも出る泡：風下へ伸びる細い筋（風が作る縦の渦で泡が集まる帯）と、そこに漂う泡のかたまり、まばらな小さい白波
+  {vec2 wq=rot(xz,0.64)+vec2(texture2D(tNoise2,xz/170.0).b-0.5,texture2D(tNoise2,xz/130.0+0.3).b-0.5)*vec2(22.0,60.0);   /* 筋はゆるく曲がる */
+    float lg=texture2D(tNoise2,wq/vec2(240.0,16.0)+wd*0.0016).b*0.75+texture2D(tNoise2,wq/vec2(70.0,7.0)-wd*0.003).b*0.25;
+    float ln=smoothstep(0.63,0.78,lg)*smoothstep(0.46,0.7,n2*0.55+n3*0.55)*smoothstep(0.25,0.55,n1)*0.42;   /* 幅のある、ちぎれた帯 */
+    float pat=smoothstep(0.64,0.78,texture2D(tNoise2,xz/38.0+wd*0.0025).b*0.7+texture2D(tNoise2,xz/11.0-wd*0.004).b*0.3)*smoothstep(0.42,0.7,n3*0.7+n2*0.4)*0.5;
+    float wh=smoothstep(0.74,0.9,sat(crest/(0.317*sea))*0.55+n1*0.6)*smoothstep(0.5,0.72,strk)*smoothstep(0.42,0.62,n2)*0.85;
+    foam=max(foam,max(max(ln,pat),wh)*(1.0-smoothstep(250.0,1600.0,dist)));}
   foam*=mix(1.0,0.4,sat(dist/7000.0))*(1.0-hbm);
   col=mix(col,vec3(0.78,0.82,0.84)*(E+0.02)*(1.0+0.5*wp),foam*(0.82+0.12*wp));
   gl_FragColor=vec4(col,1.0);
