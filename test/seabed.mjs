@@ -9,7 +9,7 @@ await p.evaluate(()=>{window.requestAnimationFrame=()=>0;document.getElementById
 const spots=await p.evaluate(()=>{const out={};for(let r=200;r<3000&&Object.keys(out).length<3;r+=37)for(let a=0;a<6.28;a+=.13){const x=BASE.x+Math.cos(a)*r,z=BASE.z+Math.sin(a)*r,h=exGround(x,z);
   if(!out.reef&&h<-6&&h>-12&&typeof hash2==='function'&&hash2(Math.floor(x/40),Math.floor(z/40),91)>.58)out.reef=[x,z,h];
   if(!out.kelp&&h<-5&&h>-12&&typeof hash2==='function'&&hash2(Math.floor(x/40),Math.floor(z/40),91)<=.58&&hash2(Math.floor(x/30),Math.floor(z/30),92)>=.5)out.kelp=[x,z,h];
-  if(!out.eel&&h<-2.5&&h>-6&&typeof hash2==='function'&&hash2(Math.floor(x/30),Math.floor(z/30),92)<.5)out.eel=[x,z,h];}return out;});
+  if(!out.eel&&h<-3&&h>-6.5&&hash2(Math.floor(x/40),Math.floor(z/40),91)<=.58&&hash2(Math.floor(x/30),Math.floor(z/30),92)<.5&&Math.hypot(x-BASE.x,z-BASE.z)>900){const s=[0,0,0,0];terrSample(x,z,s);if(s[3]<.25){const h2=exGround(x+12,z+12),h3=exGround(x-12,z-12);if(h2<-1.2&&h3<-1.2&&hash2(Math.floor((x+12)/30),Math.floor((z+12)/30),92)<.5)out.eel=[x,z,h];}}}return out;});
 console.log(JSON.stringify(spots));
 for(const[k,[x,z,h]]of Object.entries(spots)){for(const[j,yaw]of[[0,0],[1,2.1]]){await p.evaluate(([x,z,h,yaw])=>{EX.pos.set(x,h+2.2,z);EX.depth=-(h+2.2);EX.mode='dive';EX.yaw=yaw;EX.vel.set(0,0,0);
     // ボートを隠し、カメラを海底すれすれ（1.2m）に置いて水平に見る

@@ -16,6 +16,7 @@
 html,body{margin:0;height:100%;background:#05080c;overflow:hidden;color:#e8f1f7;
   font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
   user-select:none;-webkit-user-select:none;touch-action:none}
+*{touch-action:manipulation}   /* touch-action は子に引き継がれないので、ボタンやパネルの上のダブルタップでも拡大しないように全部の要素へ */
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block}
 .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 #hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 0 6px rgba(0,20,40,.9)}
@@ -168,7 +169,7 @@ button.pri{background:rgba(111,211,255,.2);border-color:#bfe9ff;font-size:16px;p
 #oShape{max-width:250px}
 #opts .panel{max-width:440px;margin-right:min(4vw,48px)}
 #opts .row input[type=range]{width:150px}
-#opts{cursor:grab;touch-action:none}#opts.grabbing{cursor:grabbing}#opts .panel{cursor:auto;touch-action:auto}
+#opts{cursor:grab;touch-action:none}#opts.grabbing{cursor:grabbing}#opts .panel{cursor:auto;touch-action:manipulation}
 .orbHint{font-size:11px;letter-spacing:.12em;opacity:.7;margin:-4px 0 10px}body.small .orbHint,body.touch .orbHint{display:none}
 @media (max-width:760px){.panel{padding:24px 18px 18px}.panel .menu button{width:100%}}@media (max-width:760px) and (orientation:portrait){#opts{align-items:center;background:rgba(2,16,22,.6)}#opts .panel{margin-right:0}}
 #res{background:radial-gradient(ellipse at 50% 42%,rgba(6,44,54,.10),rgba(4,30,38,.55) 62%,rgba(2,16,22,.86));font-family:var(--f-label)}

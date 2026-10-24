@@ -1128,6 +1128,12 @@ function bindInput(){
   addEventListener('keyup',e=>{input.keys[e.code]=false;});
   addEventListener('blur',()=>{input.keys={};});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play')togglePause();else if(!document.hidden&&AU.ctx)initAudio();});
+  // スマートフォン：意図しない拡大を止める。iPhone の Safari はビューポートの「拡大しない」指定を無視するので、
+  // ピンチ（gesture）と、0.32 秒以内の 2 回目のタップを止め、それでも拡大されたら等倍へ戻す
+  {const no=e=>e.preventDefault();for(const ev of['gesturestart','gesturechange','gestureend'])document.addEventListener(ev,no,{passive:false});document.addEventListener('dblclick',no,{passive:false});
+    let lastT=0;document.addEventListener('touchend',e=>{const n=performance.now();if(n-lastT<320&&e.changedTouches.length===1&&!(e.target.closest&&e.target.closest('input,textarea,select')))e.preventDefault();lastT=n;},{passive:false});
+    document.addEventListener('touchmove',e=>{if(e.touches.length>1||(e.scale!==undefined&&e.scale!==1))e.preventDefault();},{passive:false});
+    const vv=window.visualViewport,meta=document.querySelector('meta[name=viewport]');if(vv&&meta){const base=meta.content;vv.addEventListener('resize',()=>{if(vv.scale>1.02){meta.content=base.replace('maximum-scale=1','maximum-scale=1.01');setTimeout(()=>{meta.content=base;window.scrollTo(0,0);},60);}});}}
   addEventListener('pointerdown',()=>initAudio(),true);addEventListener('focus',()=>{if(AU.ctx)initAudio();});
   addEventListener('resize',()=>resize());
   const click=(id,fn)=>$(id).addEventListener('click',()=>{initAudio();if(id==='bStart'||id==='bRetry'||id==='bAgain')SFX.uiStart();else SFX.ui();fn();});
