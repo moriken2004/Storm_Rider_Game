@@ -255,7 +255,7 @@ function seaJellyGeo(){const parts=[];const b=new THREE.SphereGeometry(.5,20,10,
   for(let k=0;k<4;k++){const a=k*1.571,c=new THREE.CylinderGeometry(.03,.01,.7,5);c.translate(Math.cos(a)*.08,-.35,Math.sin(a)*.08);parts.push(c);}return seaMerge(parts);}
 // ── 置き直し（ボートが 12m 動くごと）：決まった格子ごとに乱数を固定して置く
 function seaScatter(cx,cz){seaInit();const d=new THREE.Object3D(),col=new THREE.Color(),s=[0,0,0,0];const n={cB:0,cM:0,cT:0,fan:0,soft:0,eel:0,kelp:0,barn:0,mus:0,star:0,urch:0,spB:0,spT:0,whip:0,pen:0,cuke:0};
-  const put=(m,key,x,y,z,sc,ry,c,rx,rz)=>{if(n[key]>=m.instanceMatrix.count)return false;d.position.set(x,y,z);d.rotation.set(rx||0,ry,rz||0);if(typeof sc==='number')d.scale.setScalar(sc);else d.scale.set(sc[0],sc[1],sc[2]);d.updateMatrix();m.setMatrixAt(n[key],d.matrix);if(c)m.setColorAt(n[key],c);n[key]++;return true;};
+  const put=(m,key,x,y,z,sc,ry,c,rx,rz)=>{if(n[key]>=m.instanceMatrix.count)return false;if(key!=='barn'&&key!=='mus'&&seaNearStruct(x,z,.3,y+.3))return false;   /* 岸壁・防波堤の土台・船の中から生やさない（岩に張り付くフジツボ・イガイは別） */d.position.set(x,y,z);d.rotation.set(rx||0,ry,rz||0);if(typeof sc==='number')d.scale.setScalar(sc);else d.scale.set(sc[0],sc[1],sc[2]);d.updateMatrix();m.setMatrixAt(n[key],d.matrix);if(c)m.setColorAt(n[key],c);n[key]++;return true;};
   const R=95;const G=1.6;
   {const c0=Math.round(cx/G),c1=Math.round(cz/G);for(const o of exRing(Math.ceil(R/G)+1)){const x=c0+o[0],z=c1+o[1];const wx=x*G+hash2(x,z,81)*G,wz=z*G+hash2(x,z,82)*G,dd=(wx-cx)**2+(wz-cz)**2;if(dd>R*R)continue;
     terrSample(wx,wz,s);const h=s[0],cl=s[3];if(h>2.2)continue;const rnd=k=>hash2(x,z,k);
@@ -300,7 +300,17 @@ function seaScatter(cx,cz){seaInit();const d=new THREE.Object3D(),col=new THREE.
 // 生き物の居場所を探す：ボートのまわりで条件に合う海底
 function exSub(x,z){const o=terrSample(x,z,[0,0,0,0,0,0,0]);return{rock:o[4],mud:o[5],gravel:o[6],sand:Math.max(0,1-o[4]-o[5]-o[6])};}
 function seaFindHome(f,cx,cz,want){for(let k=0;k<24;k++){const a=Math.random()*6.283,r=want.r0+Math.random()*(want.r1-want.r0),x=cx+Math.cos(a)*r,z=cz+Math.sin(a)*r,h=exGround(x,z);
-    if(h<want.hmax&&h>want.hmin&&(!want.reef||hash2(Math.floor(x/40),Math.floor(z/40),91)>.58)){f.home.set(x,h,z);return true;}}return false;}
+    if(h<want.hmax&&h>want.hmin&&(!want.reef||hash2(Math.floor(x/40),Math.floor(z/40),91)>.58)&&!seaNearStruct(x,z,want.clear||6)){f.home.set(x,h,z);return true;}}return false;}   /* 回遊の半径ぶん構造物から離す */
+// 構造物（向き付きの箱：岸壁・防波堤・船・トレーラーなど）と岩の凸凹から、生き物を押し出す。めり込みの浅い向きへ、横か上に（下へは押さない）。
+// 海底より下・水面より上には出さない
+function seaPush(p,rad,boxOnly){for(const c of exColsNear(p.x,p.z,rad+1)){if(p.y<c[1]-rad||p.y>c[4]+rad)continue;const dx=p.x-c[6],dz=p.z-c[7],u=dx*c[10]+dz*c[11],v=dx*c[12]+dz*c[13],pu=c[8]+rad-Math.abs(u),pv=c[9]+rad-Math.abs(v);if(pu<=0||pv<=0)continue;
+    const pyu=c[4]+rad<-.4?c[4]+rad-p.y:1e9;   /* 上へ出せるのは上面が水面より下のときだけ */
+    if(pyu<pu&&pyu<pv)p.y+=pyu;else if(pu<pv){const sg=Math.sign(u)||1;p.x+=c[10]*sg*pu;p.z+=c[11]*sg*pu;}else{const sg=Math.sign(v)||1;p.x+=c[12]*sg*pv;p.z+=c[13]*sg*pv;}}
+  if(boxOnly)return p;   /* 群れの 1 匹ずつは箱からの押し出しだけ（海底や岩の凸凹で高さが小刻みに跳ねないように。そちらは群れの中心で） */
+  for(const b of exBumpsNear(p.x,p.z)){const t=exBumpTop(b,p.x,p.z);if(t>-1e8&&p.y<t+rad&&p.y>b[1]-rad)p.y=t+rad;}
+  const g=exGround(p.x,p.z);if(p.y<g+rad*.6)p.y=g+rad*.6;if(p.y>-.3)p.y=-.3;return p;}
+// その点のまわり r に構造物があるか（住みかや海底の置き物を決めるとき）。y を渡すと、その高さを含む物だけ
+function seaNearStruct(x,z,r,y){{for(const c of exColsNear(x,z,r+1)){   /* 係留中の船も含める（船底は海底より上なので、航行中の船で海底の置き物が変わることはほぼない） */if(y!==undefined&&(y<c[1]-.3||y>c[4]+.3))continue;if(c[4]<exGround(x,z)-.5)continue;const dx=x-c[6],dz=z-c[7],u=Math.abs(dx*c[10]+dz*c[11])-c[8],v=Math.abs(dx*c[12]+dz*c[13])-c[9];if(u<r&&v<r)return true;}return false;}}
 const _so=new THREE.Object3D();
 // 向きは実際に動いた方向から決める（頭が進む向き）
 function seaFace(o,prev,cur,f,dt,k){const dx=cur.x-prev.x,dy=cur.y-prev.y,dz=cur.z-prev.z,h=Math.hypot(dx,dz);let turn=0;if(h>1e-4){const ty=Math.atan2(-dx,-dz);let dyaw=ty-f.yaw;dyaw=Math.atan2(Math.sin(dyaw),Math.cos(dyaw));const st=dyaw*Math.min(1,dt*(k||6));f.yaw+=st;turn=st/Math.max(dt,1e-3);f.pit=damp(f.pit,Math.atan2(dy,h)*.8,4,dt);}
@@ -309,13 +319,13 @@ function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12|
   for(const m of SEA.all)m.visible=show||m===SEA.barn||m===SEA.mus;if(!show)return;const t=U.uTime.value;   /* 潮間帯のフジツボ・イガイは水の上からも見える */
   // 魚の群れ：群れごとに海の中の居場所を持ち、そのまわりをゆっくり泳ぐ（ボートには付いて来ない）。ボートから 60m 離れたら、見通しの外（30〜45m 先）へ移す。深さはなめらかに
   SEA.schools.forEach((sc,k)=>{if(!sc.home)sc.home=new V3();const far=sc.ok&&Math.hypot(sc.home.x-p.x,sc.home.z-p.z)>60;
-    if(!sc.ok||far){for(let tr=0;tr<16;tr++){const a=Math.random()*6.283,r=sc.placed?30+Math.random()*15:8+Math.random()*25,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r,gy=exGround(x,z);if(gy<-4){sc.home.set(x,gy,z);sc.ok=true;break;}}
+    if(!sc.ok||far){for(let tr=0;tr<16;tr++){const a=Math.random()*6.283,r=sc.placed?30+Math.random()*15:8+Math.random()*25,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r,gy=exGround(x,z);if(gy<-4&&!seaNearStruct(x,z,12)){sc.home.set(x,gy,z);sc.ok=true;break;}}
       if(sc.ok&&(!sc.placed||far)){const gy=sc.home.y;sc.p.set(sc.home.x,Math.max(gy+1.8,Math.min(-1.8,gy*.5)),sc.home.z);sc.ty=sc.p.y;sc.v.set(0,0,0);sc.jump=true;sc.jn=(sc.jn||0)+1;}sc.placed=true;}
     if(!sc.ok)return;sc.t=(sc.t||0)+dt;const tx=sc.home.x+Math.sin(sc.t*.07+sc.seed)*9,tz=sc.home.z+Math.cos(sc.t*.05+sc.seed*1.3)*9;
     const dx=tx-sc.p.x,dz=tz-sc.p.z,dl=Math.hypot(dx,dz)||1;sc.v.x=damp(sc.v.x,dx/dl*1.3,.8,dt);sc.v.z=damp(sc.v.z,dz/dl*1.3,.8,dt);sc.p.x+=sc.v.x*dt;sc.p.z+=sc.v.z*dt;
-    const gy=Math.min(exGround(sc.p.x,sc.p.z),exGround(sc.p.x+3,sc.p.z),exGround(sc.p.x,sc.p.z+3)),want=Math.max(gy+1.8,Math.min(-1.8,gy*.5+Math.sin(sc.t*.11+k)*1.2));sc.ty=damp(sc.ty,want,.5,dt);sc.p.y=damp(sc.p.y,sc.ty,1.2,dt);});
+    const gy=Math.min(exGround(sc.p.x,sc.p.z),exGround(sc.p.x+3,sc.p.z),exGround(sc.p.x,sc.p.z+3)),want=Math.max(gy+1.8,Math.min(-1.8,gy*.5+Math.sin(sc.t*.11+k)*1.2));sc.ty=damp(sc.ty,want,.5,dt);sc.p.y=damp(sc.p.y,sc.ty,1.2,dt);seaPush(sc.p,2.2,true);});   /* 群れの中心も構造物の外へ */
   const o=_so;for(let i=0;i<SEA.fishD.length;i++){const f=SEA.fishD[i],sc=SEA.schools[f.sc];
-    const cur=_gv.copy(sc.p).add(f.o);cur.x+=Math.sin(t*.5+f.ph)*.7;cur.y+=Math.sin(t*.35+f.ph*2)*.15;cur.z+=Math.cos(t*.45+f.ph)*.7;
+    const cur=_gv.copy(sc.p).add(f.o);cur.x+=Math.sin(t*.5+f.ph)*.7;cur.y+=Math.sin(t*.35+f.ph*2)*.15;cur.z+=Math.cos(t*.45+f.ph)*.7;if(sc.ok)seaPush(cur,.25,true);
     if(!f.init||sc.jump){f.prev.copy(cur);f.init=true;}o.position.copy(cur);seaFace(o,f.prev,cur,f,dt,4);f.prev.copy(cur);o.scale.setScalar(sc.ok?.35*f.s:0);o.updateMatrix();SEA.fish.setMatrixAt(i,o.matrix);}
   SEA.schools.forEach(sc=>sc.jump=false);
   SEA.fish.instanceMatrix.needsUpdate=true;
@@ -325,7 +335,7 @@ function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12|
     // アオリイカは群れ（4 匹）で動く。群れの先頭が置き場所を探し、3 割の確率でしか現れない（外れたら 10 秒は探さない）。ほかは先頭の場所に付く
     if(f.kind==='squid'&&f.i%4){const ld=SEA.mov.find(q=>q.kind==='squid'&&q.i===f.i-f.i%4);f.ok=!!(ld&&ld.ok);if(f.ok){if(!f.home)f.home=new V3();if(!f.home.equals(ld.home)){f.home.copy(ld.home);f.p.copy(ld.p);f.prev.copy(f.p);f.reN=(f.reN||0)+1;}}}
     else if(!f.ok&&f.kind==='squid'){f.wait=(f.wait||0)-dt;if(f.wait<=0){f.wait=10;if(Math.random()<.3){f.wait=0;f.tryNow=true;}}}
-    if(!f.ok&&(f.kind!=='squid'||(f.i%4===0&&f.tryNow))){f.tryNow=false;let w={shark:{r0:22,r1:40,hmin:-80,hmax:-9},ray:{r0:8,r1:35,hmin:-30,hmax:-3},squid:{r0:6,r1:30,hmin:-60,hmax:-4},flat:{r0:3,r1:28,hmin:-25,hmax:-1.5},reef:{r0:3,r1:40,hmin:-15,hmax:-3,reef:true},jelly:{r0:5,r1:35,hmin:-90,hmax:-14}}[f.kind];
+    if(!f.ok&&(f.kind!=='squid'||(f.i%4===0&&f.tryNow))){f.tryNow=false;let w={shark:{r0:22,r1:40,hmin:-80,hmax:-9,clear:18},ray:{r0:8,r1:35,hmin:-30,hmax:-3,clear:10},squid:{r0:6,r1:30,hmin:-60,hmax:-4,clear:12},flat:{r0:3,r1:28,hmin:-25,hmax:-1.5,clear:3},reef:{r0:3,r1:40,hmin:-15,hmax:-3,reef:true,clear:3},jelly:{r0:5,r1:35,hmin:-90,hmax:-14,clear:6}}[f.kind];
       if(f.placed)w=Object.assign({},w,{r0:Math.max(w.r0,28),r1:Math.max(w.r1,45)});   /* 2 回目からは見通しの外に置き直す（目の前に急に現れない） */
       f.ok=seaFindHome(f,p.x,p.z,w);if(f.ok){f.placed=true;f.reN=(f.reN||0)+1;f.p.copy(f.home);f.p.y=f.home.y+1;f.prev.copy(f.p);f.yaw=Math.random()*6.28;}}
     if(f.ok&&f.home.distanceTo(_gv.set(p.x,f.home.y,p.z))>75)f.ok=false;
@@ -337,8 +347,9 @@ function seaUpdate(dt,p,show){if(!SEA.ok)seaInit();if(Math.abs(p.x-SEA.gc.x)>12|
       const lt=SEA.mov.find(q=>q.kind==='squid'&&q.i===f.i-f.i%4)||f,gt=lt.t;f.p.set(H.x+Math.cos(gt*.05+grp*1.7+(lt.u||0)*.08)*r+(f.i%4-1.5)*.9,H.y+3+Math.sin(f.t*.4+f.i)*.4+(f.i%2)*.5,H.z+Math.sin(gt*.05+grp*1.7+(lt.u||0)*.08)*r+((f.i*3)%4-1.5)*.6);f.p.y=Math.min(f.p.y,-1.5);sc=.95+.3*((f.i*3)%4)/3;}   /* 群れで並んで同じ向きに */
     else if(f.kind==='flat'){const dB=Math.hypot(p.x-f.p.x,p.z-f.p.z);if(dB<4.5&&p.y<-.5&&!f.flee){f.flee=1.6;f.fv=new V3(f.p.x-p.x,0,f.p.z-p.z).normalize();}
       if(f.flee>0){f.flee-=dt;f.p.addScaledVector(f.fv,dt*2.6);f.p.y=exGround(f.p.x,f.p.z)+.12+Math.sin(Math.min(1,f.flee/1.6)*Math.PI)*.4;}else{f.flee=0;f.p.y=exGround(f.p.x,f.p.z)+.03;}sc=.9+.6*((f.i*3)%4)/3;}
-    else if(f.kind==='jelly'){f.p.set(H.x+Math.sin(f.t*.05+sd)*4,Math.min(-3,H.y*.55+Math.sin(f.t*.12+sd)*2+2),H.z+Math.cos(f.t*.04+sd)*4);sc=.35+.5*((f.i*7)%5)/4;o.position.copy(f.p);o.rotation.set(Math.sin(f.t*.3+sd)*.2,0,Math.cos(f.t*.27+sd)*.2);o.scale.setScalar(sc);o.updateMatrix();m.setMatrixAt(idx,o.matrix);continue;}
+    else if(f.kind==='jelly'){f.p.set(H.x+Math.sin(f.t*.05+sd)*4,Math.min(-3,H.y*.55+Math.sin(f.t*.12+sd)*2+2),H.z+Math.cos(f.t*.04+sd)*4);sc=.35+.5*((f.i*7)%5)/4;seaPush(f.p,.4*sc+.2);o.position.copy(f.p);o.rotation.set(Math.sin(f.t*.3+sd)*.2,0,Math.cos(f.t*.27+sd)*.2);o.scale.setScalar(sc);o.updateMatrix();m.setMatrixAt(idx,o.matrix);continue;}
     else{const a=f.t*.4+sd,r=1.2+.8*Math.sin(f.t*.3+sd);f.p.set(H.x+Math.cos(a)*r,H.y+.6+.5*Math.sin(f.t*.5+sd),H.z+Math.sin(a*1.3)*r);sc=.12+.1*((f.i*7)%4)/3;}
+    if(f.kind!=='flat')seaPush(f.p,{shark:.9*sc,ray:.6*sc,squid:.45*sc,reef:.15}[f.kind]||.4);   /* 構造物を透過しない */
     if(f.reN!==f.reSeen||f.sy===undefined){f.sy=f.p.y;f.reSeen=f.reN;}else f.sy=damp(f.sy,f.p.y,f.kind==='flat'?6:1.6,dt);f.p.y=f.sy;
     o.position.copy(f.p);if(f.kind==='flat'&&!(f.flee>0))o.rotation.set(0,f.yaw,0,'YXZ');else seaFace(o,f.prev,f.p,f,dt,f.kind==='shark'?1.5:5);
     if(f.kind==='squid'){/* イカは外套の先（-z）が前。動いた向きに向ける */}
